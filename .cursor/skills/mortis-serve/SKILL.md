@@ -89,14 +89,16 @@ Windows 上第二个 uvicorn 仍能绑定已被占用的 8100，请求会落到�
 & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --user-data-dir=D:\dev\tmp\edge-prof --window-size=1280,800 --virtual-time-budget=5000 --screenshot=D:\dev\tmp\<名字>.png <网址>
 ```
 
-用 Read 查看截图：应显示「莫提斯」「智能体元数据刮削管理器」「版本 0.0.1」和数据目录（默认是 `<仓库>\.dev-data`），而不是「连不上后端」。托管模式的 `D:\dev\tmp\start-out.log` 里应出现 `GET /api/system/info ... 200`；开发模式没有访问日志，改用 `Invoke-WebRequest http://localhost:5174/api/system/info -UseBasicParsing` 确认经 Vite 代理能取到 JSON。
+用 Read 查看截图：首页会跳到媒体库页，应显示「莫提斯」、左侧导航「媒体库」「设置」和库卡片（没有库时是「还没有媒体库。」）；`/settings` 的「关于」里有版本和数据目录（默认是 `<仓库>\.dev-data`）。页面上不应出现「连不上后端」或「读取失败」。托管模式的 `D:\dev\tmp\start-out.log` 里应出现 `GET /api/system/info ... 200`；开发模式没有访问日志，改用 `Invoke-WebRequest http://localhost:5174/api/system/info -UseBasicParsing` 确认经 Vite 代理能取到 JSON。
 
 ### 页面自动化测试
 
-用 Playwright 驱动本机 Edge（`channel="msedge"`），不下载浏览器，不要运行 `playwright install`。默认 `pytest` 不跑，要先构建前端再显式运行：
+用 Playwright 驱动本机 Edge（`channel="msedge"`），不下载浏览器，不要运行 `playwright install`。默认 `pytest` 不跑（`addopts` 排除了 e2e，直接指定文件也会全部跳过），要先构建前端再用 `-m e2e` 运行：
 
-    Push-Location web; npm run build; Pop-Location
-    & $PY -m pytest -m e2e -q
+```powershell
+$env:npm_config_cache = "D:\dev\cache\npm"; Push-Location web; npm run build; Pop-Location
+& $env:MORTIS_PYTHON -m pytest -m e2e -q
+```
 
 测试自己在随机端口起一个后端、用临时数据目录，不占 8100，也不碰 `.dev-data`。
 
