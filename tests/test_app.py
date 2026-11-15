@@ -51,6 +51,8 @@ def test_without_web_dist_root_is_404(tmp_path: Path) -> None:
         ("/assets/app.js", 200, "console.log(1)"),
         ("/../secret.txt", 200, "<html>莫提斯</html>"),
         ("/assets/../../secret.txt", 200, "<html>莫提斯</html>"),
+        ("/%2e%2e/secret.txt", 200, "<html>莫提斯</html>"),
+        ("/..%5Csecret.txt", 200, "<html>莫提斯</html>"),
     ],
 )
 def test_web_dist_serving(
