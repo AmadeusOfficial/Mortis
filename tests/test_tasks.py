@@ -279,11 +279,12 @@ def test_list_roots_with_child_stats(factory: Factory) -> None:
 
 
 def test_find_queued_matches_type_and_payload(factory: Factory) -> None:
-    first = _add(factory, task_type="organize", payload={"library_id": 1})
+    first = _add(factory, task_type="organize", payload={"library_id": 1, "scrape": None})
     with factory() as session:
-        found = repo.find_queued(session, "organize", {"library_id": 1})
+        found = repo.find_queued(session, "organize", "library_id", 1)
         assert found is not None and found.id == first
-        assert repo.find_queued(session, "organize", {"library_id": 2}) is None
+        assert repo.find_queued(session, "organize", "library_id", 2) is None
+        assert repo.find_queued(session, "scrape", "library_id", 1) is None
 
 
 def test_threaded_runner_picks_up_new_task(factory: Factory, services: Services) -> None:

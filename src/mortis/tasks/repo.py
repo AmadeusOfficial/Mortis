@@ -53,14 +53,14 @@ def enqueue(
     return task
 
 
-def find_queued(session: Session, task_type: str, payload: dict[str, Any]) -> Task | None:
-    """同类型、同参数、还在排队的任务，用来避免重复排队。"""
-    return session.scalars(
-        select(Task)
-        .where(Task.task_type == task_type, Task.status == QUEUED, Task.payload == _dump(payload))
-        .order_by(Task.id)
-        .limit(1)
-    ).first()
+def find_queued(session: Session, task_type: str, key: str, value: Any) -> Task | None:
+    """找一个同类型、payload 里某个键相同、还在排队的任务。"""
+    for task in session.scalars(
+        select(Task).where(Task.task_type == task_type, Task.status == QUEUED).order_by(Task.id)
+    ):
+        if json.loads(task.payload or "{}").get(key) == value:
+            return task
+    return None
 
 
 def claim_next(session: Session) -> Task | None:

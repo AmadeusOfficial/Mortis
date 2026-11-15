@@ -2,8 +2,9 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict
 
 from mortis import libraries
-from mortis.api.deps import SessionDep
+from mortis.api.deps import RunnerDep, SessionDep
 from mortis.db.models import Library
+from mortis.tasks import repo as task_repo
 
 router = APIRouter(prefix="/api/libraries")
 
@@ -86,6 +87,38 @@ def update_library(library_id: int, body: LibraryUpdate, session: SessionDep) ->
         is_auto_scrape=body.is_auto_scrape,
     )
     return _one(session, library)
+
+
+class OrganizeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scrape: bool | None = None
+
+
+class Enqueued(BaseModel):
+    task_id: int
+
+
+@router.post("/{library_id}/organize", response_model=Enqueued, status_code=202)
+def organize_library(
+    library_id: int,
+    session: SessionDep,
+    runner: RunnerDep,
+    body: OrganizeRequest | None = None,
+) -> Enqueued:
+    library = libraries.get_library(session, library_id)
+    queued = task_repo.find_queued(session, "organize", "library_id", library.id)
+    if queued is not None:
+        return Enqueued(task_id=queued.id)
+    task = task_repo.enqueue(
+        session,
+        "organize",
+        {"library_id": library.id, "scrape": body.scrape if body is not None else None},
+        priority=1,
+    )
+    session.commit()
+    runner.wake()
+    return Enqueued(task_id=task.id)
 
 
 @router.delete("/{library_id}", status_code=204)
