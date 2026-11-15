@@ -303,6 +303,31 @@ export const batchTasks = (action: TaskAction, taskIds: number[]) =>
 export const clearFinishedTasks = () =>
   request<{ affected: number }>("POST", "/api/tasks/clear-finished");
 
+export interface UnmatchedFile {
+  id: number;
+  library_id: number;
+  library_name: string;
+  path: string;
+  size: number | null;
+  guess_title: string;
+  guess_year: number | null;
+}
+
+export const fetchUnmatched = (libraryId: number | null) =>
+  request<UnmatchedFile[]>(
+    "GET",
+    libraryId === null
+      ? "/api/media-files/unmatched"
+      : `/api/media-files/unmatched?library_id=${libraryId}`,
+  );
+export const bindMediaFile = (fileId: number, hit: MovieHit) =>
+  request<{ item_id: number; task_id: number }>("POST", `/api/media-files/${fileId}/bind`, {
+    tmdb_id: hit.tmdb_id,
+    title: hit.title,
+    original_title: hit.original_title,
+    release_date: hit.release_date,
+  });
+
 export const fetchWall = (libraryId: number, q: string, sort: WallSort, order: SortOrder) => {
   const params = new URLSearchParams({ sort, order });
   if (q.trim() !== "") {

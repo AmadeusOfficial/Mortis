@@ -5,6 +5,7 @@ import { fetchSystemInfo } from "./api";
 
 export const NAV_ITEMS: { to: string; label: string; also?: string[] }[] = [
   { to: "/libraries", label: "媒体库", also: ["/items"] },
+  { to: "/unmatched", label: "未识别" },
   { to: "/tasks", label: "任务" },
   { to: "/settings", label: "设置" },
 ];

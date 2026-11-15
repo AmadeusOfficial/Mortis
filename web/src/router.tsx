@@ -6,6 +6,7 @@ import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryWallPage } from "./pages/LibraryWallPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TasksPage } from "./pages/TasksPage";
+import { UnmatchedPage } from "./pages/UnmatchedPage";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "libraries", element: <LibrariesPage /> },
       { path: "libraries/:libraryId", element: <LibraryWallPage /> },
       { path: "items/:itemId", element: <ItemDetailPage /> },
+      { path: "unmatched", element: <UnmatchedPage /> },
       { path: "tasks", element: <TasksPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "*", element: <Text c="dimmed">没有这个页面。</Text> },
