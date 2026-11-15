@@ -13,6 +13,7 @@ from mortis.api.routes import data_types as data_type_routes
 from mortis.api.routes import images as image_routes
 from mortis.api.routes import items as item_routes
 from mortis.api.routes import libraries as library_routes
+from mortis.api.routes import output as output_routes
 from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import tasks as task_routes
 from mortis.api.routes import tmdb as tmdb_routes
@@ -114,6 +115,7 @@ def create_app(
     app.include_router(library_routes.router)
     app.include_router(task_routes.router)
     app.include_router(item_routes.router)
+    app.include_router(output_routes.router)
     app.include_router(image_routes.router)
     app.include_router(tmdb_routes.router)
 

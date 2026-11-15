@@ -118,7 +118,10 @@ def test_detail_sections_sources_and_collection(
     assert _field(detail, "fanart")["value"][0]["url"].startswith("/api/images/")
     assert detail["fanart_url"] == _field(detail, "fanart")["value"][0]["url"]
     assert detail["collection"]["title"] == "黑客帝国（系列）"
-    assert [f["path"].endswith("m.mkv") for f in detail["files"]] == [True]
+    videos = [f for f in detail["files"] if f["file_kind"] == "video"]
+    assert [f["path"].endswith("m.mkv") for f in videos] == [True]
+    assert detail["files"][0] == videos[0]
+    assert {f["file_kind"] for f in detail["files"]} == {"video", "nfo", "image"}
     assert detail["scraped_at"] is not None
     collection = client.get(f"/api/items/{detail['collection']['id']}").json()
     assert collection["kind"] == "collection"

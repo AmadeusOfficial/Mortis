@@ -18,6 +18,7 @@ from mortis.db.models import (
 )
 from mortis.items.identity import find_by_tmdb
 from mortis.organize.service import unscraped_movie_ids
+from mortis.output.service import after_scrape, has_video
 from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
 from mortis.scrape.images import ImageError, ImageStore
 from mortis.sources.tmdb.client import TmdbClient, open_tmdb
@@ -254,8 +255,13 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
 
 
 def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
-    result = scrape_movie(ctx, int(payload["item_id"]), force=bool(payload.get("force")))
-    return TaskResult(result=result)
+    item_id = int(payload["item_id"])
+    result = scrape_movie(ctx, item_id, force=bool(payload.get("force")))
+    with ctx.session_factory() as session:
+        followups = after_scrape(ctx.services.config_store.load_config().movie, item_id)
+        if not has_video(session, item_id):
+            followups = []
+    return TaskResult(result=result, followups=followups)
 
 
 def handle_scrape_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:

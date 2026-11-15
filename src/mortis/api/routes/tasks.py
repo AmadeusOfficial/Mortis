@@ -13,7 +13,15 @@ from mortis.tasks.runner import TaskRunner
 
 router = APIRouter(prefix="/api/tasks")
 
-TYPE_LABELS = {"organize": "整理媒体库", "scrape": "刮削", "scrape_library": "刮削媒体库"}
+TYPE_LABELS = {
+    "organize": "整理媒体库",
+    "scrape": "刮削",
+    "scrape_library": "刮削媒体库",
+    "write_files": "写出文件",
+    "rename": "重命名",
+    "write_files_library": "写出整库",
+    "rename_library": "重命名整库",
+}
 
 
 class TaskOut(BaseModel):

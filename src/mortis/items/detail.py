@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import (
@@ -182,7 +182,12 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         )
     }
     files = session.scalars(
-        select(MediaFile).where(MediaFile.item_id == item.id).order_by(MediaFile.path)
+        select(MediaFile)
+        .where(MediaFile.item_id == item.id)
+        .order_by(
+            case({"video": 0, "subtitle": 1, "nfo": 2}, value=MediaFile.file_kind, else_=3),
+            MediaFile.path,
+        )
     )
     return {
         "id": item.id,
