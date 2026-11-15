@@ -11,6 +11,7 @@ def test_main_creates_data_dir_and_runs(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setenv("MORTIS_DATA_DIR", str(data_dir))
     monkeypatch.setenv("MORTIS_PORT", "18123")
     monkeypatch.delenv("MORTIS_WEB_DIST", raising=False)
+    monkeypatch.delenv("MORTIS_HOST", raising=False)
     calls: list[tuple[object, str, int]] = []
 
     def fake_run(app: object, host: str, port: int) -> None:
