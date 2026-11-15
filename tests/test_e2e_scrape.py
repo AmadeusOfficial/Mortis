@@ -73,14 +73,14 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
 
     page.get_by_role("link", name="任务").click()
     expect(page.get_by_text("整理媒体库").first).to_be_visible()
-    expect(page.get_by_text("子任务 1/1")).to_be_visible(timeout=SLOW)
+    expect(page.get_by_text("子任务 2/2")).to_be_visible(timeout=SLOW)
 
     page.get_by_role("link", name="媒体库").click()
     page.get_by_role("link", name="打开").click()
     page.get_by_role("link", name="黑客帝国").first.click()
     expect(page.get_by_role("heading", name="黑客帝国")).to_be_visible()
     expect(page.get_by_text("欢迎来到真实的世界")).to_be_visible()
-    expect(page.get_by_text("基努·里维斯")).to_be_visible()
+    expect(page.get_by_text("基努·里维斯", exact=True)).to_be_visible()
     expect(page.get_by_text("系列：黑客帝国（系列）")).to_be_visible()
 
     page.get_by_role("button", name="编辑片名").click()
@@ -105,3 +105,29 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
     page.get_by_role("link", name="媒体库").click()
     page.get_by_role("link", name="打开").click()
     expect(page.get_by_role("link", name="盗火线").first).to_be_visible(timeout=SLOW)
+
+
+def test_written_files_and_rename_preview(page: Page, base_url: str, movies: Path) -> None:
+    page.goto(base_url + "/libraries")
+    page.get_by_role("button", name="新建媒体库").click()
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_label("目录").fill(str(movies))
+    dialog.get_by_role("button", name="保存").click()
+    page.get_by_role("button", name="扫描").click()
+    expect(page.get_by_text("「电影」扫描结束")).to_be_visible(timeout=SLOW)
+    old = movies / "The Matrix (1999)"
+    page.get_by_role("link", name="打开").click()
+    page.get_by_role("link", name="黑客帝国").first.click()
+    expect(page.get_by_role("heading", name="黑客帝国")).to_be_visible()
+    expect(page.get_by_text(str(old / "movie.nfo"))).to_be_visible(timeout=SLOW)
+
+    page.get_by_role("button", name="重命名", exact=True).click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog.get_by_text("黑客帝国 (1999)")).to_be_visible(timeout=SLOW)
+    expect(dialog.get_by_text("黑客帝国.mkv")).to_be_visible()
+    dialog.get_by_role("button", name="确认重命名").click()
+    expect(page.get_by_text("重命名完成")).to_be_visible(timeout=SLOW)
+    folder = movies / "黑客帝国 (1999)"
+    expect(page.get_by_text(str(folder / "黑客帝国.mkv"))).to_be_visible()
+    assert (folder / "黑客帝国.nfo").is_file() and (folder / "黑客帝国-poster.jpg").is_file()
+    assert not old.exists()

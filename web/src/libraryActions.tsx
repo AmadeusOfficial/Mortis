@@ -23,6 +23,8 @@ const START_MESSAGES: Record<Kind, string> = {
   rename: "已开始重命名整库",
 };
 
+const DONE_LABELS: Record<string, string> = { organize: "扫描", scrape_library: "刮削" };
+
 function summary(task: TaskDetail): string {
   if (task.status !== "succeeded") {
     return task.error ?? "任务没有完成";
@@ -59,7 +61,7 @@ export function LibraryActions({ library }: { library: Library }) {
     const failed = task.child_status.failed ?? 0;
     notifications.show({
       color: task.status === "succeeded" && failed === 0 ? "green" : "red",
-      title: `「${library.name}」${task.type_label}结束`,
+      title: `「${library.name}」${DONE_LABELS[task.task_type] ?? task.type_label}结束`,
       message:
         failed > 0
           ? `${summary(task)}；有 ${String(failed)} 部失败，详情看任务页`
