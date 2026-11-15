@@ -31,6 +31,7 @@ packages = ["src/mortis"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-m 'not e2e'"
 markers = ["e2e: 用本机 Edge 走一遍页面，需要先构建前端（npm run build）"]
 
@@ -41,3 +42,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mortis", "tests"]

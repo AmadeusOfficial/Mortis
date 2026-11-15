@@ -13,6 +13,7 @@ from mortis.api.routes import data_types as data_type_routes
 from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import tasks as task_routes
+from mortis.api.routes import tmdb as tmdb_routes
 from mortis.catalog.install import ensure_builtin_types
 from mortis.config.models import AppConfig
 from mortis.config.store import ConfigError, ConfigStore
@@ -110,6 +111,7 @@ def create_app(
     app.include_router(data_type_routes.router)
     app.include_router(library_routes.router)
     app.include_router(task_routes.router)
+    app.include_router(tmdb_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
