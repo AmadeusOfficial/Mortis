@@ -1,4 +1,5 @@
-from pathlib import Path
+import posixpath
+from pathlib import Path, PureWindowsPath
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -44,11 +45,31 @@ def _mount_web(app: FastAPI, dist: Path) -> None:
     if not index.is_file():
         raise FileNotFoundError(f"前端产物目录里没有 index.html：{root}")
 
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def web(path: str) -> FileResponse:
         if path == "api" or path.startswith("api/"):
             raise HTTPException(status_code=404)
-        candidate = (root / path).resolve()
-        if candidate.is_relative_to(root) and candidate.is_file():
-            return FileResponse(candidate)
+        relative = _relative_web_path(path)
+        if relative is None:
+            return FileResponse(index)
+        try:
+            candidate = (root / relative).resolve()
+            if candidate.is_relative_to(root) and candidate.is_file():
+                return FileResponse(candidate)
+        except OSError, ValueError:
+            pass
         return FileResponse(index)
+
+
+def _relative_web_path(path: str) -> str | None:
+    """纯字符串判断，不碰磁盘：带盘符、根或 UNC 的路径，以及规范化后跳出目录的路径都返回 None。
+
+    拼上绝对路径再 resolve 会去访问别的盘或外部 SMB 共享。
+    """
+    unified = path.replace("\\", "/")
+    if PureWindowsPath(unified).anchor or ":" in unified:
+        return None
+    normalized = posixpath.normpath(unified)
+    if normalized == ".." or normalized.startswith("../"):
+        return None
+    return normalized

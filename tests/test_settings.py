@@ -1,9 +1,17 @@
+import os
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from mortis.settings import Settings, default_data_dir
+
+
+@pytest.fixture(autouse=True)
+def clean_mortis_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in list(os.environ):
+        if key.upper().startswith("MORTIS_"):
+            monkeypatch.delenv(key)
 
 
 def test_default_data_dir_uses_localappdata(
@@ -43,6 +51,21 @@ def test_env_overrides(
 ) -> None:
     monkeypatch.setenv(key, value)
     assert getattr(Settings(), field) == expected
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_blank_web_dist_is_unset(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("MORTIS_WEB_DIST", value)
+    assert Settings().web_dist is None
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_blank_data_dir_uses_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, value: str
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("MORTIS_DATA_DIR", value)
+    assert Settings().data_dir == tmp_path / "Mortis"
 
 
 @pytest.mark.parametrize("value", ["abc", "0", "65536", "-1"])
