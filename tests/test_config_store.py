@@ -82,3 +82,52 @@ def test_examples_match_defaults() -> None:
     assert AppConfig.model_validate(config) == AppConfig()
     assert Secrets.model_validate(secrets) == Secrets()
     assert set(secrets) == set(SECRET_KEYS)
+
+
+def test_non_utf8_file_becomes_config_error(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_bytes('[network]\nproxy_host = "中文"\n'.encode("gbk"))
+    with pytest.raises(ConfigError, match="config.toml"):
+        store.load_config()
+
+
+def test_unreadable_file_becomes_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ConfigStore(tmp_path)
+    store.secrets_path.write_text('tmdb_api_key = "x"\n', encoding="utf-8")
+
+    def deny(self: Path, *args: object, **kwargs: object) -> str:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "read_text", deny)
+    with pytest.raises(ConfigError, match="secrets.toml"):
+        store.load_secrets()
+
+
+def test_validation_error_does_not_leak_values(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.secrets_path.write_text("proxy_password = 123456789\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="secrets.toml") as info:
+        store.load_secrets()
+    message = str(info.value)
+    assert "123456789" not in message
+    assert "proxy_password" in message
+
+
+def test_failed_replace_keeps_original_and_no_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ConfigStore(tmp_path)
+    original = AppConfig(network=NetworkConfig(proxy_port=1111))
+    store.save_config(original)
+    before = store.config_path.read_bytes()
+
+    def boom(src: object, dst: object) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("mortis.config.store.os.replace", boom)
+    with pytest.raises(OSError, match="replace failed"):
+        store.save_config(AppConfig(network=NetworkConfig(proxy_port=2222)))
+    assert store.config_path.read_bytes() == before
+    assert list(tmp_path.glob("*.tmp")) == []

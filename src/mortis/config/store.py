@@ -39,12 +39,21 @@ def _load[M: BaseModel](path: Path, model: type[M]) -> M:
         return model()
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise ConfigError(f"{path} 不是 UTF-8 编码，无法读取") from error
+    except OSError as error:
+        raise ConfigError(f"{path} 无法读取：{error.strerror or type(error).__name__}") from error
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"{path} 不是合法的 TOML：{error}") from error
     try:
         return model.model_validate(data)
     except ValidationError as error:
-        raise ConfigError(f"{path} 里有不合法的设置：{error}") from error
+        # 只用字段位置和原因，不带输入值，避免密钥泄漏到错误消息里。
+        problems = "；".join(
+            f"{'.'.join(str(part) for part in item['loc'])}：{item['msg']}"
+            for item in error.errors(include_input=False, include_url=False)
+        )
+        raise ConfigError(f"{path} 里有不合法的设置：{problems}") from None
 
 
 def _save(path: Path, model: BaseModel) -> None:
