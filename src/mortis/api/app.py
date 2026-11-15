@@ -12,12 +12,18 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from mortis.api.routes import data_types as data_type_routes
 from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import settings as settings_routes
+from mortis.api.routes import tasks as task_routes
 from mortis.catalog.install import ensure_builtin_types
+from mortis.config.models import AppConfig
 from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
 from mortis.errors import UserError
+from mortis.services import Services
 from mortis.settings import Settings
+from mortis.tasks import repo as task_repo
+from mortis.tasks.registry import builtin_handlers
+from mortis.tasks.runner import TaskRunner
 from mortis.version import get_version
 
 PRODUCT_NAME = "莫提斯"
@@ -38,6 +44,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     http_transport: httpx.BaseTransport | None = None,
+    start_worker: bool = True,
 ) -> FastAPI:
     resolved = settings if settings is not None else Settings()
     resolved.data_dir.mkdir(parents=True, exist_ok=True)
@@ -45,23 +52,43 @@ def create_app(
     upgrade_database(db_path)
     engine = create_db_engine(db_path)
     session_factory = make_session_factory(engine)
+    config_store = ConfigStore(resolved.data_dir)
+    startup_config = _startup_config(config_store)
     with session_factory() as session:
         ensure_builtin_types(session)
         session.commit()
+        task_repo.recover_running(session)
+        task_repo.prune(
+            session, keep_days=startup_config.tasks.keep_days, data_dir=resolved.data_dir
+        )
     # 启动安装用过的连接不留在池里；没进 lifespan 的调用方（只读静态页的测试）也不会漏连接。
     engine.dispose()
+    services = Services(resolved.data_dir, config_store, http_transport)
+    runner = TaskRunner(
+        session_factory,
+        services,
+        builtin_handlers(),
+        concurrency=startup_config.tasks.concurrency,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        yield
-        engine.dispose()
+        if start_worker:
+            runner.start()
+        try:
+            yield
+        finally:
+            runner.stop()
+            engine.dispose()
 
     app = FastAPI(title=PRODUCT_NAME, version=get_version(), lifespan=lifespan)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts(resolved.host))
     app.state.settings = resolved
     app.state.session_factory = session_factory
-    app.state.config_store = ConfigStore(resolved.data_dir)
+    app.state.config_store = config_store
     app.state.http_transport = http_transport
+    app.state.services = services
+    app.state.task_runner = runner
 
     @app.exception_handler(UserError)
     async def _user_error(_request: Request, error: UserError) -> JSONResponse:
@@ -82,10 +109,19 @@ def create_app(
     app.include_router(settings_routes.router)
     app.include_router(data_type_routes.router)
     app.include_router(library_routes.router)
+    app.include_router(task_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
     return app
+
+
+def _startup_config(store: ConfigStore) -> AppConfig:
+    """设置文件坏了也要能启动，好让用户在设置页看到错误；这时任务设置用默认值。"""
+    try:
+        return store.load_config()
+    except ConfigError:
+        return AppConfig()
 
 
 def _allowed_hosts(configured: str) -> list[str]:
