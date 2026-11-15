@@ -1,0 +1,7 @@
+# 莫提斯普通设置示例。真实文件是数据目录下的 config.toml，由设置页写入，不进 git。
+
+[network]
+# 代理主机，留空表示不用代理
+proxy_host = "127.0.0.1"
+proxy_port = 7890
+ignore_cert_errors = true

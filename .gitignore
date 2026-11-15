@@ -226,3 +226,4 @@ web/node_modules/
 web/dist/
 *.local.toml
 secrets.toml
+config.toml
