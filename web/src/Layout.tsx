@@ -3,7 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, NavLink as RouterNavLink, useLocation } from "react-router";
 import { fetchSystemInfo } from "./api";
 
-export const NAV_ITEMS: { to: string; label: string }[] = [{ to: "/settings", label: "设置" }];
+export const NAV_ITEMS: { to: string; label: string }[] = [
+  { to: "/libraries", label: "媒体库" },
+  { to: "/settings", label: "设置" },
+];
 
 export function Layout() {
   const info = useQuery({ queryKey: ["system-info"], queryFn: fetchSystemInfo });
