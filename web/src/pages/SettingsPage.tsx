@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import {
   type AppConfig,
   type MovieImages,
+  type MovieOutputConfig,
   type MovieScrapeConfig,
   type NetworkConfig,
   type SecretKey,
@@ -296,6 +297,9 @@ const IMAGE_LABELS: [keyof MovieImages, string][] = [
   ["actor_images", "演员头像"],
 ];
 
+const TEMPLATE_HINT =
+  "可用 ${title} ${originalTitle} ${year} ${edition} ${videoFormat} ${audioCodec}；${前缀,标记,后缀} 只在标记有值时出现";
+
 function splitWords(text: string): string[] {
   return text
     .split(/[\s,，]+/)
@@ -310,6 +314,8 @@ function MovieSection() {
     return null;
   }
   const set = (patch: Partial<MovieScrapeConfig>) => setDraft({ ...movie, ...patch });
+  const setOutput = (patch: Partial<MovieOutputConfig>) =>
+    set({ output: { ...movie.output, ...patch } });
   const skip = skipText ?? movie.skip_folders.join("\n");
   const country = movie.certification_country;
   const countryInvalid = !/^[A-Z]{2}$/.test(country);
@@ -398,6 +404,110 @@ function MovieSection() {
           value={skip}
           onChange={(event) => setSkipText(event.currentTarget.value)}
         />
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            写到视频旁边
+          </Text>
+          <Switch
+            label="刮削后写出 NFO 和图片"
+            checked={movie.output.write_after_scrape}
+            onChange={(event) =>
+              setOutput({ write_after_scrape: event.currentTarget.checked })
+            }
+          />
+          <Switch
+            label="刮削后重命名"
+            description="先改目录和文件名，再写出 NFO 和图片"
+            checked={movie.output.rename_after_scrape}
+            onChange={(event) =>
+              setOutput({ rename_after_scrape: event.currentTarget.checked })
+            }
+          />
+          <Checkbox.Group
+            label="NFO 文件名"
+            value={movie.output.nfo_names}
+            onChange={(value) =>
+              setOutput({ nfo_names: value as ("movie" | "filename")[] })
+            }
+          >
+            <Group gap="md" mt={4}>
+              <Checkbox value="movie" label="movie.nfo" />
+              <Checkbox value="filename" label="视频名.nfo" />
+            </Group>
+          </Checkbox.Group>
+          <Select
+            label="图片文件名"
+            data={[
+              { value: "filename", label: "视频名-poster.jpg" },
+              { value: "plain", label: "poster.jpg" },
+            ]}
+            allowDeselect={false}
+            value={movie.output.image_style}
+            onChange={(value) =>
+              value !== null && setOutput({ image_style: value as "filename" | "plain" })
+            }
+          />
+          <Switch
+            label="系列图写成 movieset-poster.jpg"
+            checked={movie.output.collection_image_names}
+            onChange={(event) =>
+              setOutput({ collection_image_names: event.currentTarget.checked })
+            }
+          />
+          <TextInput
+            label="演员头像目录"
+            description="只填一层目录名，放在视频旁边"
+            value={movie.output.actor_images_folder}
+            onChange={(event) => setOutput({ actor_images_folder: event.currentTarget.value })}
+          />
+          <TextInput
+            label="目录模板"
+            description={TEMPLATE_HINT}
+            value={movie.output.folder_template}
+            onChange={(event) => setOutput({ folder_template: event.currentTarget.value })}
+          />
+          <TextInput
+            label="文件模板"
+            description={TEMPLATE_HINT}
+            value={movie.output.file_template}
+            onChange={(event) => setOutput({ file_template: event.currentTarget.value })}
+          />
+          <Group grow align="flex-start">
+            <TextInput
+              label="目录名空格换成"
+              placeholder="不换"
+              maxLength={3}
+              value={movie.output.folder_space}
+              onChange={(event) => setOutput({ folder_space: event.currentTarget.value })}
+            />
+            <TextInput
+              label="文件名空格换成"
+              maxLength={3}
+              value={movie.output.file_space}
+              onChange={(event) => setOutput({ file_space: event.currentTarget.value })}
+            />
+            <TextInput
+              label="冒号换成"
+              maxLength={3}
+              value={movie.output.colon_replacement}
+              onChange={(event) => setOutput({ colon_replacement: event.currentTarget.value })}
+            />
+          </Group>
+          <Switch
+            label="NFO 写入锁定标记"
+            checked={movie.output.nfo_write_lockdata}
+            onChange={(event) =>
+              setOutput({ nfo_write_lockdata: event.currentTarget.checked })
+            }
+          />
+          <Switch
+            label="NFO 只写一个制片公司"
+            checked={movie.output.nfo_single_studio}
+            onChange={(event) =>
+              setOutput({ nfo_single_studio: event.currentTarget.checked })
+            }
+          />
+        </Stack>
         <SaveError error={save.error} />
         <Group>
           <Button

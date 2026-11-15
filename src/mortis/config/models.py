@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
+from mortis.rename.template import render
+
 PROXY_HOST_MESSAGE = "代理主机只填主机名或 IP，不要带 http:// 或端口；IPv6 要加方括号"
 _FORBIDDEN_IN_HOST = re.compile(r"://|[/@\s]")
 
@@ -166,6 +168,75 @@ class MovieImages(BaseModel):
     actor_images: bool = True
 
 
+# Windows 文件名里不允许的字符，模板和替换字符共用。
+_FORBIDDEN_NAME_CHARS = frozenset('/\\:*?"<>|')
+
+
+class MovieOutputConfig(BaseModel):
+    """刮削后写到视频旁边的 NFO、图片和改名规则。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    write_after_scrape: bool = True
+    rename_after_scrape: bool = False
+    nfo_names: list[Literal["movie", "filename"]] = Field(
+        default_factory=lambda: ["movie", "filename"]
+    )
+    image_style: Literal["filename", "plain"] = "filename"
+    collection_image_names: bool = True
+    actor_images_folder: str = ".actors"
+    folder_template: str = "${title} ${- ,edition,} (${year})"
+    file_template: str = "${title}${- ,edition,}.${videoFormat}.${audioCodec}"
+    folder_space: str = ""
+    file_space: str = "."
+    colon_replacement: str = "-"
+    first_char_number: str = "#"
+    nfo_write_lockdata: bool = False
+    nfo_single_studio: bool = False
+
+    @field_validator("nfo_names")
+    @classmethod
+    def _clean_nfo_names(
+        cls, value: list[Literal["movie", "filename"]]
+    ) -> list[Literal["movie", "filename"]]:
+        cleaned: list[Literal["movie", "filename"]] = []
+        for name in value:
+            if name not in cleaned:
+                cleaned.append(name)
+        if not cleaned:
+            raise PydanticCustomError("nfo_names", "NFO 文件名至少选一个")
+        return cleaned
+
+    @field_validator("actor_images_folder")
+    @classmethod
+    def _check_actor_images_folder(cls, value: str) -> str:
+        folder = value.strip()
+        if not folder or any(char in _FORBIDDEN_NAME_CHARS for char in folder):
+            raise PydanticCustomError("actor_images_folder", "演员头像目录只填一个目录名")
+        return folder
+
+    @field_validator("folder_template", "file_template")
+    @classmethod
+    def _check_template(cls, value: str) -> str:
+        template = value.strip()
+        if not template:
+            raise PydanticCustomError("template", "模板不能为空")
+        if "/" in template or "\\" in template:
+            raise PydanticCustomError("template", "模板里不能有路径分隔符")
+        try:
+            render(template, {"title": "片名", "year": "2000"}, space="", colon="-")
+        except ValueError as error:
+            raise PydanticCustomError("template", str(error)) from None
+        return template
+
+    @field_validator("folder_space", "file_space", "colon_replacement", "first_char_number")
+    @classmethod
+    def _check_replacement(cls, value: str) -> str:
+        if len(value) > 3 or any(char in _FORBIDDEN_NAME_CHARS for char in value):
+            raise PydanticCustomError("replacement", "替换字符不能是文件名里不允许的字符")
+        return value
+
+
 class MovieScrapeConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -178,6 +249,7 @@ class MovieScrapeConfig(BaseModel):
     fanart_size: FanartSize = "original"
     prefer_textless_fanart: bool = True
     images: MovieImages = Field(default_factory=MovieImages)
+    output: MovieOutputConfig = Field(default_factory=MovieOutputConfig)
 
     @field_validator("skip_folders")
     @classmethod

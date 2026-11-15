@@ -47,6 +47,36 @@ collection_poster = true
 collection_fanart = true
 actor_images = true
 
+[movie.output]
+# 刮削后写 NFO 和图片
+write_after_scrape = true
+# 刮削后重命名
+rename_after_scrape = false
+# NFO 文件名：movie 写 movie.nfo，filename 写 <视频名>.nfo
+nfo_names = ["movie", "filename"]
+# 图片文件名：filename 写 <视频名>-poster.jpg，plain 写 poster.jpg
+image_style = "filename"
+# 系列图写成 movieset-poster.jpg / movieset-fanart.jpg
+collection_image_names = true
+# 演员头像放在哪个目录
+actor_images_folder = ".actors"
+# 目录名模板
+folder_template = "${title} ${- ,edition,} (${year})"
+# 文件名模板
+file_template = "${title}${- ,edition,}.${videoFormat}.${audioCodec}"
+# 目录名里的空格换成什么，留空不换
+folder_space = ""
+# 文件名里的空格换成什么
+file_space = "."
+# 冒号换成什么
+colon_replacement = "-"
+# 名字开头的数字换成什么
+first_char_number = "#"
+# NFO 里写入锁定标记
+nfo_write_lockdata = false
+# NFO 只写一个制片公司
+nfo_single_studio = false
+
 [tasks]
 # 任务并发数，改了重启后生效
 concurrency = 3

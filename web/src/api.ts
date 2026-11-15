@@ -83,6 +83,23 @@ export interface MovieImages {
   actor_images: boolean;
 }
 
+export interface MovieOutputConfig {
+  write_after_scrape: boolean;
+  rename_after_scrape: boolean;
+  nfo_names: ("movie" | "filename")[];
+  image_style: "filename" | "plain";
+  collection_image_names: boolean;
+  actor_images_folder: string;
+  folder_template: string;
+  file_template: string;
+  folder_space: string;
+  file_space: string;
+  colon_replacement: string;
+  first_char_number: string;
+  nfo_write_lockdata: boolean;
+  nfo_single_studio: boolean;
+}
+
 export interface MovieScrapeConfig {
   language: string;
   certification_country: string;
@@ -93,6 +110,7 @@ export interface MovieScrapeConfig {
   fanart_size: string;
   prefer_textless_fanart: boolean;
   images: MovieImages;
+  output: MovieOutputConfig;
 }
 
 export interface TasksConfig {
