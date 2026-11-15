@@ -136,6 +136,16 @@ def test_update_name_and_paths(client: TestClient, dirs: dict[str, Path]) -> Non
     assert body["data_type_id"] == "movie"
 
 
+@pytest.mark.parametrize("field", ["data_type_id", "automation", "id"])
+def test_update_rejects_unknown_fields(
+    client: TestClient, dirs: dict[str, Path], field: str
+) -> None:
+    created = _create(client, [str(dirs["a"])]).json()
+    response = client.patch(f"/api/libraries/{created['id']}", json={field: "tv"})
+    assert response.status_code == 422
+    assert client.get(f"/api/libraries/{created['id']}").json() == created
+
+
 def test_update_can_narrow_to_own_subdir(client: TestClient, dirs: dict[str, Path]) -> None:
     created = _create(client, [str(dirs["a"])]).json()
     response = client.patch(

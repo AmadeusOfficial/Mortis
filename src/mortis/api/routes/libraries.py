@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from mortis import libraries
 from mortis.api.deps import SessionDep
@@ -26,6 +26,8 @@ class LibraryCreate(BaseModel):
 
 
 class LibraryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = None
     paths: list[str] | None = None
 
