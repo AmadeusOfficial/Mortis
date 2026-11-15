@@ -2,6 +2,7 @@
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Python = if ($env:MORTIS_PYTHON) { $env:MORTIS_PYTHON } else { "python" }
+if (-not $env:MORTIS_DATA_DIR) { $env:MORTIS_DATA_DIR = Join-Path $Root ".dev-data" }
 
 & (Join-Path $PSScriptRoot "build_web.ps1")
 $env:MORTIS_WEB_DIST = Join-Path $Root "web\dist"

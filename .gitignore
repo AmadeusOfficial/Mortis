@@ -221,6 +221,7 @@ __marimo__/
 
 # 莫提斯
 .superpowers/
+.dev-data/
 web/node_modules/
 web/dist/
 *.local.toml
