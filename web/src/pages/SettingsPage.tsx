@@ -42,9 +42,11 @@ function NetworkSection() {
   const queryClient = useQueryClient();
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [draft, setDraft] = useState<AppConfig | null>(null);
+  const [port, setPort] = useState<number | "">("");
   useEffect(() => {
     if (settings.data !== undefined) {
       setDraft(settings.data);
+      setPort(settings.data.network.proxy_port);
     }
   }, [settings.data]);
   const save = useMutation({
@@ -66,6 +68,7 @@ function NetworkSection() {
     return <Text c="dimmed">正在读取设置…</Text>;
   }
   const network = draft.network;
+  const portInvalid = port === "" || port < 1 || port > 65535;
   const setNetwork = (patch: Partial<NetworkConfig>) =>
     setDraft({ ...draft, network: { ...network, ...patch } });
 
@@ -85,8 +88,9 @@ function NetworkSection() {
             min={1}
             max={65535}
             allowDecimal={false}
-            value={network.proxy_port}
-            onChange={(value) => setNetwork({ proxy_port: Number(value) })}
+            value={port}
+            onChange={(value) => setPort(typeof value === "number" ? value : "")}
+            error={portInvalid ? "代理端口要在 1 到 65535 之间" : undefined}
           />
         </Group>
         <Switch
@@ -100,7 +104,15 @@ function NetworkSection() {
           </Alert>
         )}
         <Group>
-          <Button loading={save.isPending} onClick={() => save.mutate(draft)}>
+          <Button
+            loading={save.isPending}
+            disabled={portInvalid}
+            onClick={() => {
+              if (port !== "") {
+                save.mutate({ ...draft, network: { ...network, proxy_port: port } });
+              }
+            }}
+          >
             保存网络设置
           </Button>
         </Group>
@@ -111,7 +123,15 @@ function NetworkSection() {
   );
 }
 
-function SecretField({ secretKey, label }: { secretKey: SecretKey; label: string }) {
+function SecretField({
+  secretKey,
+  label,
+  onChanged,
+}: {
+  secretKey: SecretKey;
+  label: string;
+  onChanged?: () => void;
+}) {
   const queryClient = useQueryClient();
   const status = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
   const [value, setValue] = useState("");
@@ -124,12 +144,14 @@ function SecretField({ secretKey, label }: { secretKey: SecretKey; label: string
     onSuccess: (saved, next) => {
       queryClient.setQueryData(["secrets"], saved);
       setValue("");
+      onChanged?.();
       notifications.show({
         color: "green",
         message: next === null ? `${label}已清除` : `${label}已保存`,
       });
     },
   });
+  const known = status.data !== undefined;
   const isSet = status.data?.[secretKey] ?? false;
 
   return (
@@ -138,14 +160,23 @@ function SecretField({ secretKey, label }: { secretKey: SecretKey; label: string
         <PasswordInput
           style={{ flex: 1 }}
           label={label}
-          description={isSet ? "已填写。输入新值会覆盖，留空不修改。" : "未填写"}
+          description={
+            status.isError
+              ? `读取失败：${status.error.message}`
+              : !known
+                ? "正在读取…"
+                : isSet
+                  ? "已填写。输入新值会覆盖，留空不修改。"
+                  : "未填写"
+          }
+          autoComplete="new-password"
           value={value}
           onChange={(event) => setValue(event.currentTarget.value)}
         />
         <Button
           variant="light"
           aria-label={`保存${label}`}
-          disabled={value.trim() === ""}
+          disabled={!known || value.trim() === ""}
           loading={save.isPending}
           onClick={() => save.mutate(value)}
         >
@@ -155,7 +186,7 @@ function SecretField({ secretKey, label }: { secretKey: SecretKey; label: string
           variant="subtle"
           color="red"
           aria-label={`清除${label}`}
-          disabled={!isSet}
+          disabled={!known || !isSet}
           onClick={() => save.mutate(null)}
         >
           清除
@@ -179,7 +210,11 @@ function TmdbSection() {
         <Text size="sm" c="dimmed">
           电影的元数据和图片来自 TMDB。可以填 API Key（v3）或读访问令牌（v4）。测试连接使用已保存的网络设置。
         </Text>
-        <SecretField secretKey="tmdb_api_key" label="TMDB API Key" />
+        <SecretField
+          secretKey="tmdb_api_key"
+          label="TMDB API Key"
+          onChanged={() => check.reset()}
+        />
         <Group>
           <Button variant="default" loading={check.isPending} onClick={() => check.mutate()}>
             测试连接
@@ -209,6 +244,11 @@ function AboutSection() {
     <Paper withBorder p="md">
       <Stack gap="xs">
         <Title order={4}>关于</Title>
+        {info.isError && (
+          <Text size="sm" c="red">
+            读取失败：{info.error.message}
+          </Text>
+        )}
         {info.isSuccess && (
           <>
             <Text size="sm">版本 {info.data.version}</Text>

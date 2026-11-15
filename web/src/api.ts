@@ -28,11 +28,19 @@ function errorMessage(data: unknown, status: number): string {
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new ApiError("连不上后端", 0);
+    }
+    throw error;
+  }
   const text = await response.text();
   let data: unknown = undefined;
   if (text !== "") {
