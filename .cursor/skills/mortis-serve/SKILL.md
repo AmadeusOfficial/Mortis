@@ -52,7 +52,7 @@ $p.Id | Set-Content D:\dev\tmp\start.pid
 
 开发模式的后端跑在一个隐藏的独立控制台里（经 `cmd.exe` 启动）：uvicorn 热重载时会向同一控制台的所有进程发 Ctrl+C，和 Vite 共用控制台会把 Vite 一起停掉。
 
-- 后端运行日志（启动、重新加载、报错）在 `<数据目录>\logs\dev-api.err.log`，默认 `.dev-data\logs\dev-api.err.log`，每次启动覆盖。用 `Get-Content .dev-data\logs\dev-api.err.log -Encoding UTF8 -Tail 30` 查看。改了 `src` 后应能看到 `Reloading...` 和新的 `Started server process`。
+- 后端运行日志（启动、重新加载、报错）在 `<数据目录>\logs\dev-api.err.log`，默认 `.dev-data\logs\dev-api.err.log`，每次真正起后端时重写（端口预检没通过时脚本直接退出，不起后端，这个文件保持上次的内容）。用 `Get-Content .dev-data\logs\dev-api.err.log -Encoding UTF8 -Tail 30` 查看。改了 `src` 后应能看到 `Reloading...` 和新的 `Started server process`。
 - 访问日志（每条请求）不落文件：reloader 的 stdout 必须是控制台，Ctrl+C 才会被处理，stdout 重定向到文件后热重载会卡住不重启。
 - `dev-out.log` / `dev-err.log` 里只有 dev.ps1 自己和 Vite 的输出。
 
@@ -76,6 +76,10 @@ $p.Id | Set-Content D:\dev\tmp\start.pid
 ```powershell
 Get-NetTCPConnection -LocalPort 8100,5174 -State Listen -ErrorAction SilentlyContinue
 ```
+
+Windows 上第二个 uvicorn 仍能绑定已被占用的 8100，请求会落到旧进程上，所以两个脚本启动前都会预检端口（`dev.ps1` 查 8100 和 5174，`start.ps1` 查 8100）：被占就列出占用进程的 PID 和命令行，提示用 `taskkill /PID <pid> /T /F` 结束，然后非零退出，不起后端也不起 Vite。`dev.ps1` 拿到 200 后还会确认 8100 的监听进程属于自己起的进程树。
+
+直接关掉 dev.ps1 的窗口时 `finally` 不会执行，隐藏控制台里的后端会留在后台占着 8100；下次启动就会报端口被占，并给出要结束的 PID（是 uvicorn reloader，按进程树结束会连同服务进程和外层 cmd 一起退出）。
 
 ## 页面自查
 
