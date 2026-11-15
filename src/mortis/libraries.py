@@ -1,18 +1,16 @@
 import os
 
-from sqlalchemy import exists, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import DataType, Item, Library, LibraryPath, MediaFile, utc_now
+from mortis.errors import UserError
 
 MAX_NAME_LENGTH = 50
 
 
-class LibraryError(Exception):
-    def __init__(self, message: str, *, status_code: int) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status_code = status_code
+class LibraryError(UserError):
+    pass
 
 
 def _inside(child: str, parent: str) -> bool:
@@ -82,6 +80,27 @@ def list_libraries(session: Session) -> list[Library]:
     return list(session.scalars(select(Library).order_by(Library.id)))
 
 
+def library_counts(session: Session, library_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """每个库的（作品数，视频文件数）。系列电影那一层不算。"""
+    items = {
+        library_id: count
+        for library_id, count in session.execute(
+            select(Item.library_id, func.count())
+            .where(Item.library_id.in_(library_ids), Item.kind == "work")
+            .group_by(Item.library_id)
+        )
+    }
+    files = {
+        library_id: count
+        for library_id, count in session.execute(
+            select(MediaFile.library_id, func.count())
+            .where(MediaFile.library_id.in_(library_ids), MediaFile.file_kind == "video")
+            .group_by(MediaFile.library_id)
+        )
+    }
+    return {lid: (items.get(lid, 0), files.get(lid, 0)) for lid in library_ids}
+
+
 def create_library(session: Session, *, name: str, data_type_id: str, paths: list[str]) -> Library:
     cleaned_name = _clean_name(name)
     data_type = session.get(DataType, data_type_id)
@@ -110,6 +129,7 @@ def update_library(
     *,
     name: str | None = None,
     paths: list[str] | None = None,
+    is_auto_scrape: bool | None = None,
 ) -> Library:
     library = get_library(session, library_id)
     if name is not None:
@@ -121,16 +141,17 @@ def update_library(
         library.paths.clear()
         session.flush()
         library.paths.extend(LibraryPath(path=path) for path in normalized)
+    if is_auto_scrape is not None:
+        library.is_auto_scrape = int(is_auto_scrape)
     library.updated_at = utc_now()
     session.commit()
     return library
 
 
 def delete_library(session: Session, library_id: int) -> None:
+    """连同库里的条目和文件记录一起删；硬盘上的文件不动。"""
     library = get_library(session, library_id)
-    has_items = session.scalar(select(exists().where(Item.library_id == library.id)))
-    has_files = session.scalar(select(exists().where(MediaFile.library_id == library.id)))
-    if has_items or has_files:
-        raise LibraryError("库里还有条目或文件，不能删除", status_code=409)
+    session.execute(delete(MediaFile).where(MediaFile.library_id == library.id))
+    session.execute(delete(Item).where(Item.library_id == library.id))
     session.delete(library)
     session.commit()

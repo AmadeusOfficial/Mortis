@@ -16,7 +16,7 @@ from mortis.catalog.install import ensure_builtin_types
 from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
-from mortis.libraries import LibraryError
+from mortis.errors import UserError
 from mortis.settings import Settings
 from mortis.version import get_version
 
@@ -63,8 +63,8 @@ def create_app(
     app.state.config_store = ConfigStore(resolved.data_dir)
     app.state.http_transport = http_transport
 
-    @app.exception_handler(LibraryError)
-    async def _library_error(_request: Request, error: LibraryError) -> JSONResponse:
+    @app.exception_handler(UserError)
+    async def _user_error(_request: Request, error: UserError) -> JSONResponse:
         return JSONResponse(status_code=error.status_code, content={"detail": error.message})
 
     @app.exception_handler(ConfigError)

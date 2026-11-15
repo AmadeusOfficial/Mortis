@@ -14,7 +14,10 @@ class LibraryOut(BaseModel):
     data_type_id: str
     data_type_name: str
     automation: str
+    is_auto_scrape: bool
     paths: list[str]
+    item_count: int
+    file_count: int
     created_at: str
     updated_at: str
 
@@ -30,24 +33,34 @@ class LibraryUpdate(BaseModel):
 
     name: str | None = None
     paths: list[str] | None = None
+    is_auto_scrape: bool | None = None
 
 
-def _out(library: Library) -> LibraryOut:
+def _out(library: Library, counts: tuple[int, int]) -> LibraryOut:
     return LibraryOut(
         id=library.id,
         name=library.name,
         data_type_id=library.data_type_id,
         data_type_name=library.data_type.name,
         automation=library.automation,
+        is_auto_scrape=bool(library.is_auto_scrape),
         paths=[row.path for row in library.paths],
+        item_count=counts[0],
+        file_count=counts[1],
         created_at=library.created_at,
         updated_at=library.updated_at,
     )
 
 
+def _one(session: SessionDep, library: Library) -> LibraryOut:
+    return _out(library, libraries.library_counts(session, [library.id])[library.id])
+
+
 @router.get("", response_model=list[LibraryOut])
 def list_libraries(session: SessionDep) -> list[LibraryOut]:
-    return [_out(library) for library in libraries.list_libraries(session)]
+    rows = libraries.list_libraries(session)
+    counts = libraries.library_counts(session, [library.id for library in rows])
+    return [_out(library, counts[library.id]) for library in rows]
 
 
 @router.post("", response_model=LibraryOut, status_code=201)
@@ -55,18 +68,24 @@ def create_library(body: LibraryCreate, session: SessionDep) -> LibraryOut:
     library = libraries.create_library(
         session, name=body.name, data_type_id=body.data_type_id, paths=body.paths
     )
-    return _out(library)
+    return _one(session, library)
 
 
 @router.get("/{library_id}", response_model=LibraryOut)
 def read_library(library_id: int, session: SessionDep) -> LibraryOut:
-    return _out(libraries.get_library(session, library_id))
+    return _one(session, libraries.get_library(session, library_id))
 
 
 @router.patch("/{library_id}", response_model=LibraryOut)
 def update_library(library_id: int, body: LibraryUpdate, session: SessionDep) -> LibraryOut:
-    library = libraries.update_library(session, library_id, name=body.name, paths=body.paths)
-    return _out(library)
+    library = libraries.update_library(
+        session,
+        library_id,
+        name=body.name,
+        paths=body.paths,
+        is_auto_scrape=body.is_auto_scrape,
+    )
+    return _one(session, library)
 
 
 @router.delete("/{library_id}", status_code=204)

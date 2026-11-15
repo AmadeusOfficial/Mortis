@@ -2,14 +2,15 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import Engine, inspect, select, text
+from sqlalchemy import Engine, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mortis.db.engine import create_db_engine
-from mortis.db.migrate import upgrade_database
+from mortis.db.migrate import _alembic_config, upgrade_database
 from mortis.db.models import (
     Base,
     DataType,
@@ -17,6 +18,7 @@ from mortis.db.models import (
     ItemExternalId,
     Library,
     LibraryPath,
+    Task,
     utc_now,
 )
 
@@ -172,6 +174,49 @@ def test_library_paths_cascade_and_unique(session: Session) -> None:
     session.delete(session.get(Library, library.id))
     session.commit()
     assert session.scalars(select(LibraryPath)).all() == []
+
+
+def test_upgrade_from_0001_keeps_rows(tmp_path: Path) -> None:
+    db_path = tmp_path / "old.db"
+    command.upgrade(_alembic_config(db_path), "0001")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "insert into data_types (id, name, structure) values ('movie', '电影', 'item_group')"
+        )
+        conn.execute(
+            "insert into libraries (data_type_id, name, created_at, updated_at) "
+            "values ('movie', '电影', 'x', 'x')"
+        )
+        conn.execute(
+            "insert into tasks (task_type, status, created_at) values ('organize', 'queued', 'x')"
+        )
+    conn.close()
+    upgrade_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("select is_auto_scrape from libraries").fetchone() == (1,)
+        assert conn.execute(
+            "select priority, parent_task_id, root_task_id from tasks"
+        ).fetchone() == (0, None, None)
+    conn.close()
+
+
+def test_deleting_parent_task_deletes_children(session: Session) -> None:
+    parent = Task(task_type="organize", status="succeeded", created_at=utc_now())
+    session.add(parent)
+    session.flush()
+    session.add(
+        Task(
+            task_type="scrape",
+            status="queued",
+            created_at=utc_now(),
+            parent_task_id=parent.id,
+            root_task_id=parent.id,
+        )
+    )
+    session.commit()
+    session.execute(text("delete from tasks where id = :id"), {"id": parent.id})
+    session.commit()
+    assert session.scalar(select(func.count()).select_from(Task)) == 0
 
 
 def test_utc_now_format() -> None:

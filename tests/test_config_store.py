@@ -182,6 +182,7 @@ def test_failed_replace_keeps_original_and_no_temp(
     assert store.config_path.read_bytes() == before
     assert list(tmp_path.glob("*.tmp")) == []
 
+
 def test_new_sections_default_to_local_tmm() -> None:
     config = AppConfig()
     assert ".mkv" in config.files.video_extensions

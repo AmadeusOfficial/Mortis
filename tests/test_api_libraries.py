@@ -3,9 +3,10 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from mortis.api.app import create_app
-from mortis.db.models import Item, utc_now
+from mortis.db.models import Item, MediaFile, utc_now
 from mortis.settings import Settings
 
 LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
@@ -48,6 +49,8 @@ def test_create_and_list(client: TestClient, dirs: dict[str, Path]) -> None:
     assert body["data_type_id"] == "movie"
     assert body["data_type_name"] == "电影"
     assert body["automation"] == "manual"
+    assert body["is_auto_scrape"] is True
+    assert (body["item_count"], body["file_count"]) == (0, 0)
     assert body["paths"] == [str(dirs["a"])]
     assert body["created_at"] == body["updated_at"]
     assert client.get("/api/libraries").json() == [body]
@@ -171,24 +174,51 @@ def test_delete_frees_paths(client: TestClient, dirs: dict[str, Path]) -> None:
     assert _create(client, [str(dirs["a"])]).status_code == 201
 
 
-def test_delete_refused_when_library_has_items(client: TestClient, dirs: dict[str, Path]) -> None:
-    created = _create(client, [str(dirs["a"])]).json()
-    with client.app.state.session_factory() as session:
+def test_delete_removes_items_and_files_but_not_disk(
+    client: TestClient, dirs: dict[str, Path]
+) -> None:
+    library = _create(client, [str(dirs["a"])]).json()
+    video = dirs["a"] / "片.mkv"
+    video.write_bytes(b"x")
+    factory = client.app.state.session_factory
+    with factory() as session:
         now = utc_now()
+        item = Item(
+            library_id=library["id"],
+            data_type_id="movie",
+            kind="work",
+            title="片",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(item)
+        session.flush()
         session.add(
-            Item(
-                library_id=created["id"],
-                data_type_id="movie",
-                kind="work",
-                title="教父",
+            MediaFile(
+                library_id=library["id"],
+                item_id=item.id,
+                path=str(video),
+                file_kind="video",
+                size=1,
                 created_at=now,
                 updated_at=now,
             )
         )
         session.commit()
-    response = client.delete(f"/api/libraries/{created['id']}")
-    assert response.status_code == 409
-    assert response.json()["detail"] == "库里还有条目或文件，不能删除"
+    listed = client.get("/api/libraries").json()[0]
+    assert (listed["item_count"], listed["file_count"]) == (1, 1)
+    assert client.delete(f"/api/libraries/{library['id']}").status_code == 204
+    with factory() as session:
+        assert session.scalar(select(func.count()).select_from(Item)) == 0
+        assert session.scalar(select(func.count()).select_from(MediaFile)) == 0
+    assert video.is_file()
+
+
+def test_toggle_auto_scrape(client: TestClient, dirs: dict[str, Path]) -> None:
+    library = _create(client, [str(dirs["a"])]).json()
+    body = client.patch(f"/api/libraries/{library['id']}", json={"is_auto_scrape": False}).json()
+    assert body["is_auto_scrape"] is False
+    assert body["paths"] == library["paths"]
 
 
 def test_libraries_survive_restart(data_dir: Path, dirs: dict[str, Path]) -> None:

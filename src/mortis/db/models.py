@@ -89,6 +89,7 @@ class Library(Base):
     data_type_id: Mapped[str] = mapped_column(ForeignKey("data_types.id"))
     name: Mapped[str]
     automation: Mapped[str] = mapped_column(server_default=text("'manual'"))
+    is_auto_scrape: Mapped[int] = mapped_column(server_default=text("1"))
     created_at: Mapped[str]
     updated_at: Mapped[str]
 
@@ -272,11 +273,18 @@ class MediaFile(Base):
 
 class Task(Base):
     __tablename__ = "tasks"
-    __table_args__ = (Index("ix_tasks_status", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_tasks_status", "status", "created_at"),
+        Index("ix_tasks_parent", "parent_task_id"),
+        Index("ix_tasks_root", "root_task_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     task_type: Mapped[str]
     status: Mapped[str]
+    priority: Mapped[int] = mapped_column(server_default=text("0"))
+    parent_task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    root_task_id: Mapped[int | None]
     payload: Mapped[str | None]
     result: Mapped[str | None]
     error: Mapped[str | None]
