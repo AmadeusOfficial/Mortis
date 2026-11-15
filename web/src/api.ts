@@ -190,6 +190,80 @@ export interface TaskPage {
 
 export type TaskAction = "cancel" | "retry" | "delete";
 
+export type WallSort = "title" | "release_date" | "created_at";
+export type SortOrder = "asc" | "desc";
+
+export interface WallItem {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  year: number | null;
+  poster_url: string | null;
+  is_scraped: boolean;
+}
+
+export interface PersonValue {
+  id: number;
+  name: string;
+  original_name: string | null;
+  character: string | null;
+  photo_url: string | null;
+}
+
+export interface RatingValue {
+  source: string;
+  rating: number;
+  max_rating: number;
+  vote_count: number | null;
+}
+
+export interface ImageValue {
+  url: string | null;
+  language: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface FieldOut {
+  key: string;
+  label: string;
+  value_type: string;
+  stored_in: string;
+  value: unknown;
+  source: string | null;
+  locked: boolean;
+  lockable: boolean;
+  editable: boolean;
+}
+
+export interface ItemDetail {
+  id: number;
+  library_id: number;
+  library_name: string;
+  kind: "work" | "collection";
+  title: string;
+  subtitle: string | null;
+  year: number | null;
+  poster_url: string | null;
+  fanart_url: string | null;
+  external_ids: Record<string, string>;
+  collection: { id: number; title: string; poster_url: string | null } | null;
+  parts: WallItem[];
+  files: { id: number; path: string; file_kind: string; size: number | null }[];
+  scraped_at: string | null;
+  sections: { name: string; fields: FieldOut[] }[];
+}
+
+export interface MovieHit {
+  tmdb_id: number;
+  title: string;
+  original_title: string;
+  release_date: string | null;
+  year: number | null;
+  overview: string;
+  poster_url: string | null;
+}
+
 export const fetchSystemInfo = () => request<SystemInfo>("GET", "/api/system/info");
 export const fetchSettings = () => request<AppConfig>("GET", "/api/settings");
 export const saveSettingsSection = <K extends SettingsSection>(name: K, section: AppConfig[K]) =>
@@ -228,6 +302,30 @@ export const batchTasks = (action: TaskAction, taskIds: number[]) =>
   request<{ affected: number }>("POST", "/api/tasks/batch", { action, task_ids: taskIds });
 export const clearFinishedTasks = () =>
   request<{ affected: number }>("POST", "/api/tasks/clear-finished");
+
+export const fetchWall = (libraryId: number, q: string, sort: WallSort, order: SortOrder) => {
+  const params = new URLSearchParams({ sort, order });
+  if (q.trim() !== "") {
+    params.set("q", q.trim());
+  }
+  return request<WallItem[]>("GET", `/api/libraries/${libraryId}/items?${params}`);
+};
+export const fetchItem = (id: number) => request<ItemDetail>("GET", `/api/items/${id}`);
+export const updateItemFields = (id: number, values: Record<string, unknown>) =>
+  request<ItemDetail>("PATCH", `/api/items/${id}/fields`, { values });
+export const updateItemLocks = (id: number, locked: string[]) =>
+  request<ItemDetail>("PUT", `/api/items/${id}/locks`, { locked });
+export const scrapeItem = (id: number, force = true) =>
+  request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
+export const rematchItem = (id: number, tmdbId: number) =>
+  request<Enqueued>("POST", `/api/items/${id}/rematch`, { tmdb_id: tmdbId });
+export const searchTmdbMovies = (query: string, year: number | null) => {
+  const params = new URLSearchParams({ query });
+  if (year !== null) {
+    params.set("year", String(year));
+  }
+  return request<MovieHit[]>("GET", `/api/tmdb/search/movie?${params}`);
+};
 
 export function isTaskBusy(task: TaskRow): boolean {
   const children = (task.child_status.queued ?? 0) + (task.child_status.running ?? 0);
