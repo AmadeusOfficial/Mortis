@@ -8,6 +8,7 @@ import {
   Paper,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   Textarea,
@@ -16,6 +17,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router";
 import {
   type Library,
   createLibrary,
@@ -24,6 +26,7 @@ import {
   fetchLibraries,
   updateLibrary,
 } from "../api";
+import { LibraryActions } from "../libraryActions";
 
 const AUTOMATION_LABELS: Record<string, string> = {
   manual: "只手动扫描",
@@ -37,7 +40,7 @@ export function LibrariesPage() {
   const [deleting, setDeleting] = useState<Library | null>(null);
 
   return (
-    <Stack maw={800}>
+    <Stack maw={900}>
       <Group justify="space-between">
         <Title order={2}>媒体库</Title>
         <Button onClick={() => setEditing("new")}>新建媒体库</Button>
@@ -82,6 +85,20 @@ function LibraryCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: (isAutoScrape: boolean) =>
+      updateLibrary(library.id, { is_auto_scrape: isAutoScrape }),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      notifications.show({
+        color: "green",
+        message: saved.is_auto_scrape ? "已打开扫描后自动刮削" : "已关闭扫描后自动刮削",
+      });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+
   return (
     <Paper withBorder p="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap">
@@ -90,6 +107,9 @@ function LibraryCard({
             <Title order={4}>{library.name}</Title>
             <Badge variant="light">{library.data_type_name}</Badge>
           </Group>
+          <Text size="sm" c="dimmed">
+            {library.item_count} 部电影 · {library.file_count} 个视频
+          </Text>
           {library.paths.map((path) => (
             <Text key={path} size="sm" ff="monospace">
               {path}
@@ -98,15 +118,29 @@ function LibraryCard({
           <Text size="xs" c="dimmed">
             {AUTOMATION_LABELS[library.automation] ?? library.automation}
           </Text>
+          <Switch
+            label="扫描后自动刮削"
+            checked={library.is_auto_scrape}
+            disabled={toggle.isPending}
+            onChange={(event) => toggle.mutate(event.currentTarget.checked)}
+          />
         </Stack>
-        <Group gap="xs" wrap="nowrap">
-          <Button variant="default" size="xs" onClick={onEdit}>
-            编辑
-          </Button>
-          <Button variant="subtle" color="red" size="xs" onClick={onDelete}>
-            删除
-          </Button>
-        </Group>
+        <Stack gap="xs" align="flex-end">
+          <Group gap="xs" wrap="nowrap">
+            <Button component={Link} to={`/libraries/${library.id}`} size="xs" variant="default">
+              打开
+            </Button>
+            <LibraryActions library={library} />
+          </Group>
+          <Group gap="xs" wrap="nowrap">
+            <Button variant="default" size="xs" onClick={onEdit}>
+              编辑
+            </Button>
+            <Button variant="subtle" color="red" size="xs" onClick={onDelete}>
+              删除
+            </Button>
+          </Group>
+        </Stack>
       </Group>
     </Paper>
   );
@@ -199,7 +233,10 @@ function DeleteLibraryModal({ library, onClose }: { library: Library; onClose: (
   return (
     <Modal opened onClose={onClose} title="删除媒体库">
       <Stack>
-        <Text>删除媒体库「{library.name}」？只删除库的记录，不动硬盘上的文件。</Text>
+        <Text>
+          删除媒体库「{library.name}」？库里的 {library.item_count} 部电影和 {library.file_count}{" "}
+          个视频的记录会一起删除，硬盘上的文件不动。
+        </Text>
         {remove.isError && (
           <Alert color="red" title="删除失败">
             {remove.error.message}

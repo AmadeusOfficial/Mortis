@@ -1,23 +1,30 @@
 import {
   Alert,
   Button,
+  Checkbox,
   Group,
   NumberInput,
   Paper,
   PasswordInput,
+  Select,
   Stack,
   Switch,
   Text,
   TextInput,
+  Textarea,
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
+  type AppConfig,
+  type MovieImages,
+  type MovieScrapeConfig,
   type NetworkConfig,
   type SecretKey,
   type SecretsUpdate,
+  type SettingsSection,
   checkTmdb,
   fetchSecretsStatus,
   fetchSettings,
@@ -27,44 +34,73 @@ import {
 } from "../api";
 
 export function SettingsPage() {
+  const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   return (
     <Stack maw={640}>
       <Title order={2}>设置</Title>
-      <NetworkSection />
-      <TmdbSection />
+      {settings.isError && (
+        <Alert color="red" title="读不到设置">
+          {settings.error.message}
+        </Alert>
+      )}
+      {settings.isPending && <Text c="dimmed">正在读取设置…</Text>}
+      {settings.isSuccess && (
+        <>
+          <NetworkSection />
+          <TmdbSection />
+          <MovieSection />
+          <FilesSection />
+          <TasksSection />
+        </>
+      )}
       <AboutSection />
     </Stack>
   );
 }
 
-function NetworkSection() {
+function useSection<K extends SettingsSection>(name: K, label: string) {
   const queryClient = useQueryClient();
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
-  const [network, setDraft] = useState<NetworkConfig | null>(null);
-  const [port, setPort] = useState<number | "">("");
+  const [draft, setDraft] = useState<AppConfig[K] | null>(null);
   useEffect(() => {
-    if (settings.data !== undefined) {
-      setDraft(settings.data.network);
-      setPort(settings.data.network.proxy_port);
+    if (settings.data !== undefined && draft === null) {
+      setDraft(settings.data[name]);
     }
-  }, [settings.data]);
+  }, [settings.data, draft, name]);
   const save = useMutation({
-    mutationFn: (next: NetworkConfig) => saveSettingsSection("network", next),
+    mutationFn: (value: AppConfig[K]) => saveSettingsSection(name, value),
     onSuccess: (saved) => {
       queryClient.setQueryData(["settings"], saved);
-      notifications.show({ color: "green", message: "网络设置已保存" });
+      setDraft(saved[name]);
+      notifications.show({ color: "green", message: `${label}已保存` });
     },
   });
+  return { draft, setDraft, save };
+}
 
-  if (settings.isError) {
-    return (
-      <Alert color="red" title="读不到设置">
-        {settings.error.message}
-      </Alert>
-    );
+function SaveError({ error }: { error: Error | null }) {
+  if (error === null) {
+    return null;
   }
+  return (
+    <Alert color="red" title="保存失败">
+      {error.message}
+    </Alert>
+  );
+}
+
+function NetworkSection() {
+  const { draft: network, setDraft, save } = useSection("network", "网络设置");
+  const [port, setPort] = useState<number | "">("");
+  const loadedPort = network?.proxy_port;
+  useEffect(() => {
+    if (loadedPort !== undefined) {
+      setPort(loadedPort);
+    }
+  }, [loadedPort]);
+
   if (network === null) {
-    return <Text c="dimmed">正在读取设置…</Text>;
+    return null;
   }
   const portInvalid = port === "" || port < 1 || port > 65535;
   const setNetwork = (patch: Partial<NetworkConfig>) => setDraft({ ...network, ...patch });
@@ -95,11 +131,7 @@ function NetworkSection() {
           checked={network.ignore_cert_errors}
           onChange={(event) => setNetwork({ ignore_cert_errors: event.currentTarget.checked })}
         />
-        {save.isError && (
-          <Alert color="red" title="保存失败">
-            {save.error.message}
-          </Alert>
-        )}
+        <SaveError error={save.error} />
         <Group>
           <Button
             loading={save.isPending}
@@ -230,6 +262,259 @@ function TmdbSection() {
             {check.data.message}
           </Alert>
         )}
+      </Stack>
+    </Paper>
+  );
+}
+
+const LANGUAGES = [
+  { value: "zh-CN", label: "简体中文" },
+  { value: "zh-TW", label: "繁体中文（台湾）" },
+  { value: "zh-HK", label: "繁体中文（香港）" },
+  { value: "en-US", label: "英语" },
+  { value: "ja-JP", label: "日语" },
+  { value: "ko-KR", label: "韩语" },
+];
+const POSTER_SIZES = [
+  { value: "w342", label: "小（w342）" },
+  { value: "w500", label: "中（w500）" },
+  { value: "w780", label: "大（w780）" },
+  { value: "original", label: "原图" },
+];
+const FANART_SIZES = [
+  { value: "w780", label: "小（w780）" },
+  { value: "w1280", label: "中（w1280）" },
+  { value: "original", label: "大（原图）" },
+];
+const IMAGE_LABELS: [keyof MovieImages, string][] = [
+  ["poster", "海报"],
+  ["fanart", "同人画"],
+  ["clearlogo", "透明标志"],
+  ["keyart", "关键艺术图"],
+  ["collection_poster", "系列海报"],
+  ["collection_fanart", "系列同人画"],
+  ["actor_images", "演员头像"],
+];
+
+function splitWords(text: string): string[] {
+  return text
+    .split(/[\s,，]+/)
+    .map((word) => word.trim())
+    .filter((word) => word !== "");
+}
+
+function MovieSection() {
+  const { draft: movie, setDraft, save } = useSection("movie", "电影刮削设置");
+  const [skipText, setSkipText] = useState<string | null>(null);
+  if (movie === null) {
+    return null;
+  }
+  const set = (patch: Partial<MovieScrapeConfig>) => setDraft({ ...movie, ...patch });
+  const skip = skipText ?? movie.skip_folders.join("\n");
+  const country = movie.certification_country;
+  const countryInvalid = !/^[A-Z]{2}$/.test(country);
+
+  return (
+    <Paper withBorder p="md">
+      <Stack>
+        <Title order={4}>电影刮削</Title>
+        <Group grow align="flex-start">
+          <Select
+            label="刮削语言"
+            data={LANGUAGES}
+            allowDeselect={false}
+            value={movie.language}
+            onChange={(value) => value !== null && set({ language: value })}
+          />
+          <TextInput
+            label="分级国家"
+            description="TMDB 的国家代码，例如 US、CN"
+            maxLength={2}
+            value={country}
+            error={countryInvalid ? "填两位字母" : undefined}
+            onChange={(event) =>
+              set({ certification_country: event.currentTarget.value.toUpperCase() })
+            }
+          />
+        </Group>
+        <NumberInput
+          label="匹配阈值"
+          description="文件名和 TMDB 结果的相似度达到这个值才自动认定"
+          min={0}
+          max={1}
+          step={0.05}
+          decimalScale={2}
+          value={movie.match_threshold}
+          onChange={(value) => typeof value === "number" && set({ match_threshold: value })}
+        />
+        <Switch
+          label="包含成人内容"
+          checked={movie.include_adult}
+          onChange={(event) => set({ include_adult: event.currentTarget.checked })}
+        />
+        <Group grow align="flex-start">
+          <Select
+            label="海报尺寸"
+            data={POSTER_SIZES}
+            allowDeselect={false}
+            value={movie.poster_size}
+            onChange={(value) => value !== null && set({ poster_size: value })}
+          />
+          <Select
+            label="同人画尺寸"
+            data={FANART_SIZES}
+            allowDeselect={false}
+            value={movie.fanart_size}
+            onChange={(value) => value !== null && set({ fanart_size: value })}
+          />
+        </Group>
+        <Switch
+          label="优先无文字的同人画"
+          checked={movie.prefer_textless_fanart}
+          onChange={(event) => set({ prefer_textless_fanart: event.currentTarget.checked })}
+        />
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            要抓的图片
+          </Text>
+          <Group gap="md">
+            {IMAGE_LABELS.map(([key, label]) => (
+              <Checkbox
+                key={key}
+                label={label}
+                checked={movie.images[key]}
+                onChange={(event) =>
+                  set({ images: { ...movie.images, [key]: event.currentTarget.checked } })
+                }
+              />
+            ))}
+          </Group>
+        </Stack>
+        <Textarea
+          label="跳过的目录"
+          description="一行一个目录名，扫描时整个目录不看"
+          autosize
+          minRows={2}
+          value={skip}
+          onChange={(event) => setSkipText(event.currentTarget.value)}
+        />
+        <SaveError error={save.error} />
+        <Group>
+          <Button
+            loading={save.isPending}
+            disabled={countryInvalid}
+            onClick={() => {
+              const skipFolders = skip
+                .split("\n")
+                .map((line) => line.trim())
+                .filter((line) => line !== "");
+              save.mutate(
+                { ...movie, skip_folders: skipFolders },
+                { onSuccess: () => setSkipText(null) },
+              );
+            }}
+          >
+            保存电影刮削设置
+          </Button>
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
+function FilesSection() {
+  const { draft: files, save } = useSection("files", "文件设置");
+  const [videoText, setVideoText] = useState<string | null>(null);
+  const [subtitleText, setSubtitleText] = useState<string | null>(null);
+  if (files === null) {
+    return null;
+  }
+  const video = videoText ?? files.video_extensions.join(" ");
+  const subtitle = subtitleText ?? files.subtitle_extensions.join(" ");
+  const description = "扫描时只认这些扩展名，用空格或换行分隔";
+
+  return (
+    <Paper withBorder p="md">
+      <Stack>
+        <Title order={4}>文件</Title>
+        <Textarea
+          label="视频扩展名"
+          description={description}
+          autosize
+          minRows={2}
+          value={video}
+          onChange={(event) => setVideoText(event.currentTarget.value)}
+        />
+        <Textarea
+          label="字幕扩展名"
+          description={description}
+          autosize
+          minRows={1}
+          value={subtitle}
+          onChange={(event) => setSubtitleText(event.currentTarget.value)}
+        />
+        <SaveError error={save.error} />
+        <Group>
+          <Button
+            loading={save.isPending}
+            onClick={() => {
+              save.mutate(
+                { video_extensions: splitWords(video), subtitle_extensions: splitWords(subtitle) },
+                {
+                  onSuccess: () => {
+                    setVideoText(null);
+                    setSubtitleText(null);
+                  },
+                },
+              );
+            }}
+          >
+            保存文件设置
+          </Button>
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
+function TasksSection() {
+  const { draft: tasks, setDraft, save } = useSection("tasks", "任务设置");
+  if (tasks === null) {
+    return null;
+  }
+  return (
+    <Paper withBorder p="md">
+      <Stack>
+        <Title order={4}>任务</Title>
+        <Group grow align="flex-start">
+          <NumberInput
+            label="同时运行的任务数"
+            description="改了以后重启莫提斯生效"
+            min={1}
+            max={8}
+            allowDecimal={false}
+            value={tasks.concurrency}
+            onChange={(value) =>
+              typeof value === "number" && setDraft({ ...tasks, concurrency: value })
+            }
+          />
+          <NumberInput
+            label="已结束的任务保留天数"
+            min={1}
+            max={3650}
+            allowDecimal={false}
+            value={tasks.keep_days}
+            onChange={(value) =>
+              typeof value === "number" && setDraft({ ...tasks, keep_days: value })
+            }
+          />
+        </Group>
+        <SaveError error={save.error} />
+        <Group>
+          <Button loading={save.isPending} onClick={() => save.mutate(tasks)}>
+            保存任务设置
+          </Button>
+        </Group>
       </Stack>
     </Paper>
   );

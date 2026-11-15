@@ -130,6 +130,9 @@ export interface Library {
   data_type_id: string;
   data_type_name: string;
   automation: string;
+  is_auto_scrape: boolean;
+  item_count: number;
+  file_count: number;
   paths: string[];
   created_at: string;
   updated_at: string;
@@ -144,7 +147,48 @@ export interface LibraryCreate {
 export interface LibraryUpdate {
   name?: string;
   paths?: string[];
+  is_auto_scrape?: boolean;
 }
+
+export interface Enqueued {
+  task_id: number;
+}
+
+export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export type TaskFilter = "all" | "active" | "failed";
+
+export interface TaskProgress {
+  current: number;
+  total: number;
+  message: string;
+}
+
+export interface TaskRow {
+  id: number;
+  task_type: string;
+  type_label: string;
+  title: string;
+  status: TaskStatus;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  child_count: number;
+  child_status: Partial<Record<TaskStatus, number>>;
+  progress: TaskProgress | null;
+}
+
+export interface TaskDetail extends TaskRow {
+  payload: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+}
+
+export interface TaskPage {
+  items: TaskRow[];
+  total: number;
+}
+
+export type TaskAction = "cancel" | "retry" | "delete";
 
 export const fetchSystemInfo = () => request<SystemInfo>("GET", "/api/system/info");
 export const fetchSettings = () => request<AppConfig>("GET", "/api/settings");
@@ -161,3 +205,31 @@ export const createLibrary = (body: LibraryCreate) =>
 export const updateLibrary = (id: number, body: LibraryUpdate) =>
   request<Library>("PATCH", `/api/libraries/${id}`, body);
 export const deleteLibrary = (id: number) => request<void>("DELETE", `/api/libraries/${id}`);
+export const fetchLibrary = (id: number) => request<Library>("GET", `/api/libraries/${id}`);
+export const organizeLibrary = (id: number, scrape: boolean | null = null) =>
+  request<Enqueued>("POST", `/api/libraries/${id}/organize`, { scrape });
+export const scrapeLibrary = (id: number, force = false) =>
+  request<Enqueued>("POST", `/api/libraries/${id}/scrape`, { force });
+
+export const TASK_PAGE_SIZE = 50;
+export const fetchTasks = (filter: TaskFilter, offset = 0) => {
+  const params = new URLSearchParams({ limit: String(TASK_PAGE_SIZE), offset: String(offset) });
+  if (filter !== "all") {
+    params.set("status", filter);
+  }
+  return request<TaskPage>("GET", `/api/tasks?${params}`);
+};
+export const fetchTask = (id: number) => request<TaskDetail>("GET", `/api/tasks/${id}`);
+export const fetchTaskChildren = (id: number) =>
+  request<TaskRow[]>("GET", `/api/tasks/${id}/children`);
+export const fetchTaskLog = (id: number) =>
+  request<{ lines: string[] }>("GET", `/api/tasks/${id}/log?limit=500`);
+export const batchTasks = (action: TaskAction, taskIds: number[]) =>
+  request<{ affected: number }>("POST", "/api/tasks/batch", { action, task_ids: taskIds });
+export const clearFinishedTasks = () =>
+  request<{ affected: number }>("POST", "/api/tasks/clear-finished");
+
+export function isTaskBusy(task: TaskRow): boolean {
+  const children = (task.child_status.queued ?? 0) + (task.child_status.running ?? 0);
+  return task.status === "queued" || task.status === "running" || children > 0;
+}

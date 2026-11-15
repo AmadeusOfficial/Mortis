@@ -3,8 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, NavLink as RouterNavLink, useLocation } from "react-router";
 import { fetchSystemInfo } from "./api";
 
-export const NAV_ITEMS: { to: string; label: string }[] = [
-  { to: "/libraries", label: "媒体库" },
+export const NAV_ITEMS: { to: string; label: string; also?: string[] }[] = [
+  { to: "/libraries", label: "媒体库", also: ["/items"] },
+  { to: "/tasks", label: "任务" },
   { to: "/settings", label: "设置" },
 ];
 
@@ -30,7 +31,7 @@ export function Layout() {
             component={RouterNavLink}
             to={item.to}
             label={item.label}
-            active={pathname.startsWith(item.to)}
+            active={[item.to, ...(item.also ?? [])].some((prefix) => pathname.startsWith(prefix))}
           />
         ))}
       </AppShell.Navbar>
