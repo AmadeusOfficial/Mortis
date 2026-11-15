@@ -23,14 +23,18 @@ import {
   type ItemDetail,
   type MovieHit,
   fetchItem,
+  fetchItemRenamePreview,
   rematchItem,
+  renameItem,
   scrapeItem,
   updateItemFields,
   updateItemLocks,
+  writeItemFiles,
 } from "../api";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
+import { RenamePreviewModal } from "../components/RenamePreviewModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { formatSize, formatTime } from "../format";
 import { useTaskWatcher } from "../useTaskWatcher";
@@ -53,23 +57,55 @@ export function ItemDetailPage() {
   const item = useQuery({ queryKey: ["item", id], queryFn: () => fetchItem(id) });
   const [editing, setEditing] = useState<FieldOut | null>(null);
   const [rematching, setRematching] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [outputKind, setOutputKind] = useState<"write" | "rename" | null>(null);
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
     void queryClient.invalidateQueries({ queryKey: ["wall", detail.library_id] });
   };
   const watcher = useTaskWatcher((task) => {
+    setOutputKind(null);
     void queryClient.invalidateQueries({ queryKey: ["item", id] });
+    void queryClient.invalidateQueries({ queryKey: ["item-rename-preview", id] });
     void queryClient.invalidateQueries({ queryKey: ["wall"] });
     notifications.show(
       task.status === "succeeded"
-        ? { color: "green", message: "刮削完成" }
-        : { color: "red", title: "刮削失败", message: task.error ?? "任务没有完成" },
+        ? { color: "green", message: `${task.type_label}完成` }
+        : { color: "red", title: `${task.type_label}失败`, message: task.error ?? "任务没有完成" },
     );
   });
   const scrape = useMutation({
     mutationFn: () => scrapeItem(id, true),
     onSuccess: ({ task_id }) => watcher.watch(task_id),
     onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+  const writeFiles = useMutation({
+    mutationFn: () => writeItemFiles(id),
+    onMutate: () => setOutputKind("write"),
+    onSuccess: ({ task_id }) => {
+      watcher.watch(task_id);
+      notifications.show({ message: "已开始写出文件" });
+    },
+    onError: (error) => {
+      setOutputKind(null);
+      notifications.show({ color: "red", message: error.message });
+    },
+  });
+  const renamePreview = useQuery({
+    queryKey: ["item-rename-preview", id],
+    queryFn: () => fetchItemRenamePreview(id),
+    enabled: renaming,
+    retry: false,
+  });
+  const rename = useMutation({
+    mutationFn: () => renameItem(id),
+    onMutate: () => setOutputKind("rename"),
+    onSuccess: ({ task_id }) => {
+      setRenaming(false);
+      watcher.watch(task_id);
+      notifications.show({ message: "已开始重命名" });
+    },
+    onError: () => setOutputKind(null),
   });
   const rematch = useMutation({
     mutationFn: (hit: MovieHit) => rematchItem(id, hit.tmdb_id),
@@ -112,6 +148,8 @@ export function ItemDetailPage() {
       field.locked ? lockedKeys.filter((key) => key !== field.key) : [...lockedKeys, field.key],
     );
   const busy = watcher.watching || scrape.isPending;
+  const hasVideo = detail.files.some((file) => file.file_kind === "video");
+  const canOutput = detail.kind === "work" && hasVideo;
 
   const header = (
     <Group align="flex-start" wrap="nowrap" p="md">
@@ -164,6 +202,29 @@ export function ItemDetailPage() {
             >
               重新匹配
             </Button>
+            {canOutput && (
+              <>
+                <Button
+                  variant="default"
+                  loading={outputKind === "write"}
+                  disabled={busy}
+                  onClick={() => writeFiles.mutate()}
+                >
+                  写出文件
+                </Button>
+                <Button
+                  variant="default"
+                  loading={outputKind === "rename"}
+                  disabled={busy}
+                  onClick={() => {
+                    rename.reset();
+                    setRenaming(true);
+                  }}
+                >
+                  重命名
+                </Button>
+              </>
+            )}
           </Group>
         )}
       </Stack>
@@ -304,6 +365,21 @@ export function ItemDetailPage() {
           onClose={() => setRematching(false)}
         />
       )}
+      <RenamePreviewModal
+        opened={renaming}
+        onClose={() => setRenaming(false)}
+        previews={renamePreview.data === undefined ? undefined : [renamePreview.data]}
+        loading={renamePreview.isFetching}
+        error={
+          renamePreview.isError
+            ? renamePreview.error.message
+            : rename.isError
+              ? rename.error.message
+              : null
+        }
+        onConfirm={() => rename.mutate()}
+        confirming={rename.isPending}
+      />
     </Stack>
   );
 }

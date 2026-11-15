@@ -272,6 +272,22 @@ export interface ItemDetail {
   sections: { name: string; fields: FieldOut[] }[];
 }
 
+export interface RenameMove {
+  source: string;
+  target: string;
+}
+
+export interface RenamePreview {
+  item_id: number;
+  title: string;
+  folder_from: string | null;
+  folder_to: string | null;
+  make_folder: boolean;
+  moves: RenameMove[];
+  problems: string[];
+  changes: boolean;
+}
+
 export interface MovieHit {
   tmdb_id: number;
   title: string;
@@ -362,6 +378,17 @@ export const scrapeItem = (id: number, force = true) =>
   request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
 export const rematchItem = (id: number, tmdbId: number) =>
   request<Enqueued>("POST", `/api/items/${id}/rematch`, { tmdb_id: tmdbId });
+export const writeItemFiles = (id: number) =>
+  request<Enqueued>("POST", `/api/items/${id}/write-files`);
+export const fetchItemRenamePreview = (id: number) =>
+  request<RenamePreview>("GET", `/api/items/${id}/rename-preview`);
+export const renameItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/rename`);
+export const writeLibraryFiles = (id: number) =>
+  request<Enqueued>("POST", `/api/libraries/${id}/write-files`);
+export const fetchLibraryRenamePreview = (id: number) =>
+  request<RenamePreview[]>("GET", `/api/libraries/${id}/rename-preview`);
+export const renameLibrary = (id: number) =>
+  request<Enqueued>("POST", `/api/libraries/${id}/rename`);
 export const searchTmdbMovies = (query: string, year: number | null) => {
   const params = new URLSearchParams({ query });
   if (year !== null) {
