@@ -1,0 +1,13 @@
+{
+  "id": 2344,
+  "posters": [
+    {"file_path": "/c-poster-en.jpg", "iso_639_1": "en", "width": 1000, "height": 1500,
+     "vote_average": 5.0},
+    {"file_path": "/c-poster.jpg", "iso_639_1": "zh", "width": 1000, "height": 1500,
+     "vote_average": 4.0}
+  ],
+  "backdrops": [
+    {"file_path": "/c-backdrop.jpg", "iso_639_1": null, "width": 1920, "height": 1080,
+     "vote_average": 5.0}
+  ]
+}
