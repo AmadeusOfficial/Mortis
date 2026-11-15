@@ -5,6 +5,14 @@ $Python = if ($env:MORTIS_PYTHON) { $env:MORTIS_PYTHON } else { "python" }
 $Port = if ($env:MORTIS_PORT) { $env:MORTIS_PORT } else { "8100" }
 if (-not $env:MORTIS_DATA_DIR) { $env:MORTIS_DATA_DIR = Join-Path $Root ".dev-data" }
 
+$ErrorActionPreference = "Continue"
+& $Python -c "import mortis, uvicorn" 2>$null | Out-Null
+$importOk = $LASTEXITCODE -eq 0
+$ErrorActionPreference = "Stop"
+if (-not $importOk) {
+    throw "解释器 $Python 里没有装莫提斯。把环境变量 MORTIS_PYTHON 设成装了莫提斯的 python.exe（例如 conda 环境 python314），再重新启动。"
+}
+
 # Windows 上第二个 uvicorn 仍能绑定已被占用的端口，请求会落到旧进程上，所以启动前必须确认端口空闲。
 $owners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
     ForEach-Object { $_.OwningProcess } | Sort-Object -Unique)
