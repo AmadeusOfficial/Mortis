@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import quote
 
 import httpx2 as httpx
@@ -6,6 +7,9 @@ from mortis.config.models import NetworkConfig, Secrets
 from mortis.version import get_version
 
 TIMEOUT_SECONDS = 15.0
+
+# httpx2 会在 INFO 记录完整请求地址，而 TMDB v3 的 key 就在查询参数里。
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
 def proxy_url(network: NetworkConfig, secrets: Secrets) -> str | None:

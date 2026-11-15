@@ -1,3 +1,5 @@
+import logging
+
 import httpx2 as httpx
 import pytest
 
@@ -105,6 +107,14 @@ def test_check_redacts_api_key_from_error_text() -> None:
     assert result.ok is False
     assert "secretkey123" not in result.message
     assert "api_key=***" in result.message
+
+
+def test_tmdb_key_never_reaches_logs(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    with _client(lambda request: httpx.Response(200, json={})) as client:
+        result = check_tmdb_key(client, "secretkey123")
+    assert result.ok is True
+    assert "secretkey123" not in caplog.text
 
 
 def test_build_client_defaults_without_transport() -> None:
