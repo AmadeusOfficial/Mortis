@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 莫提斯
+.superpowers/
+web/node_modules/
+web/dist/
+*.local.toml
+secrets.toml
