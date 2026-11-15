@@ -23,6 +23,7 @@ dependencies = [
 dev = [
     "pytest>=9.2",
     "ruff>=0.17",
+    "playwright>=1.65",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -30,6 +31,8 @@ packages = ["src/mortis"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not e2e'"
+markers = ["e2e: 用本机 Edge 走一遍页面，需要先构建前端（npm run build）"]
 
 [tool.ruff]
 line-length = 100

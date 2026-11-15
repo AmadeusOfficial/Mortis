@@ -91,6 +91,15 @@ Windows 上第二个 uvicorn 仍能绑定已被占用的 8100，请求会落到�
 
 用 Read 查看截图：应显示「莫提斯」「智能体元数据刮削管理器」「版本 0.0.1」和数据目录（默认是 `<仓库>\.dev-data`），而不是「连不上后端」。托管模式的 `D:\dev\tmp\start-out.log` 里应出现 `GET /api/system/info ... 200`；开发模式没有访问日志，改用 `Invoke-WebRequest http://localhost:5174/api/system/info -UseBasicParsing` 确认经 Vite 代理能取到 JSON。
 
+### 页面自动化测试
+
+用 Playwright 驱动本机 Edge（`channel="msedge"`），不下载浏览器，不要运行 `playwright install`。默认 `pytest` 不跑，要先构建前端再显式运行：
+
+    Push-Location web; npm run build; Pop-Location
+    & $PY -m pytest -m e2e -q
+
+测试自己在随机端口起一个后端、用临时数据目录，不占 8100，也不碰 `.dev-data`。
+
 ## 交给用户
 
 只给 Web 地址，用纯文本，不放进代码块。要用户看某个页面时给完整路径。请用户复验时，无论服务是否已在运行，都再给一次地址。
