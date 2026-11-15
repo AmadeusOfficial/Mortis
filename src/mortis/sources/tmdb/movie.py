@@ -3,6 +3,7 @@ from typing import Any
 
 from mortis.config.models import MovieScrapeConfig
 from mortis.sources.tmdb.client import TmdbClient
+from mortis.sources.tmdb.names import country_name, language_name
 
 SOURCE = "tmdb"
 APPEND = "credits,images,release_dates,keywords,videos,external_ids"
@@ -92,6 +93,19 @@ def _names(entries: Iterable[dict[str, Any]] | None, *keys: str) -> list[str]:
     result: list[str] = []
     for entry in entries or []:
         name = next((entry.get(key) for key in keys if entry.get(key)), None)
+        if name and name not in result:
+            result.append(name)
+    return result
+
+
+def _coded(
+    entries: Iterable[dict[str, Any]] | None,
+    key: str,
+    convert: Callable[[str | None], str | None],
+) -> list[str]:
+    result: list[str] = []
+    for entry in entries or []:
+        name = convert(entry.get(key))
         if name and name not in result:
             result.append(name)
     return result
@@ -196,10 +210,10 @@ def movie_candidates(raw: dict[str, Any], config: MovieScrapeConfig) -> dict[str
             "certification": _certification(raw, config.certification_country),
             "ratings": _ratings(raw),
             "genres": _names(raw.get("genres"), "name"),
-            "countries": _names(raw.get("production_countries"), "name"),
+            "countries": _coded(raw.get("production_countries"), "iso_3166_1", country_name),
             "studios": _names(raw.get("production_companies"), "name"),
             "keywords": _names((raw.get("keywords") or {}).get("keywords"), "name"),
-            "spoken_languages": _names(raw.get("spoken_languages"), "english_name", "name"),
+            "spoken_languages": _coded(raw.get("spoken_languages"), "iso_639_1", language_name),
             "trailer": _trailer(raw, config),
             "directors": _crew(credits, lambda e: e.get("job") == "Director"),
             "writers": _crew(credits, lambda e: e.get("department") == "Writing"),

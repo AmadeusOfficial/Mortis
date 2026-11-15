@@ -30,10 +30,10 @@ def test_movie_candidates() -> None:
         {"source": "tmdb", "rating": 8.2, "max_rating": 10.0, "vote_count": 26000}
     ]
     assert c["genres"] == ["动作", "科幻"]
-    assert c["countries"] == ["United States of America"]
+    assert c["countries"] == ["美国"]
     assert c["studios"] == ["Village Roadshow Pictures", "Groucho II Film Partnership"]
     assert c["keywords"] == ["simulated reality", "artificial intelligence"]
-    assert c["spoken_languages"] == ["English"]
+    assert c["spoken_languages"] == ["英语"]
     assert c["trailer"] == "https://www.youtube.com/watch?v=zh-trailer"
     assert [p["name"] for p in c["directors"]] == ["Lana Wachowski", "Lilly Wachowski"]
     assert [p["name"] for p in c["writers"]] == ["Lana Wachowski", "Lilly Wachowski"]
