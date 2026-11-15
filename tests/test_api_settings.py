@@ -49,6 +49,20 @@ def test_invalid_port_rejected(client: TestClient) -> None:
     assert client.put("/api/settings", json=body).status_code == 422
 
 
+@pytest.mark.parametrize("host", ["http://127.0.0.1", "127.0.0.1:7890", "user@proxy", "::1"])
+def test_invalid_proxy_host_rejected_with_message(client: TestClient, host: str) -> None:
+    body = {"network": {"proxy_host": host, "proxy_port": 7890, "ignore_cert_errors": True}}
+    response = client.put("/api/settings", json=body)
+    assert response.status_code == 422
+    assert "代理主机只填主机名或 IP" in response.json()["detail"][0]["msg"]
+    assert client.get("/api/settings").json() == DEFAULT_SETTINGS
+
+
+def test_ipv6_proxy_host_saved(client: TestClient) -> None:
+    body = {"network": {"proxy_host": "[::1]", "proxy_port": 7890, "ignore_cert_errors": True}}
+    assert client.put("/api/settings", json=body).json() == body
+
+
 def test_secrets_status_never_returns_values(client: TestClient, data_dir: Path) -> None:
     assert client.get("/api/secrets").json() == {
         "tmdb_api_key": False,

@@ -28,6 +28,18 @@ def test_proxy_url_quotes_credentials() -> None:
     )
 
 
+def test_proxy_url_brackets_ipv6_host() -> None:
+    url = proxy_url(NetworkConfig(proxy_host="[::1]", proxy_port=1080), Secrets())
+    assert url == "http://[::1]:1080"
+    assert httpx.URL(url).host == "::1"
+    assert httpx.URL(url).port == 1080
+
+
+def test_build_client_accepts_ipv6_proxy_host() -> None:
+    with build_client(NetworkConfig(proxy_host="[::1]"), Secrets()) as client:
+        assert client._mounts
+
+
 def test_client_sends_user_agent() -> None:
     seen: list[httpx.Request] = []
 

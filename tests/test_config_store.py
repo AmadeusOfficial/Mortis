@@ -2,6 +2,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from mortis.config.models import SECRET_KEYS, AppConfig, NetworkConfig, Secrets
 from mortis.config.store import ConfigError, ConfigStore
@@ -17,6 +18,45 @@ def test_defaults_match_local_tmm() -> None:
         True,
     )
     assert SECRET_KEYS == ("tmdb_api_key", "proxy_username", "proxy_password")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("127.0.0.1", "127.0.0.1"),
+        ("proxy.local", "proxy.local"),
+        ("  my-proxy.example.com  ", "my-proxy.example.com"),
+        ("[::1]", "[::1]"),
+        ("[fe80::1]", "[fe80::1]"),
+        ("", ""),
+        ("   ", ""),
+    ],
+)
+def test_proxy_host_accepts_hostnames_and_ips(raw: str, expected: str) -> None:
+    assert NetworkConfig(proxy_host=raw).proxy_host == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "http://127.0.0.1",
+        "socks5://proxy",
+        "127.0.0.1:7890",
+        "proxy/path",
+        "user@proxy",
+        "my proxy",
+        "pro\txy",
+        "::1",
+        "fe80::1",
+        "[::1]:7890",
+        "[proxy]",
+        "[::1",
+        "::1]",
+    ],
+)
+def test_proxy_host_rejects_malformed_values(raw: str) -> None:
+    with pytest.raises(ValidationError, match="代理主机只填主机名或 IP"):
+        NetworkConfig(proxy_host=raw)
 
 
 def test_missing_files_give_defaults_without_creating(tmp_path: Path) -> None:
