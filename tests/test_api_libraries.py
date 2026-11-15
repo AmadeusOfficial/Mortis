@@ -8,6 +8,8 @@ from mortis.api.app import create_app
 from mortis.db.models import Item, utc_now
 from mortis.settings import Settings
 
+LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
+
 
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
@@ -16,7 +18,7 @@ def data_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(data_dir: Path) -> Iterator[TestClient]:
-    with TestClient(create_app(Settings(data_dir=data_dir))) as opened:
+    with TestClient(create_app(Settings(data_dir=data_dir)), base_url=LOCAL) as opened:
         yield opened
 
 
@@ -180,7 +182,7 @@ def test_delete_refused_when_library_has_items(client: TestClient, dirs: dict[st
 
 
 def test_libraries_survive_restart(data_dir: Path, dirs: dict[str, Path]) -> None:
-    with TestClient(create_app(Settings(data_dir=data_dir))) as first:
+    with TestClient(create_app(Settings(data_dir=data_dir)), base_url=LOCAL) as first:
         created = _create(first, [str(dirs["a"])]).json()
-    with TestClient(create_app(Settings(data_dir=data_dir))) as second:
+    with TestClient(create_app(Settings(data_dir=data_dir)), base_url=LOCAL) as second:
         assert second.get("/api/libraries").json() == [created]

@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from mortis.api.app import create_app
 from mortis.settings import Settings
 
+LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
+
 DEFAULT_SETTINGS = {
     "network": {"proxy_host": "127.0.0.1", "proxy_port": 7890, "ignore_cert_errors": True}
 }
@@ -24,7 +26,7 @@ def data_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(data_dir: Path) -> Iterator[TestClient]:
-    with TestClient(_app(data_dir)) as opened:
+    with TestClient(_app(data_dir), base_url=LOCAL) as opened:
         yield opened
 
 
@@ -38,7 +40,7 @@ def test_settings_saved_and_survive_restart(client: TestClient, data_dir: Path) 
     body = {"network": {"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False}}
     assert client.put("/api/settings", json=body).json() == body
     assert (data_dir / "config.toml").is_file()
-    with TestClient(_app(data_dir)) as again:
+    with TestClient(_app(data_dir), base_url=LOCAL) as again:
         assert again.get("/api/settings").json() == body
 
 
@@ -91,7 +93,7 @@ def test_check_tmdb_uses_saved_key(data_dir: Path) -> None:
         seen.append(request)
         return httpx.Response(200, json={})
 
-    with TestClient(_app(data_dir, httpx.MockTransport(handler))) as client:
+    with TestClient(_app(data_dir, httpx.MockTransport(handler)), base_url=LOCAL) as client:
         client.put("/api/secrets", json={"tmdb_api_key": "abc"})
         assert client.post("/api/settings/check-tmdb").json() == {
             "ok": True,
@@ -103,7 +105,7 @@ def test_check_tmdb_uses_saved_key(data_dir: Path) -> None:
 def test_broken_config_file_reports_path(data_dir: Path) -> None:
     data_dir.mkdir(parents=True)
     (data_dir / "config.toml").write_text("[network\n", encoding="utf-8")
-    with TestClient(_app(data_dir)) as client:
+    with TestClient(_app(data_dir), base_url=LOCAL) as client:
         response = client.get("/api/settings")
     assert response.status_code == 500
     assert "config.toml" in response.json()["detail"]

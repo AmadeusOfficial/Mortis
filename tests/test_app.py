@@ -8,6 +8,8 @@ from mortis.api.app import create_app
 from mortis.settings import Settings
 from mortis.version import get_version
 
+LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
+
 
 @pytest.fixture
 def web_dist(tmp_path: Path) -> Path:
@@ -21,7 +23,46 @@ def web_dist(tmp_path: Path) -> Path:
 
 def make_client(tmp_path: Path, web_dist: Path | None = None) -> TestClient:
     settings = Settings(data_dir=tmp_path / "data", web_dist=web_dist)
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), base_url=LOCAL)
+
+
+@pytest.mark.parametrize("path", ["/api/health", "/", "/library/1"])
+def test_foreign_host_is_rejected(tmp_path: Path, web_dist: Path, path: str) -> None:
+    client = make_client(tmp_path, web_dist)
+    response = client.get(path, headers={"Host": "evil.example"})
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1:8100", "localhost:5174", "localhost", "LOCALHOST:1"])
+@pytest.mark.parametrize("path", ["/api/health", "/"])
+def test_local_hosts_are_allowed(tmp_path: Path, web_dist: Path, host: str, path: str) -> None:
+    client = make_client(tmp_path, web_dist)
+    assert client.get(path, headers={"Host": host}).status_code == 200
+
+
+def test_testserver_host_is_not_allowed(tmp_path: Path) -> None:
+    client = TestClient(create_app(Settings(data_dir=tmp_path / "data")))
+    assert client.get("/api/health").status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("host", "allowed", "denied"),
+    [
+        ("192.168.1.5", ["192.168.1.5:8100", "localhost"], ["10.0.0.1"]),
+        ("0.0.0.0", ["127.0.0.1"], ["0.0.0.0", "10.0.0.1"]),
+        ("::", ["localhost"], ["::", "10.0.0.1"]),
+        ("localhost", ["localhost", "127.0.0.1"], ["10.0.0.1"]),
+    ],
+)
+def test_configured_host_joins_allow_list(
+    tmp_path: Path, host: str, allowed: list[str], denied: list[str]
+) -> None:
+    app = create_app(Settings(data_dir=tmp_path / "data", host=host))
+    client = TestClient(app, base_url=LOCAL)
+    for name in allowed:
+        assert client.get("/api/health", headers={"Host": name}).status_code == 200
+    for name in denied:
+        assert client.get("/api/health", headers={"Host": name}).status_code == 400
 
 
 def test_health(tmp_path: Path) -> None:

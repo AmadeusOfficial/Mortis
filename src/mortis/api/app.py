@@ -7,6 +7,7 @@ import httpx2 as httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from mortis.api.routes import data_types as data_type_routes
 from mortis.api.routes import libraries as library_routes
@@ -56,6 +57,7 @@ def create_app(
         engine.dispose()
 
     app = FastAPI(title=PRODUCT_NAME, version=get_version(), lifespan=lifespan)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts(resolved.host))
     app.state.settings = resolved
     app.state.session_factory = session_factory
     app.state.config_store = ConfigStore(resolved.data_dir)
@@ -84,6 +86,14 @@ def create_app(
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
     return app
+
+
+def _allowed_hosts(configured: str) -> list[str]:
+    """只认回环名和配置的监听地址，挡住 DNS 重绑定；通配监听地址不算。"""
+    hosts = ["127.0.0.1", "localhost"]
+    if configured not in {"0.0.0.0", "::"} and configured not in hosts:
+        hosts.append(configured)
+    return hosts
 
 
 def _mount_web(app: FastAPI, dist: Path) -> None:
