@@ -1,14 +1,26 @@
 import posixpath
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path, PureWindowsPath
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+import httpx2 as httpx
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from mortis.api.routes import data_types as data_type_routes
+from mortis.api.routes import libraries as library_routes
+from mortis.api.routes import settings as settings_routes
+from mortis.catalog.install import ensure_builtin_types
+from mortis.config.store import ConfigError, ConfigStore
+from mortis.db.engine import create_db_engine, make_session_factory
+from mortis.db.migrate import upgrade_database
+from mortis.libraries import LibraryError
 from mortis.settings import Settings
 from mortis.version import get_version
 
 PRODUCT_NAME = "莫提斯"
+DB_FILE = "mortis.db"
 
 
 class Health(BaseModel):
@@ -21,9 +33,41 @@ class SystemInfo(BaseModel):
     data_dir: str
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    http_transport: httpx.BaseTransport | None = None,
+) -> FastAPI:
     resolved = settings if settings is not None else Settings()
-    app = FastAPI(title=PRODUCT_NAME, version=get_version())
+    resolved.data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = resolved.data_dir / DB_FILE
+    upgrade_database(db_path)
+    engine = create_db_engine(db_path)
+    session_factory = make_session_factory(engine)
+    with session_factory() as session:
+        ensure_builtin_types(session)
+        session.commit()
+    # 启动安装用过的连接不留在池里；没进 lifespan 的调用方（只读静态页的测试）也不会漏连接。
+    engine.dispose()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        engine.dispose()
+
+    app = FastAPI(title=PRODUCT_NAME, version=get_version(), lifespan=lifespan)
+    app.state.settings = resolved
+    app.state.session_factory = session_factory
+    app.state.config_store = ConfigStore(resolved.data_dir)
+    app.state.http_transport = http_transport
+
+    @app.exception_handler(LibraryError)
+    async def _library_error(_request: Request, error: LibraryError) -> JSONResponse:
+        return JSONResponse(status_code=error.status_code, content={"detail": error.message})
+
+    @app.exception_handler(ConfigError)
+    async def _config_error(_request: Request, error: ConfigError) -> JSONResponse:
+        return JSONResponse(status_code=500, content={"detail": str(error)})
 
     @app.get("/api/health", response_model=Health)
     def health() -> Health:
@@ -32,6 +76,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/system/info", response_model=SystemInfo)
     def system_info() -> SystemInfo:
         return SystemInfo(name=PRODUCT_NAME, version=get_version(), data_dir=str(resolved.data_dir))
+
+    app.include_router(settings_routes.router)
+    app.include_router(data_type_routes.router)
+    app.include_router(library_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
