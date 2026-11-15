@@ -6,13 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mortis.api.app import create_app
+from mortis.config.models import AppConfig
 from mortis.settings import Settings
 
 LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
 
-DEFAULT_SETTINGS = {
-    "network": {"proxy_host": "127.0.0.1", "proxy_port": 7890, "ignore_cert_errors": True}
-}
+DEFAULT_SETTINGS = AppConfig().model_dump(mode="json")
 
 
 def _app(data_dir: Path, transport: httpx.BaseTransport | None = None):  # noqa: ANN202
@@ -37,30 +36,31 @@ def test_settings_defaults(client: TestClient) -> None:
 
 
 def test_settings_saved_and_survive_restart(client: TestClient, data_dir: Path) -> None:
-    body = {"network": {"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False}}
-    assert client.put("/api/settings", json=body).json() == body
+    network = {"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False}
+    body = client.put("/api/settings/network", json=network).json()
+    assert body == {**DEFAULT_SETTINGS, "network": network}
     assert (data_dir / "config.toml").is_file()
     with TestClient(_app(data_dir), base_url=LOCAL) as again:
         assert again.get("/api/settings").json() == body
 
 
 def test_invalid_port_rejected(client: TestClient) -> None:
-    body = {"network": {"proxy_host": "x", "proxy_port": 0, "ignore_cert_errors": True}}
-    assert client.put("/api/settings", json=body).status_code == 422
+    body = {"proxy_host": "x", "proxy_port": 0, "ignore_cert_errors": True}
+    assert client.put("/api/settings/network", json=body).status_code == 422
 
 
 @pytest.mark.parametrize("host", ["http://127.0.0.1", "127.0.0.1:7890", "user@proxy", "::1"])
 def test_invalid_proxy_host_rejected_with_message(client: TestClient, host: str) -> None:
-    body = {"network": {"proxy_host": host, "proxy_port": 7890, "ignore_cert_errors": True}}
-    response = client.put("/api/settings", json=body)
+    body = {"proxy_host": host, "proxy_port": 7890, "ignore_cert_errors": True}
+    response = client.put("/api/settings/network", json=body)
     assert response.status_code == 422
     assert "代理主机只填主机名或 IP" in response.json()["detail"][0]["msg"]
     assert client.get("/api/settings").json() == DEFAULT_SETTINGS
 
 
 def test_ipv6_proxy_host_saved(client: TestClient) -> None:
-    body = {"network": {"proxy_host": "[::1]", "proxy_port": 7890, "ignore_cert_errors": True}}
-    assert client.put("/api/settings", json=body).json() == body
+    body = {"proxy_host": "[::1]", "proxy_port": 7890, "ignore_cert_errors": True}
+    assert client.put("/api/settings/network", json=body).json()["network"] == body
 
 
 def test_secrets_status_never_returns_values(client: TestClient, data_dir: Path) -> None:
@@ -129,3 +129,28 @@ def test_data_types_lists_movie(client: TestClient) -> None:
     assert client.get("/api/data-types").json() == [
         {"id": "movie", "name": "电影", "structure": "item_group"}
     ]
+
+
+def test_old_whole_put_is_gone(client: TestClient) -> None:
+    assert client.put("/api/settings", json={}).status_code == 405
+
+
+def test_each_section_saves_alone(client: TestClient) -> None:
+    client.put(
+        "/api/settings/network",
+        json={"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False},
+    )
+    body = client.put("/api/settings/movie", json={"language": "en-US"}).json()
+    assert body["movie"]["language"] == "en-US"
+    assert body["network"]["proxy_port"] == 1080
+    body = client.put(
+        "/api/settings/files", json={"video_extensions": ["mkv"], "subtitle_extensions": ["srt"]}
+    ).json()
+    assert body["files"]["video_extensions"] == [".mkv"]
+    body = client.put("/api/settings/tasks", json={"concurrency": 2, "keep_days": 7}).json()
+    assert body["tasks"] == {"concurrency": 2, "keep_days": 7}
+    assert client.get("/api/settings").json() == body
+
+
+def test_section_validation_rejects_bad_threshold(client: TestClient) -> None:
+    assert client.put("/api/settings/movie", json={"match_threshold": 5}).status_code == 422

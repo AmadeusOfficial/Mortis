@@ -2,7 +2,15 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
 from mortis.api.deps import ConfigStoreDep
-from mortis.config.models import SECRET_KEYS, AppConfig, Secrets
+from mortis.config.models import (
+    SECRET_KEYS,
+    AppConfig,
+    FilesConfig,
+    MovieScrapeConfig,
+    NetworkConfig,
+    Secrets,
+    TasksConfig,
+)
 from mortis.net.http import build_client
 from mortis.sources.tmdb.check import TmdbCheck, check_tmdb_key
 
@@ -26,10 +34,24 @@ def read_settings(store: ConfigStoreDep) -> AppConfig:
     return store.load_config()
 
 
-@router.put("/settings", response_model=AppConfig)
-def write_settings(config: AppConfig, store: ConfigStoreDep) -> AppConfig:
-    store.save_config(config)
-    return config
+@router.put("/settings/network", response_model=AppConfig)
+def write_network(section: NetworkConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("network", section)
+
+
+@router.put("/settings/files", response_model=AppConfig)
+def write_files(section: FilesConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("files", section)
+
+
+@router.put("/settings/movie", response_model=AppConfig)
+def write_movie(section: MovieScrapeConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("movie", section)
+
+
+@router.put("/settings/tasks", response_model=AppConfig)
+def write_tasks(section: TasksConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("tasks", section)
 
 
 @router.get("/secrets")

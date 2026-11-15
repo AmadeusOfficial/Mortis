@@ -4,7 +4,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mortis.config.models import SECRET_KEYS, AppConfig, NetworkConfig, Secrets
+from mortis.config.models import (
+    SECRET_KEYS,
+    AppConfig,
+    FilesConfig,
+    MovieScrapeConfig,
+    NetworkConfig,
+    Secrets,
+    TasksConfig,
+)
 from mortis.config.store import ConfigError, ConfigStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -74,8 +82,10 @@ def test_config_roundtrip(tmp_path: Path) -> None:
     )
     store.save_config(config)
     assert store.load_config() == config
-    assert tomllib.loads(store.config_path.read_text(encoding="utf-8")) == {
-        "network": {"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False}
+    assert tomllib.loads(store.config_path.read_text(encoding="utf-8"))["network"] == {
+        "proxy_host": "",
+        "proxy_port": 1080,
+        "ignore_cert_errors": False,
     }
     assert list(store.config_path.parent.glob("*.tmp")) == []
 
@@ -171,3 +181,76 @@ def test_failed_replace_keeps_original_and_no_temp(
         store.save_config(AppConfig(network=NetworkConfig(proxy_port=2222)))
     assert store.config_path.read_bytes() == before
     assert list(tmp_path.glob("*.tmp")) == []
+
+def test_new_sections_default_to_local_tmm() -> None:
+    config = AppConfig()
+    assert ".mkv" in config.files.video_extensions
+    assert ".iso" in config.files.video_extensions
+    assert ".srt" in config.files.subtitle_extensions
+    movie = config.movie
+    assert (movie.language, movie.certification_country) == ("zh-CN", "US")
+    assert movie.include_adult is True
+    assert movie.match_threshold == 0.75
+    assert movie.skip_folders == ["MAKEMKV"]
+    assert (movie.poster_size, movie.fanart_size) == ("w780", "original")
+    assert movie.prefer_textless_fanart is True
+    assert all(movie.images.model_dump().values())
+    assert config.tasks.concurrency == 3
+    assert config.tasks.keep_days == 30
+
+
+def test_extensions_are_normalized() -> None:
+    files = FilesConfig(video_extensions=[" MKV", ".mp4", "mkv", ""], subtitle_extensions=["srt"])
+    assert files.video_extensions == [".mkv", ".mp4"]
+    assert files.subtitle_extensions == [".srt"]
+
+
+@pytest.mark.parametrize("bad", [["m kv"], ["*.mkv"], [], ["", " "]])
+def test_extensions_reject_bad_values(bad: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        FilesConfig(video_extensions=bad)
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"language": "zh"},
+        {"certification_country": "usa"},
+        {"match_threshold": 1.5},
+        {"poster_size": "w9999"},
+    ],
+)
+def test_movie_section_rejects_bad_values(patch: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        MovieScrapeConfig.model_validate(patch)
+
+
+def test_skip_folders_are_cleaned() -> None:
+    movie = MovieScrapeConfig(skip_folders=[" MAKEMKV ", "", "makemkv", "Extras"])
+    assert movie.skip_folders == ["MAKEMKV", "Extras"]
+
+
+def test_tasks_concurrency_bounds() -> None:
+    with pytest.raises(ValidationError):
+        TasksConfig(concurrency=0)
+    with pytest.raises(ValidationError):
+        TasksConfig(concurrency=9)
+
+
+def test_save_section_keeps_other_sections_and_unknown_keys(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text(
+        "[network]\nproxy_port = 1080\nfuture = 1\n[later]\nx = 2\n", encoding="utf-8"
+    )
+    saved = store.save_section("movie", MovieScrapeConfig(language="en-US"))
+    assert saved.movie.language == "en-US"
+    assert saved.network.proxy_port == 1080
+    raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
+    assert raw["network"] == {"proxy_port": 1080, "future": 1}
+    assert raw["later"] == {"x": 2}
+    assert raw["movie"]["language"] == "en-US"
+
+
+def test_save_section_rejects_unknown_name(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        ConfigStore(tmp_path).save_section("nope", TasksConfig())

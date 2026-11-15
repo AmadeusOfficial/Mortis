@@ -2,11 +2,12 @@ import os
 import tempfile
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import tomli_w
 from pydantic import BaseModel, ValidationError
 
-from mortis.config.models import AppConfig, Secrets
+from mortis.config.models import CONFIG_SECTIONS, AppConfig, Secrets
 
 CONFIG_FILE = "config.toml"
 SECRETS_FILE = "secrets.toml"
@@ -27,6 +28,20 @@ class ConfigStore:
     def save_config(self, config: AppConfig) -> None:
         _save(self.config_path, config)
 
+    def save_section(self, name: str, section: BaseModel) -> AppConfig:
+        """只替换一节；其他节和文件里还不认识的键原样保留。"""
+        expected = CONFIG_SECTIONS.get(name)
+        if expected is None or not isinstance(section, expected):
+            raise ValueError(f"没有这一节设置：{name}")
+        raw = _read_raw(self.config_path)
+        old = raw.get(name)
+        merged = dict(old) if isinstance(old, dict) else {}
+        merged.update(section.model_dump(mode="json"))
+        raw[name] = merged
+        config = _validate(self.config_path, raw, AppConfig)
+        _write(self.config_path, raw)
+        return config
+
     def load_secrets(self) -> Secrets:
         return _load(self.secrets_path, Secrets)
 
@@ -34,17 +49,20 @@ class ConfigStore:
         _save(self.secrets_path, secrets)
 
 
-def _load[M: BaseModel](path: Path, model: type[M]) -> M:
+def _read_raw(path: Path) -> dict[str, Any]:
     if not path.is_file():
-        return model()
+        return {}
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        return tomllib.loads(path.read_text(encoding="utf-8"))
     except UnicodeDecodeError as error:
         raise ConfigError(f"{path} 不是 UTF-8 编码，无法读取") from error
     except OSError as error:
         raise ConfigError(f"{path} 无法读取：{error.strerror or type(error).__name__}") from error
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"{path} 不是合法的 TOML：{error}") from error
+
+
+def _validate[M: BaseModel](path: Path, data: dict[str, Any], model: type[M]) -> M:
     try:
         return model.model_validate(data)
     except ValidationError as error:
@@ -56,9 +74,19 @@ def _load[M: BaseModel](path: Path, model: type[M]) -> M:
         raise ConfigError(f"{path} 里有不合法的设置：{problems}") from None
 
 
+def _load[M: BaseModel](path: Path, model: type[M]) -> M:
+    if not path.is_file():
+        return model()
+    return _validate(path, _read_raw(path), model)
+
+
 def _save(path: Path, model: BaseModel) -> None:
+    _write(path, model.model_dump(mode="json"))
+
+
+def _write(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = tomli_w.dumps(model.model_dump(mode="json"))
+    payload = tomli_w.dumps(data)
     fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f"{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:

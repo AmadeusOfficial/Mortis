@@ -15,7 +15,6 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
-  type AppConfig,
   type NetworkConfig,
   type SecretKey,
   type SecretsUpdate,
@@ -24,7 +23,7 @@ import {
   fetchSettings,
   fetchSystemInfo,
   saveSecrets,
-  saveSettings,
+  saveSettingsSection,
 } from "../api";
 
 export function SettingsPage() {
@@ -41,16 +40,16 @@ export function SettingsPage() {
 function NetworkSection() {
   const queryClient = useQueryClient();
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
-  const [draft, setDraft] = useState<AppConfig | null>(null);
+  const [network, setDraft] = useState<NetworkConfig | null>(null);
   const [port, setPort] = useState<number | "">("");
   useEffect(() => {
     if (settings.data !== undefined) {
-      setDraft(settings.data);
+      setDraft(settings.data.network);
       setPort(settings.data.network.proxy_port);
     }
   }, [settings.data]);
   const save = useMutation({
-    mutationFn: saveSettings,
+    mutationFn: (next: NetworkConfig) => saveSettingsSection("network", next),
     onSuccess: (saved) => {
       queryClient.setQueryData(["settings"], saved);
       notifications.show({ color: "green", message: "网络设置已保存" });
@@ -64,13 +63,11 @@ function NetworkSection() {
       </Alert>
     );
   }
-  if (draft === null) {
+  if (network === null) {
     return <Text c="dimmed">正在读取设置…</Text>;
   }
-  const network = draft.network;
   const portInvalid = port === "" || port < 1 || port > 65535;
-  const setNetwork = (patch: Partial<NetworkConfig>) =>
-    setDraft({ ...draft, network: { ...network, ...patch } });
+  const setNetwork = (patch: Partial<NetworkConfig>) => setDraft({ ...network, ...patch });
 
   return (
     <Paper withBorder p="md">
@@ -109,7 +106,7 @@ function NetworkSection() {
             disabled={portInvalid}
             onClick={() => {
               if (port !== "") {
-                save.mutate({ ...draft, network: { ...network, proxy_port: port } });
+                save.mutate({ ...network, proxy_port: port });
               }
             }}
           >

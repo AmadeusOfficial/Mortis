@@ -68,9 +68,46 @@ export interface NetworkConfig {
   ignore_cert_errors: boolean;
 }
 
+export interface FilesConfig {
+  video_extensions: string[];
+  subtitle_extensions: string[];
+}
+
+export interface MovieImages {
+  poster: boolean;
+  fanart: boolean;
+  clearlogo: boolean;
+  keyart: boolean;
+  collection_poster: boolean;
+  collection_fanart: boolean;
+  actor_images: boolean;
+}
+
+export interface MovieScrapeConfig {
+  language: string;
+  certification_country: string;
+  include_adult: boolean;
+  match_threshold: number;
+  skip_folders: string[];
+  poster_size: string;
+  fanart_size: string;
+  prefer_textless_fanart: boolean;
+  images: MovieImages;
+}
+
+export interface TasksConfig {
+  concurrency: number;
+  keep_days: number;
+}
+
 export interface AppConfig {
   network: NetworkConfig;
+  files: FilesConfig;
+  movie: MovieScrapeConfig;
+  tasks: TasksConfig;
 }
+
+export type SettingsSection = "network" | "files" | "movie" | "tasks";
 
 export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password";
 export type SecretsStatus = Record<SecretKey, boolean>;
@@ -111,8 +148,8 @@ export interface LibraryUpdate {
 
 export const fetchSystemInfo = () => request<SystemInfo>("GET", "/api/system/info");
 export const fetchSettings = () => request<AppConfig>("GET", "/api/settings");
-export const saveSettings = (config: AppConfig) =>
-  request<AppConfig>("PUT", "/api/settings", config);
+export const saveSettingsSection = <K extends SettingsSection>(name: K, section: AppConfig[K]) =>
+  request<AppConfig>("PUT", `/api/settings/${name}`, section);
 export const fetchSecretsStatus = () => request<SecretsStatus>("GET", "/api/secrets");
 export const saveSecrets = (update: SecretsUpdate) =>
   request<SecretsStatus>("PUT", "/api/secrets", update);

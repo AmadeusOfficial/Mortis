@@ -5,3 +5,50 @@
 proxy_host = "127.0.0.1"
 proxy_port = 7890
 ignore_cert_errors = true
+
+[files]
+# 扫描时认作视频的扩展名
+video_extensions = [
+    ".3gp", ".asf", ".asx", ".avc", ".avi", ".bdmv", ".bin", ".bivx", ".braw", ".dat",
+    ".divx", ".dv", ".dvr-ms", ".disc", ".evo", ".f4v", ".fli", ".flv", ".h264", ".ifo",
+    ".img", ".iso", ".mts", ".mt2s", ".m2ts", ".m2v", ".m4v", ".mkv", ".mk3d", ".mov",
+    ".mp4", ".mpeg", ".mpg", ".nrg", ".nsv", ".nuv", ".ogm", ".ogv", ".pva", ".qt", ".rm",
+    ".rmvb", ".strm", ".svq3", ".ts", ".ty", ".viv", ".vob", ".vp3", ".wmv", ".webm",
+    ".xvid",
+]
+# 扫描时认作字幕的扩展名
+subtitle_extensions = [
+    ".aqt", ".ass", ".cvd", ".dks", ".idx", ".jss", ".mpl", ".pjs", ".psb", ".rt", ".smi",
+    ".srt", ".ssa", ".ssf", ".sub", ".sup", ".svcd", ".ttxt", ".usf", ".vtt",
+]
+
+[movie]
+# 刮削语言，TMDB 的语言代码
+language = "zh-CN"
+# 分级取哪个国家的
+certification_country = "US"
+include_adult = true
+# 自动识别时，相似度低于这个值就放进未识别
+match_threshold = 0.75
+# 扫描时跳过的文件夹名
+skip_folders = ["MAKEMKV"]
+poster_size = "w780"
+fanart_size = "original"
+# 同人画优先选没有文字的
+prefer_textless_fanart = true
+
+[movie.images]
+# 刮削时抓哪些图
+poster = true
+fanart = true
+clearlogo = true
+keyart = true
+collection_poster = true
+collection_fanart = true
+actor_images = true
+
+[tasks]
+# 任务并发数，改了重启后生效
+concurrency = 3
+# 已结束的任务保留多少天
+keep_days = 30
