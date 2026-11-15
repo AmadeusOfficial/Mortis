@@ -121,6 +121,34 @@ def organize_library(
     return Enqueued(task_id=task.id)
 
 
+class LibraryScrapeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    force: bool = False
+
+
+@router.post("/{library_id}/scrape", response_model=Enqueued, status_code=202)
+def scrape_library(
+    library_id: int,
+    session: SessionDep,
+    runner: RunnerDep,
+    body: LibraryScrapeRequest | None = None,
+) -> Enqueued:
+    library = libraries.get_library(session, library_id)
+    queued = task_repo.find_queued(session, "scrape_library", "library_id", library.id)
+    if queued is not None:
+        return Enqueued(task_id=queued.id)
+    task = task_repo.enqueue(
+        session,
+        "scrape_library",
+        {"library_id": library.id, "force": body.force if body is not None else False},
+        priority=1,
+    )
+    session.commit()
+    runner.wake()
+    return Enqueued(task_id=task.id)
+
+
 @router.delete("/{library_id}", status_code=204)
 def delete_library(library_id: int, session: SessionDep) -> Response:
     libraries.delete_library(session, library_id)
