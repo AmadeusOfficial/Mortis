@@ -69,7 +69,7 @@ $p.Id | Set-Content D:\dev\tmp\start.pid
 
 两个都应是 200（第二个只在开发模式有）。没就绪时：开发模式看 `D:\dev\tmp\dev-out.log` 和 `.dev-data\logs\dev-api.err.log`；托管模式看 `D:\dev\tmp\start-err.log`（uvicorn 日志在 stderr）。
 
-托管模式另外确认 http://127.0.0.1:8100/library/1 返回页面（200，text/html），http://127.0.0.1:8100/api/unknown 返回 404。
+托管模式另外确认 http://127.0.0.1:8100/libraries/1 返回页面（200，text/html），http://127.0.0.1:8100/api/unknown 返回 404。
 
 端口已被占用时先确认是不是已经在跑，不要再起第二份：
 
@@ -89,7 +89,9 @@ Windows 上第二个 uvicorn 仍能绑定已被占用的 8100，请求会落到�
 & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --user-data-dir=D:\dev\tmp\edge-prof --window-size=1280,800 --virtual-time-budget=5000 --screenshot=D:\dev\tmp\<名字>.png <网址>
 ```
 
-用 Read 查看截图：首页会跳到媒体库页，应显示「莫提斯」、左侧导航「媒体库」「设置」和库卡片（没有库时是「还没有媒体库。」）；`/settings` 的「关于」里有版本和数据目录（默认是 `<仓库>\.dev-data`）。页面上不应出现「连不上后端」或「读取失败」。托管模式的 `D:\dev\tmp\start-out.log` 里应出现 `GET /api/system/info ... 200`；开发模式没有访问日志，改用 `Invoke-WebRequest http://localhost:5174/api/system/info -UseBasicParsing` 确认经 Vite 代理能取到 JSON。
+用 Read 查看截图：首页会跳到媒体库页，应显示「莫提斯」、左侧导航「媒体库」「未识别」「任务」「设置」和库卡片（没有库时是「还没有媒体库。」）。库卡片有「打开」「扫描」「刮削未刮削的」按钮和「扫描后自动刮削」开关；`/libraries/<编号>` 是海报墙；`/items/<编号>` 是电影详情（字段、来源徽章、「编辑」「锁定」）；`/unmatched` 是没认出的视频；`/tasks` 是任务表；`/settings` 依次有网络、TMDB、电影刮削、文件、任务、关于，「关于」里有版本和数据目录（默认是 `<仓库>\.dev-data`）。
+
+连续截几张图时每张用 `Start-Process $edge -ArgumentList ... -Wait`，否则多个无头 Edge 抢同一个 `--user-data-dir`，只有第一张能出来。页面上不应出现「连不上后端」或「读取失败」。托管模式的 `D:\dev\tmp\start-out.log` 里应出现 `GET /api/system/info ... 200`；开发模式没有访问日志，改用 `Invoke-WebRequest http://localhost:5174/api/system/info -UseBasicParsing` 确认经 Vite 代理能取到 JSON。
 
 ### 页面自动化测试
 

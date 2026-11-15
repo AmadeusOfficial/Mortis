@@ -1,26 +1,15 @@
-import socket
-import threading
-import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import httpx2 as httpx
 import pytest
-import uvicorn
 from playwright.sync_api import Page, expect, sync_playwright
 
 from mortis.api.app import create_app
 from mortis.settings import Settings
+from tests.e2e_server import WEB_DIST, serve
 
 pytestmark = pytest.mark.e2e
-
-WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
-
-
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 @pytest.fixture
@@ -30,22 +19,10 @@ def data_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def base_url(data_dir: Path) -> Iterator[str]:
-    if not (WEB_DIST / "index.html").is_file():
-        pytest.fail("先在 web 目录运行 npm run build")
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}))
     app = create_app(Settings(data_dir=data_dir, web_dist=WEB_DIST), http_transport=transport)
-    port = _free_port()
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 15
-    while not server.started:
-        if time.monotonic() > deadline:
-            pytest.fail("测试服务器 15 秒内没有启动")
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    server.should_exit = True
-    thread.join(timeout=10)
+    with serve(app) as url:
+        yield url
 
 
 @pytest.fixture
