@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from mortis.api.app import create_app
 from mortis.config.models import MovieScrapeConfig, Secrets
-from mortis.db.models import Item, Library, MediaFile, Task, utc_now
+from mortis.db.models import Item, Library, LibraryPath, MediaFile, Task, utc_now
 from mortis.items.identity import MovieRef, find_or_create_movie
 from mortis.output.nfo import build_movie_nfo, kodi_trailer
 from mortis.output.writer import actor_file_name, write_item_files
@@ -95,6 +95,7 @@ def test_nfo_follows_emby_layout(app: FastAPI, video: Path) -> None:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<!--created on'
     )
     assert "by Mortis for EMBY-->" in text
+    assert "<sorttitle/>" in text and " />" not in text
     root = ET.fromstring(raw)
     tags = [child.tag for child in root]
     order = [
@@ -139,6 +140,7 @@ def test_nfo_follows_emby_layout(app: FastAPI, video: Path) -> None:
     assert actor.findtext("name") and actor.findtext("tmdbid")
     assert root.findtext("trailer", "").startswith("plugin://plugin.video.youtube/")
     assert root.find("lockdata") is None
+    assert tags.index("writer") > tags.index("fileinfo")
     assert build_movie_nfo(session, item, certification_country="US") == raw
 
 
@@ -195,6 +197,21 @@ def test_shared_folder_skips_names_without_file_stem(app: FastAPI, video: Path) 
     assert not (video.parent / "movieset-poster.jpg").exists()
     assert (video.parent / "The.Matrix.1999.nfo").exists()
     assert (video.parent / "The.Matrix.1999-poster.jpg").exists()
+
+
+def test_library_root_gets_only_file_named_outputs(app: FastAPI, tmp_path: Path) -> None:
+    video = tmp_path / "lib" / "matrix.mkv"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"video")
+    item_id = _add_movie(app, video)
+    with app.state.session_factory() as session:
+        item = session.get(Item, item_id)
+        session.add(LibraryPath(library_id=item.library_id, path=str(video.parent)))
+        session.commit()
+    _write(app, item_id)
+    assert (video.parent / "matrix.nfo").is_file()
+    assert not (video.parent / "movie.nfo").exists()
+    assert not (video.parent / "movieset-poster.jpg").exists()
 
 
 def test_plain_image_style_when_alone(app: FastAPI, video: Path) -> None:

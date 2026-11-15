@@ -10,7 +10,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mortis.config.models import MovieScrapeConfig
-from mortis.db.models import Item, ItemImage, ItemPerson, MediaFile, Person, utc_now
+from mortis.db.models import (
+    Item,
+    ItemImage,
+    ItemPerson,
+    LibraryPath,
+    MediaFile,
+    Person,
+    utc_now,
+)
 from mortis.organize.names import strip_stack
 from mortis.output.nfo import build_movie_nfo
 from mortis.scrape.images import ImageStore
@@ -62,8 +70,14 @@ def _video_groups(videos: list[MediaFile]) -> list[tuple[Path, str]]:
 
 
 def _shared_folders(session: Session, item: Item, folders: set[Path]) -> set[Path]:
-    """同一目录里还有别的条目或未识别的视频，就不写 movie.nfo 这类不带文件名的文件。"""
-    shared: set[Path] = set()
+    """库根目录、或同一目录里还有别的条目或未识别的视频，就不写 movie.nfo 这类不带文件名的文件。"""
+    roots = {
+        Path(path)
+        for path in session.scalars(
+            select(LibraryPath.path).where(LibraryPath.library_id == item.library_id)
+        )
+    }
+    shared: set[Path] = folders & roots
     for row in session.scalars(
         select(MediaFile).where(
             MediaFile.library_id == item.library_id,

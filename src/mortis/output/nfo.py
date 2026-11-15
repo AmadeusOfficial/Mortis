@@ -1,6 +1,7 @@
 """Emby 格式的电影 NFO。只读选定字段，元素顺序照 TMM 写出的样子。"""
 
 import json
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
@@ -22,6 +23,7 @@ from mortis.db.models import (
 )
 
 RATING_NAMES = {"tmdb": "themoviedb"}
+_EMPTY = re.compile(r"<([A-Za-z_][\w.-]*(?: [^<>]*?)?) />")
 THUMB_ASPECTS = {
     "clearlogo": "clearlogo",
     "keyart": "keyart",
@@ -158,6 +160,8 @@ def build_movie_nfo(
         _text(element, "name", parent.title)
         if parent.overview:
             _text(element, "overview", parent.overview)
+    else:
+        _text(root, "set")
 
     _text(root, "plot", item.overview)
     _text(root, "outline", item.overview)
@@ -203,7 +207,8 @@ def build_movie_nfo(
     studios = _tags(session, item, "studio")
     for studio in studios[:1] if single_studio else studios:
         _text(root, "studio", studio)
-    for person, _role, tmdb_id in _people(session, item, "writer"):
+    writers = _people(session, item, "writer")
+    for person, _role, tmdb_id in writers:
         _text(root, "credits", person.name, **({"tmdbid": tmdb_id} if tmdb_id else {}))
     for person, _role, tmdb_id in _people(session, item, "director"):
         _text(root, "director", person.name, **({"tmdbid": tmdb_id} if tmdb_id else {}))
@@ -228,9 +233,11 @@ def build_movie_nfo(
         _text(video, tag, value)
     _text(video, "resolution")
     _text(video, "durationinseconds", 0)
+    for person, _role, _tmdb_id in writers:
+        _text(root, "writer", person.name)
 
     ET.indent(root, space="  ")
-    body = ET.tostring(root, encoding="unicode", short_empty_elements=True)
+    body = _EMPTY.sub(r"<\1/>", ET.tostring(root, encoding="unicode"))
     header = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         f"<!--created on {stamp} by Mortis for EMBY-->\n"
