@@ -84,3 +84,38 @@ def test_check_reports_network_errors() -> None:
     assert result.ok is False
     assert result.message.startswith("连不上 TMDB：")
     assert "代理拒绝连接" in result.message
+
+
+def test_check_empty_error_message_falls_back_to_type_name() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("", request=request)
+
+    with _client(handler) as client:
+        result = check_tmdb_key(client, "abc")
+    assert result.ok is False
+    assert result.message == "连不上 TMDB：ReadTimeout"
+
+
+def test_check_redacts_api_key_from_error_text() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"无法连接 {request.url}", request=request)
+
+    with _client(handler) as client:
+        result = check_tmdb_key(client, "secretkey123")
+    assert result.ok is False
+    assert "secretkey123" not in result.message
+    assert "api_key=***" in result.message
+
+
+def test_build_client_defaults_without_transport() -> None:
+    with build_client(NetworkConfig(), Secrets()) as client:
+        assert client.timeout.read == 15.0
+        assert client.timeout.connect == 15.0
+        assert client.trust_env is False
+        assert client.headers["User-Agent"] == f"Mortis/{get_version()}"
+        assert client._mounts  # 设了代理主机：挂了代理传输
+
+
+def test_build_client_without_proxy_host_has_no_proxy_mounts() -> None:
+    with build_client(NetworkConfig(proxy_host=""), Secrets()) as client:
+        assert not client._mounts

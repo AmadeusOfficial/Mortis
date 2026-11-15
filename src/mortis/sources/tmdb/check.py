@@ -23,7 +23,10 @@ def check_tmdb_key(client: httpx.Client, api_key: str) -> TmdbCheck:
     try:
         response = client.get(f"{TMDB_API}/configuration", headers=headers, params=params)
     except httpx.HTTPError as error:
-        return TmdbCheck(ok=False, message=f"连不上 TMDB：{error or type(error).__name__}")
+        # 异常文本可能带出请求地址（v3 的 key 在查询参数里），先抹掉 key。
+        text = str(error) or type(error).__name__
+        text = text.replace(api_key.strip(), "***")
+        return TmdbCheck(ok=False, message=f"连不上 TMDB：{text}")
     if response.status_code == 200:
         return TmdbCheck(ok=True, message="连接成功")
     if response.status_code == 401:
