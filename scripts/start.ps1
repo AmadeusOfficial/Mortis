@@ -21,3 +21,4 @@ if ($owners.Count -gt 0) {
 & (Join-Path $PSScriptRoot "build_web.ps1")
 $env:MORTIS_WEB_DIST = Join-Path $Root "web\dist"
 & $Python -m mortis.server
+exit $LASTEXITCODE
