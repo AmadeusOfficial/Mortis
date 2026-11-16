@@ -8,17 +8,22 @@ from sqlalchemy.orm import Session
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.api.routes.items import Enqueued, get_item
-from mortis.config.models import MovieScrapeConfig
+from mortis.config.models import TvScrapeConfig
+from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile
 from mortis.items.edit import ItemError
 from mortis.output.service import (
+    ArrangeConfig,
     arrange_steps,
     arrangeable_items,
+    config_for,
     enqueue_arrange,
     has_video,
     is_scraped,
+    plan_for,
 )
-from mortis.rename.plan import RenamePlan, plan_rename
+from mortis.output.tv import show_layout
+from mortis.rename.plan import RenamePlan
 from mortis.tasks import repo as task_repo
 
 router = APIRouter(prefix="/api")
@@ -53,7 +58,7 @@ class LibraryArrangePreview(BaseModel):
 def _arrangeable(session: Session, item_id: int) -> Item:
     item = get_item(session, item_id)
     if item.kind != "work":
-        raise ItemError("系列电影没有自己的文件")
+        raise ItemError("系列电影没有自己的文件，季和集跟着剧一起整理")
     if not has_video(session, item.id):
         raise ItemError("这个条目没有视频文件")
     if not is_scraped(session, item.id):
@@ -61,7 +66,10 @@ def _arrangeable(session: Session, item_id: int) -> Item:
     return item
 
 
-def _video_folder(session: Session, item: Item) -> str:
+def _video_folder(session: Session, item: Item, config: ArrangeConfig) -> str:
+    if isinstance(config, TvScrapeConfig):
+        folder = show_layout(session, item).folder
+        return str(folder) if folder else ""
     path = session.scalar(
         select(MediaFile.path)
         .where(MediaFile.item_id == item.id, MediaFile.file_kind == "video")
@@ -70,15 +78,15 @@ def _video_folder(session: Session, item: Item) -> str:
     return str(Path(path).parent) if path else ""
 
 
-def _preview(session: Session, item: Item, config: MovieScrapeConfig) -> ArrangePreview:
+def _preview(session: Session, item: Item, config: ArrangeConfig) -> ArrangePreview:
     rename, write = arrange_steps(session, item.id, config, {})
-    plan = plan_rename(session, item, config.output) if rename else RenamePlan(item.id)
+    plan = plan_for(session, item, config) if rename else RenamePlan(item.id)
     return ArrangePreview(
         item_id=item.id,
         title=item.title,
         rename=rename,
         write=write,
-        folder=plan.folder_to or _video_folder(session, item),
+        folder=plan.folder_to or _video_folder(session, item, config),
         folder_from=plan.folder_from,
         folder_to=plan.folder_to,
         make_folder=plan.make_folder,
@@ -93,7 +101,7 @@ def _preview(session: Session, item: Item, config: MovieScrapeConfig) -> Arrange
 @router.get("/items/{item_id}/arrange-preview", response_model=ArrangePreview)
 def preview_item(item_id: int, session: SessionDep, services: ServicesDep) -> ArrangePreview:
     item = _arrangeable(session, item_id)
-    return _preview(session, item, services.config_store.load_config().movie)
+    return _preview(session, item, config_for(services, item))
 
 
 @router.post("/items/{item_id}/arrange", response_model=Enqueued, status_code=202)
@@ -101,7 +109,7 @@ def arrange_item(
     item_id: int, session: SessionDep, runner: RunnerDep, services: ServicesDep
 ) -> Enqueued:
     item = _arrangeable(session, item_id)
-    preview = _preview(session, item, services.config_store.load_config().movie)
+    preview = _preview(session, item, config_for(services, item))
     if preview.problems:
         raise ItemError("；".join(preview.problems))
     return Enqueued(task_id=enqueue_arrange(session, runner, item.id))
@@ -112,7 +120,7 @@ def preview_library(
     library_id: int, session: SessionDep, services: ServicesDep
 ) -> LibraryArrangePreview:
     library = libraries.get_library(session, library_id)
-    config = services.config_store.load_config().movie
+    config = type_config(services.config_store.load_config(), library.data_type_id)
     ids = arrangeable_items(session, library.id)
     rename, write = arrange_steps(session, -1, config, {})
     previews = []

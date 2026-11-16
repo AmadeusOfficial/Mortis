@@ -28,13 +28,13 @@ def _bad_template(original: str) -> ValueError:
     return ValueError(f"模板写法不对：{original}")
 
 
-def _clean_value(value: str | None, colon: str) -> str:
-    """去掉 Windows 不允许的字符，并把冒号换成 colon。"""
+def _clean_value(value: str | None, colon: str, colons: str = ":：") -> str:
+    """去掉 Windows 不允许的字符，并把 colons 里的冒号换成 colon。"""
     if value is None:
         return ""
     out: list[str] = []
     for char in value:
-        if char in ":：":
+        if char in colons:
             while out and out[-1] == " ":
                 out.pop()
             if colon:
@@ -47,16 +47,18 @@ def _clean_value(value: str | None, colon: str) -> str:
     return text if text.strip() else ""
 
 
-def _expand(body: str, original: str, tokens: Mapping[str, str | None], colon: str) -> str:
+def _expand(
+    body: str, original: str, tokens: Mapping[str, str | None], colon: str, colons: str
+) -> str:
     fields = body.split(",")
     if len(fields) == 1:
         if not _IDENT.match(fields[0]):
             raise _bad_template(original)
-        return _clean_value(tokens.get(fields[0]), colon)
+        return _clean_value(tokens.get(fields[0]), colon, colons)
     if len(fields) == 3:
         if not _IDENT.match(fields[1]):
             raise _bad_template(original)
-        value = _clean_value(tokens.get(fields[1]), colon)
+        value = _clean_value(tokens.get(fields[1]), colon, colons)
         return f"{fields[0]}{value}{fields[2]}" if value else ""
     raise _bad_template(original)
 
@@ -101,8 +103,19 @@ def _closing(template: str, index: int) -> int:
     return -1
 
 
-def render(template: str, tokens: Mapping[str, str | None], *, space: str, colon: str) -> str:
-    """按模板生成一个名字。space 是空格替身（空串表示保留空格），colon 是冒号替身。"""
+def render(
+    template: str,
+    tokens: Mapping[str, str | None],
+    *,
+    space: str,
+    colon: str,
+    fullwidth_colon: bool = True,
+) -> str:
+    """按模板生成一个名字。space 是空格替身（空串表示保留空格），colon 是冒号替身。
+
+    fullwidth_colon 为 False 时只换半角冒号，全角「：」保留（照 TMM 电视剧写出的名字）。
+    """
+    colons = ":：" if fullwidth_colon else ":"
     pieces: list[str] = []
     index = 0
     while True:
@@ -115,7 +128,7 @@ def render(template: str, tokens: Mapping[str, str | None], *, space: str, colon
         if end < 0:
             raise _bad_template(template[start:])
         original = template[start : end + 1]
-        pieces.append(_expand(template[start + 2 : end], original, tokens, colon))
+        pieces.append(_expand(template[start + 2 : end], original, tokens, colon, colons))
         index = end + 1
     text = " ".join("".join(pieces).split())
     if space:

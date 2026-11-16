@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from mortis.api.app import create_app
-from mortis.config.models import Secrets, TvImages, TvScrapeConfig
+from mortis.config.models import Secrets, TvImages, TvOutputConfig, TvScrapeConfig
 from mortis.db.models import Item, ItemExternalId, ItemImage, ItemSourceRecord, MediaFile, Task
 from mortis.libraries import create_library
 from mortis.settings import Settings
@@ -44,7 +44,13 @@ def app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
     app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_section("tv", _config())
     return app
+
+
+def _config(**values: object) -> TvScrapeConfig:
+    """测试里刮削后不自动整理，文件名保持原样。"""
+    return TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False), **values)
 
 
 @pytest.fixture
@@ -213,7 +219,7 @@ def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -
 
 
 def test_without_missing_episodes_only_local_ones(app: FastAPI, show_id: int) -> None:
-    app.state.config_store.save_section("tv", TvScrapeConfig(show_missing_episodes=False))
+    app.state.config_store.save_section("tv", _config(show_missing_episodes=False))
     _scrape(app, show_id)
     assert {n: sorted(e) for n, e in _tree(app, show_id).items()} == {1: [1, 2, 3], 2: [1, 2, 3]}
 
@@ -232,7 +238,7 @@ def test_locked_episode_title_and_disabled_thumbs(
         episode.title = "我的集名"
         episode.locked_fields = json.dumps(["title"])
         session.commit()
-    app.state.config_store.save_section("tv", TvScrapeConfig(images=TvImages(episode_thumb=False)))
+    app.state.config_store.save_section("tv", _config(images=TvImages(episode_thumb=False)))
     before = len(fake.paths())
     _scrape(app, show_id, force=True)
     assert _tree(app, show_id)[1][1] == "我的集名"

@@ -188,11 +188,15 @@ def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
             .join(Item, Item.data_type_id == DataType.id)
             .where(Item.id == item_id)
         )
+    config = ctx.services.config_store.load_config()
     if structure == "series":
-        return TaskResult(result=scrape_show(ctx, item_id, force=force))
-    result = scrape_movie(ctx, item_id, force=force)
+        result = scrape_show(ctx, item_id, force=force)
+        config_section = config.tv
+    else:
+        result = scrape_movie(ctx, item_id, force=force)
+        config_section = config.movie
     with ctx.session_factory() as session:
-        followups = after_scrape(ctx.services.config_store.load_config().movie, item_id)
+        followups = after_scrape(config_section, item_id)
         if not has_video(session, item_id):
             followups = []
     return TaskResult(result=result, followups=followups)

@@ -8,21 +8,50 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from mortis.config.models import MovieScrapeConfig
+from mortis.config.models import MovieScrapeConfig, TvScrapeConfig
+from mortis.config.types import type_config
 from mortis.db.models import Item, ItemSourceRecord, Library, MediaFile
-from mortis.output.writer import WRITTEN_KINDS, write_item_files
+from mortis.items.identity import work_of
+from mortis.output.tv import write_show_files
+from mortis.output.writer import WRITTEN_KINDS, WriteReport, write_item_files
 from mortis.rename.apply import RenameError, apply_rename
-from mortis.rename.plan import plan_rename
+from mortis.rename.plan import RenamePlan, plan_rename
+from mortis.rename.tv_plan import plan_show_rename
 from mortis.scrape.images import ImageStore
 from mortis.tasks import repo as task_repo
 from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
 
 if TYPE_CHECKING:
+    from mortis.services import Services
     from mortis.tasks.runner import TaskRunner
 
 
-def _config(ctx: TaskContext) -> MovieScrapeConfig:
-    return ctx.services.config_store.load_config().movie
+type ArrangeConfig = MovieScrapeConfig | TvScrapeConfig
+
+
+def config_for(services: Services, item: Item) -> ArrangeConfig:
+    return type_config(services.config_store.load_config(), item.data_type_id)
+
+
+def plan_for(session: Session, item: Item, config: ArrangeConfig) -> RenamePlan:
+    if isinstance(config, TvScrapeConfig):
+        return plan_show_rename(session, item, config.output)
+    return plan_rename(session, item, config.output)
+
+
+def write_for(
+    session: Session, store: ImageStore, item: Item, config: ArrangeConfig
+) -> WriteReport:
+    if isinstance(config, TvScrapeConfig):
+        return write_show_files(session, store, item, config)
+    return write_item_files(session, store, item, config)
+
+
+def _video_owner(item_id: Any) -> Any:
+    """视频挂在这个条目上，或挂在它下面的集上。"""
+    seasons = select(Item.id).where(Item.parent_id == item_id, Item.kind == "season")
+    episodes = select(Item.id).where(Item.parent_id.in_(seasons))
+    return (MediaFile.item_id == item_id) | MediaFile.item_id.in_(episodes)
 
 
 def _work(session: Session, item_id: int) -> Item:
@@ -35,7 +64,7 @@ def _work(session: Session, item_id: int) -> Item:
 def has_video(session: Session, item_id: int) -> bool:
     return bool(
         session.scalar(
-            select(exists().where(MediaFile.item_id == item_id, MediaFile.file_kind == "video"))
+            select(exists().where(_video_owner(item_id), MediaFile.file_kind == "video"))
         )
     )
 
@@ -54,14 +83,14 @@ def has_written(session: Session, item_id: int) -> bool:
     )
 
 
-def after_scrape(config: MovieScrapeConfig, item_id: int) -> list[Followup]:
+def after_scrape(config: ArrangeConfig, item_id: int) -> list[Followup]:
     if config.output.organize_after_scrape:
         return [Followup("arrange", {"item_id": item_id})]
     return []
 
 
 def arrange_steps(
-    session: Session, item_id: int, config: MovieScrapeConfig, payload: dict[str, Any]
+    session: Session, item_id: int, config: ArrangeConfig, payload: dict[str, Any]
 ) -> tuple[bool, bool]:
     """返回（改不改名，写不写文件）。已经写过文件的条目改名后一定重写，免得留下旧名字的文件。"""
     output = config.output
@@ -73,7 +102,6 @@ def arrange_steps(
 
 
 def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
-    config = _config(ctx)
     store = ImageStore(ctx.services.data_dir)
     item_id = int(payload["item_id"])
     problems: list[str] = []
@@ -82,10 +110,11 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     folder: str | None = None
     with ctx.services.locks.hold("catalog-write"), ctx.session_factory() as session:
         item = _work(session, item_id)
+        config = config_for(ctx.services, item)
         title = item.title
         rename, write = arrange_steps(session, item_id, config, payload)
         if rename:
-            plan = plan_rename(session, item, config.output)
+            plan = plan_for(session, item, config)
             problems = plan.problems
             if not problems and plan.changes:
                 try:
@@ -102,7 +131,7 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
             elif not problems:
                 ctx.log(f"「{title}」已经是目标名字")
         if write:
-            report = write_item_files(session, store, item, config)
+            report = write_for(session, store, item, config)
             session.commit()
             written = len(report.written)
             for path in report.skipped:
@@ -137,19 +166,22 @@ def enqueue_arrange(session: Session, runner: TaskRunner, item_id: int, **option
 
 def rewrite_if_arranged(session: Session, runner: TaskRunner, item: Item) -> None:
     """库是唯一的依据：整理过的条目手动改了字段，就重写它的 NFO，不改名。"""
-    if item.kind == "work" and has_written(session, item.id):
-        enqueue_arrange(session, runner, item.id, rename=False, write=True)
+    if item.kind == "collection":
+        return
+    work_id = work_of(session, item.id)
+    if has_written(session, work_id):
+        enqueue_arrange(session, runner, work_id, rename=False, write=True)
 
 
 def arrangeable_items(session: Session, library_id: int) -> list[int]:
-    """整库整理只管刮削过、有视频的电影。"""
+    """整库整理只管刮削过、有视频的电影和剧。"""
     return list(
         session.scalars(
             select(Item.id)
             .where(
                 Item.library_id == library_id,
                 Item.kind == "work",
-                exists().where(MediaFile.item_id == Item.id, MediaFile.file_kind == "video"),
+                exists().where(_video_owner(Item.id), MediaFile.file_kind == "video"),
                 exists().where(ItemSourceRecord.item_id == Item.id),
             )
             .order_by(Item.id)

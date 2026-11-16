@@ -30,6 +30,8 @@ class RenamePlan:
     make_folder: bool = False
     moves: list[Move] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    # 改完后如果空了就删掉的旧目录（按改名后的路径）。
+    empty_dirs: list[str] = field(default_factory=list)
 
     @property
     def changes(self) -> bool:

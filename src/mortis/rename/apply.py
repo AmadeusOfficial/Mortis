@@ -55,6 +55,11 @@ def apply_rename(session: Session, plan: RenamePlan) -> None:
     except OSError as error:
         _rollback(done, made)
         raise RenameError(f"重命名失败，已改回原样：{error.strerror or error}") from None
+    for folder in plan.empty_dirs:
+        try:
+            Path(folder).rmdir()
+        except OSError:
+            pass
     now = utc_now()
     for move in plan.moves:
         row = session.get(MediaFile, move.file_id)
