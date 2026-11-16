@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from mortis.api.app import create_app
@@ -179,6 +180,36 @@ def test_snapshots_are_reused_and_rescan_keeps_bindings(
 
     _scrape(app, show_id, force=True)
     assert len([p for p in fake.paths() if p.startswith("/3/tv/")]) == count + 4
+
+
+def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -> None:
+    _scrape(app, show_id)
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        detail = client.get(f"/api/items/{show_id}").json()
+        assert [(s["number"], s["episode_count"], s["file_count"]) for s in detail["seasons"]] == [
+            (1, 10, 3),
+            (2, 10, 3),
+            (3, 10, 0),
+        ]
+        first = detail["seasons"][0]["episodes"][0]
+        assert (first["number"], first["title"], first["has_file"]) == (1, "卡美洛", True)
+        assert first["still_url"].startswith("/api/images/")
+        assert detail["seasons"][0]["episodes"][3]["has_file"] is False
+        assert [Path(f["path"]).name for f in detail["files"]] == ["花絮.mp4"]
+        assert (detail["show"], detail["position"]) == (None, None)
+
+        season = client.get(f"/api/items/{detail['seasons'][0]['id']}").json()
+        assert (season["kind"], season["position"], season["show"]["id"]) == (
+            "season",
+            "第 1 季",
+            show_id,
+        )
+        assert season["collection"] is None and season["seasons"] == []
+        episode = client.get(f"/api/items/{first['id']}").json()
+        assert (episode["title"], episode["position"]) == ("卡美洛", "第 1 季 第 1 集")
+        assert episode["show"]["title"] == "毒枭：墨西哥"
+        assert [f["file_kind"] for f in episode["files"]] == ["video", "subtitle"]
+        assert {s["name"] for s in episode["sections"]} >= {"基本信息", "演职员"}
 
 
 def test_without_missing_episodes_only_local_ones(app: FastAPI, show_id: int) -> None:

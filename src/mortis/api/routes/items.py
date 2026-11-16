@@ -68,6 +68,25 @@ class FileOut(BaseModel):
     size: int | None
 
 
+class EpisodeOut(BaseModel):
+    id: int
+    number: int | None
+    title: str
+    air_date: str | None
+    has_file: bool
+    still_url: str | None
+
+
+class SeasonOut(BaseModel):
+    id: int
+    number: int | None
+    title: str
+    poster_url: str | None
+    episode_count: int
+    file_count: int
+    episodes: list[EpisodeOut]
+
+
 class ItemDetail(BaseModel):
     id: int
     library_id: int
@@ -81,6 +100,9 @@ class ItemDetail(BaseModel):
     external_ids: dict[str, str]
     collection: CollectionRef | None
     parts: list[WallItem]
+    show: CollectionRef | None
+    position: str | None
+    seasons: list[SeasonOut]
     files: list[FileOut]
     scraped_at: str | None
     sections: list[SectionOut]

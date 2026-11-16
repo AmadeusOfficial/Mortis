@@ -1,10 +1,11 @@
 import json
 from typing import Any
 
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import (
+    DataType,
     Item,
     ItemExternalId,
     ItemImage,
@@ -131,6 +132,81 @@ def wall_rows(session: Session, items: list[Item]) -> list[dict[str, Any]]:
     ]
 
 
+def _first_images(session: Session, ids: list[int], kind: str) -> dict[int, str]:
+    rows = session.execute(
+        select(ItemImage.item_id, ItemImage.file_path)
+        .where(
+            ItemImage.item_id.in_(ids),
+            ItemImage.image_kind == kind,
+            ItemImage.file_path.is_not(None),
+        )
+        .order_by(ItemImage.item_id, ItemImage.position.desc())
+    )
+    return {item_id: path for item_id, path in rows}
+
+
+def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
+    seasons = list(
+        session.scalars(
+            select(Item)
+            .where(Item.parent_id == show.id, Item.kind == "season")
+            .order_by(Item.index_number)
+        )
+    )
+    episodes = list(
+        session.scalars(
+            select(Item)
+            .where(Item.parent_id.in_([s.id for s in seasons]), Item.kind == "episode")
+            .order_by(Item.index_number)
+        )
+    )
+    videos = dict(
+        session.execute(
+            select(MediaFile.item_id, func.count())
+            .where(MediaFile.item_id.in_([e.id for e in episodes]), MediaFile.file_kind == "video")
+            .group_by(MediaFile.item_id)
+        ).all()
+    )
+    thumbs = _first_images(session, [e.id for e in episodes], "thumb")
+    by_season: dict[int, list[dict[str, Any]]] = {s.id: [] for s in seasons}
+    for episode in episodes:
+        by_season[episode.parent_id or 0].append(
+            {
+                "id": episode.id,
+                "number": episode.index_number,
+                "title": episode.title,
+                "air_date": episode.release_date,
+                "has_file": episode.id in videos,
+                "still_url": image_url(thumbs.get(episode.id)),
+            }
+        )
+    return [
+        {
+            "id": season.id,
+            "number": season.index_number,
+            "title": season.title,
+            "poster_url": image_url(season.poster_path),
+            "episode_count": len(by_season[season.id]),
+            "file_count": sum(1 for e in by_season[season.id] if e["has_file"]),
+            "episodes": by_season[season.id],
+        }
+        for season in seasons
+    ]
+
+
+def _show_of(session: Session, item: Item) -> tuple[Item | None, str | None]:
+    """季或集所属的剧，和「第 1 季 第 2 集」这样的位置。"""
+    if item.kind == "season":
+        show = session.get(Item, item.parent_id) if item.parent_id else None
+        return show, f"第 {item.index_number} 季"
+    if item.kind == "episode":
+        season = session.get(Item, item.parent_id) if item.parent_id else None
+        show = session.get(Item, season.parent_id) if season and season.parent_id else None
+        number = season.index_number if season else None
+        return show, f"第 {number} 季 第 {item.index_number} 集"
+    return None, None
+
+
 def item_detail(session: Session, item: Item) -> dict[str, Any]:
     fields = level_fields(session, item.data_type_id, item.kind)
     sources = json.loads(item.field_sources)
@@ -172,6 +248,15 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             )
         )
         parts = wall_rows(session, children)
+    show, position = _show_of(session, item)
+    if show is not None:
+        parent = None
+    data_type = session.get(DataType, item.data_type_id)
+    seasons = (
+        _seasons(session, item)
+        if item.kind == "work" and data_type is not None and data_type.structure == "series"
+        else []
+    )
     record = session.get(ItemSourceRecord, (item.id, "tmdb"))
     external_ids = {
         provider: value
@@ -208,6 +293,11 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         if parent
         else None,
         "parts": parts,
+        "show": {"id": show.id, "title": show.title, "poster_url": image_url(show.poster_path)}
+        if show
+        else None,
+        "position": position,
+        "seasons": seasons,
         "files": [
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],
