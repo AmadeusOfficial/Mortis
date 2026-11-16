@@ -1,4 +1,5 @@
 import copy
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -68,7 +69,7 @@ def page() -> Iterator[Page]:
 
 def test_tv_scan_scrape_and_arrange(page: Page, base_url: str, shows: Path) -> None:
     page.goto(base_url + "/libraries")
-    page.get_by_role("button", name="新建媒体库").click()
+    page.get_by_role("button", name="新建媒体库", exact=True).click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("数据类型").click()
     page.get_by_role("option", name="电视剧").click()
@@ -78,9 +79,9 @@ def test_tv_scan_scrape_and_arrange(page: Page, base_url: str, shows: Path) -> N
 
     page.get_by_role("button", name="扫描").click()
     expect(page.get_by_text("「电视剧」扫描结束")).to_be_visible(timeout=SLOW)
-    expect(page.get_by_text("1 部剧 · 6 个视频")).to_be_visible()
+    expect(page.get_by_text("1 部剧", exact=True)).to_be_visible()
 
-    page.get_by_role("link", name="打开").click()
+    page.get_by_role("link", name=re.compile(r"^进入媒体库")).first.click()
     page.get_by_role("link", name="毒枭：墨西哥").first.click()
     expect(page.get_by_role("heading", name="毒枭：墨西哥")).to_be_visible()
     season = page.get_by_text("第 1 季 · 10 集 · 有文件 3")

@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -87,7 +88,7 @@ def page() -> Iterator[Page]:
 
 def test_galgame_folders_scrape_from_vndb(page: Page, base_url: str, root: Path) -> None:
     page.goto(base_url + "/libraries")
-    page.get_by_role("button", name="新建媒体库").click()
+    page.get_by_role("button", name="新建媒体库", exact=True).click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("数据类型").click()
     page.get_by_role("option", name="Galgame").click()
@@ -97,26 +98,28 @@ def test_galgame_folders_scrape_from_vndb(page: Page, base_url: str, root: Path)
 
     page.get_by_role("button", name="扫描").click()
     expect(page.get_by_text("「Galgame」扫描结束")).to_be_visible(timeout=SLOW)
-    expect(page.get_by_text("1 款游戏 · 2 个文件夹")).to_be_visible()
+    expect(page.get_by_text("1 款游戏", exact=True)).to_be_visible()
     expect(page.get_by_role("button", name="整理整库")).to_have_count(0)
 
     page.get_by_role("link", name="未识别").click()
     page.get_by_role("button", name=f"匹配{UNMATCHED}").click()
-    dialog = page.get_by_role("dialog")
-    expect(dialog.get_by_label("来源")).to_have_value("VNDB")
-    dialog.get_by_label("名称").fill("Paradise Lost")
-    dialog.get_by_role("button", name="搜索").click()
-    dialog.get_by_role("button", name="选Paradise Lost", exact=True).click()
+    panel = page.get_by_role("complementary", name="匹配面板")
+    sources = panel.get_by_role("group", name="来源")
+    expect(sources.get_by_role("button", name="VNDB")).to_have_attribute("aria-pressed", "true")
+    panel.get_by_label("名称").fill("Paradise Lost")
+    panel.get_by_role("button", name="搜索").click()
+    panel.get_by_role("button", name="选Paradise Lost", exact=True).click()
     expect(page.get_by_text("已匹配为《Paradise Lost》")).to_be_visible(timeout=SLOW)
     expect(page.get_by_text("没有未识别的文件。")).to_be_visible()
 
     page.goto(base_url + "/libraries")
-    expect(page.get_by_text("2 款游戏 · 2 个文件夹")).to_be_visible(timeout=SLOW)
-    page.get_by_role("link", name="打开").click()
+    expect(page.get_by_text("2 款游戏", exact=True)).to_be_visible(timeout=SLOW)
+    page.get_by_role("link", name=re.compile(r"^进入媒体库")).first.click()
     page.get_by_role("link", name=MATCHED).first.click()
     expect(page.get_by_role("heading", name=MATCHED)).to_be_visible()
     expect(page.get_by_text("VNDB v548")).to_be_visible()
     expect(page.get_by_text("上次刮削")).to_be_visible(timeout=SLOW)
     expect(page.get_by_text("Greenwood Co., Ltd.").first).to_be_visible()
+    page.get_by_role("tab", name=re.compile(r"^文件")).click()
     expect(page.get_by_text("游戏文件夹")).to_be_visible()
     expect(page.get_by_role("button", name="整理", exact=True)).to_have_count(0)

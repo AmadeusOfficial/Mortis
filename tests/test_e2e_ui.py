@@ -45,7 +45,7 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
     expect(page).to_have_url(base_url + "/libraries")
     expect(page.get_by_text("还没有媒体库。")).to_be_visible()
 
-    page.get_by_role("button", name="新建媒体库").click()
+    page.get_by_role("button", name="新建媒体库", exact=True).click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_role("button", name="浏览").click()
     browser = page.get_by_role("dialog", name="选择目录")
@@ -58,7 +58,7 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
     dialog.get_by_role("button", name="保存").click()
     expect(page.get_by_text(str(movies))).to_be_visible()
 
-    page.get_by_role("button", name="新建媒体库").click()
+    page.get_by_role("button", name="新建媒体库", exact=True).click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("库名").fill("重复的库")
     dialog.get_by_label("目录 1", exact=True).fill(str(movies))
@@ -69,7 +69,8 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
     page.reload()
     expect(page.get_by_text(str(movies))).to_be_visible()
 
-    page.get_by_role("button", name="编辑").click()
+    page.get_by_role("button", name="更多操作").click()
+    page.get_by_role("menuitem", name="编辑").click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("库名").fill("电影库")
     dialog.get_by_role("button", name="添加目录").click()
@@ -78,7 +79,8 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
     expect(page.get_by_text(str(more))).to_be_visible()
     expect(page.get_by_role("heading", name="电影库")).to_be_visible()
 
-    page.get_by_role("button", name="删除").click()
+    page.get_by_role("button", name="更多操作").click()
+    page.get_by_role("menuitem", name="删除").click()
     page.get_by_role("dialog").get_by_role("button", name="确认删除").click()
     expect(page.get_by_text("还没有媒体库。")).to_be_visible()
     assert movies.is_dir() and more.is_dir()
