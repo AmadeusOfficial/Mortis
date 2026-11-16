@@ -1,28 +1,15 @@
-import {
-  Alert,
-  Anchor,
-  BackgroundImage,
-  Badge,
-  Button,
-  Divider,
-  Group,
-  Image,
-  Loader,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Alert, Avatar, Button, Loader, Paper, SimpleGrid, Tabs, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
   type FieldOut,
+  type ImageValue,
   type ItemDetail,
   type MovieHit,
+  type PersonValue,
+  type RatingValue,
   addItemSource,
   arrangeItem,
   fetchItem,
@@ -35,21 +22,38 @@ import {
   updateItemLocks,
 } from "../api";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
+import { FieldActions } from "../components/detail/FieldActions";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonList } from "../components/SeasonList";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
+import { Pill, sourceLabel } from "../components/ui";
 import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
+import {
+  IconBack,
+  IconExternal,
+  IconFile,
+  IconFolder,
+  IconImage,
+  IconInfo,
+  IconLink,
+  IconOrganize,
+  IconRefresh,
+  IconScrape,
+  IconStar,
+  IconSubtitle,
+  IconVideo,
+} from "../icons";
 import { useTaskWatcher } from "../useTaskWatcher";
+import classes from "./ItemDetailPage.module.css";
 
-const SOURCE_LABELS: Record<string, string> = { tmdb: "TMDB", manual: "手动" };
-
-function externalLink(provider: string, id: string, kind: string): string | null {
+function externalLink(provider: string, id: string, kind: string, series: boolean): string | null {
   if (provider === "tmdb") {
-    return `https://www.themoviedb.org/${kind === "collection" ? "collection" : "movie"}/${id}`;
+    const path = kind === "collection" ? "collection" : series ? "tv" : "movie";
+    return `https://www.themoviedb.org/${path}/${id}`;
   }
   if (provider === "imdb") {
     return `https://www.imdb.com/title/${id}/`;
@@ -75,6 +79,51 @@ const FILE_KIND_LABELS: Record<string, string> = {
   subtitle: "字幕",
   game: "游戏文件夹",
 };
+const FILE_KIND_ICONS: Record<string, ReactNode> = {
+  video: <IconVideo size={16} />,
+  subtitle: <IconSubtitle size={16} />,
+  game: <IconFolder size={16} />,
+};
+
+// 概览里放的字段；资料栏不再重复列出。
+const OVERVIEW_KEYS = new Set(["overview"]);
+const MAIN_CAST_KEYS = ["actors", "cast"];
+const CAST_SHOWN = 12;
+
+const TAGS_SHOWN = 8;
+
+function TagsValue({ tags }: { tags: string[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? tags : tags.slice(0, TAGS_SHOWN);
+  return (
+    <div className={classes.tags}>
+      {shown.map((tag) => (
+        <Pill key={tag}>{tag}</Pill>
+      ))}
+      {tags.length > TAGS_SHOWN && (
+        <button type="button" className={classes.tagsMore} onClick={() => setAll(!all)}>
+          {all ? "收起" : `等 ${tags.length} 个`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function isEmpty(value: unknown): boolean {
+  return value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
+}
+
+function firstImage(field: FieldOut | undefined): string | null {
+  if (field === undefined || !Array.isArray(field.value)) {
+    return null;
+  }
+  return (field.value as ImageValue[]).find((image) => image.url !== null)?.url ?? null;
+}
+
+function textValue(fields: Map<string, FieldOut>, key: string): string | null {
+  const value = fields.get(key)?.value;
+  return typeof value === "string" && value !== "" ? value : null;
+}
 
 export function ItemDetailPage() {
   const id = Number(useParams().itemId);
@@ -86,6 +135,7 @@ export function ItemDetailPage() {
   const [supplementing, setSupplementing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
+  const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
     void queryClient.invalidateQueries({ queryKey: ["wall", detail.library_id] });
@@ -175,14 +225,31 @@ export function ItemDetailPage() {
     );
   }
   const detail = item.data;
-  const fields = detail.sections.flatMap((section) => section.fields);
-  const lockedKeys = fields.filter((field) => field.locked).map((field) => field.key);
-  const originalValue = fields.find((field) => field.key === "original_title")?.value;
-  const originalTitle = typeof originalValue === "string" && originalValue !== "" ? originalValue : null;
+  const series = isSeriesType(dataTypes.data, detail.data_type_id);
+  const allFields = detail.sections.flatMap((section) => section.fields);
+  const byKey = new Map(allFields.map((field) => [field.key, field]));
+  const lockedKeys = allFields.filter((field) => field.locked).map((field) => field.key);
+  const originalTitle = textValue(byKey, "original_title");
   const toggleLock = (field: FieldOut) =>
     locks.mutate(
       field.locked ? lockedKeys.filter((key) => key !== field.key) : [...lockedKeys, field.key],
     );
+  const startEdit = (field: FieldOut) => {
+    edit.reset();
+    setEditing(field);
+  };
+  const sourceName = (source: string) =>
+    sources.data?.find((entry) => entry.id === source)?.name ?? sourceLabel(source);
+  const actions = (field: FieldOut) => (
+    <FieldActions
+      field={field}
+      sourceName={sourceName}
+      lockBusy={locks.isPending}
+      onEdit={startEdit}
+      onToggleLock={toggleLock}
+    />
+  );
+
   const busy = watcher.watching || scrape.isPending;
   const hasVideo =
     detail.files.some((file) => file.file_kind === "video") ||
@@ -191,59 +258,116 @@ export function ItemDetailPage() {
   // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
   const isWork = detail.kind === "work";
   const canArrange = isWork && hasVideo && detail.scraped_at !== null;
-
   const landscape = detail.kind === "episode";
-  const header = (
-    <Group align="flex-start" wrap="nowrap" p="md">
-      {detail.poster_url !== null ? (
-        <Image
-          src={detail.poster_url}
-          alt={detail.title}
-          w={landscape ? 320 : 200}
-          radius="md"
-        />
-      ) : (
-        <Paper w={landscape ? 320 : 200} h={landscape ? 180 : 300} bg="gray.1" radius="md" />
+
+  const peopleFields = allFields.filter((field) => field.value_type === "people");
+  const imageFields = allFields.filter((field) => field.value_type === "images");
+  const overviewFields = allFields.filter((field) => OVERVIEW_KEYS.has(field.key));
+  const panelSections = detail.sections
+    .map((section) => ({
+      name: section.name,
+      fields: section.fields.filter(
+        (field) =>
+          field.value_type !== "people" && field.value_type !== "images" && !OVERVIEW_KEYS.has(field.key),
+      ),
+    }))
+    .filter((section) => section.fields.length > 0);
+  const peopleCount = peopleFields.reduce(
+    (sum, field) => sum + (Array.isArray(field.value) ? field.value.length : 0),
+    0,
+  );
+  const imagesFilled = imageFields.filter((field) => firstImage(field) !== null).length;
+  const mainCast =
+    MAIN_CAST_KEYS.map((key) => byKey.get(key)).find((field) => field !== undefined) ??
+    [...peopleFields].sort(
+      (a, b) => (Array.isArray(b.value) ? b.value.length : 0) - (Array.isArray(a.value) ? a.value.length : 0),
+    )[0];
+  const crewFields = peopleFields.filter((field) => field !== mainCast && !isEmpty(field.value));
+
+  const logo = firstImage(byKey.get("clearlogo"));
+  const tagline = textValue(byKey, "tagline");
+  const metaPills: ReactNode[] = [];
+  const rating = allFields.find((field) => field.value_type === "rating" && !isEmpty(field.value));
+  if (rating !== undefined) {
+    const best = (rating.value as RatingValue[])[0];
+    metaPills.push(
+      <Pill key="rating" tone="accent">
+        <IconStar size={12} /> {best.rating.toFixed(1)} {sourceLabel(best.source)}
+      </Pill>,
+    );
+  }
+  const released = textValue(byKey, "release_date");
+  if (released !== null) {
+    metaPills.push(<Pill key="date">{released}</Pill>);
+  } else if (detail.year !== null) {
+    metaPills.push(<Pill key="year">{detail.year}</Pill>);
+  }
+  const runtime = byKey.get("runtime")?.value;
+  if (typeof runtime === "number" && runtime > 0) {
+    metaPills.push(<Pill key="runtime">{runtime} 分钟</Pill>);
+  }
+  const certification = textValue(byKey, "certification");
+  if (certification !== null) {
+    metaPills.push(<Pill key="cert">{certification}</Pill>);
+  }
+  const genres = byKey.get("genres")?.value;
+  if (Array.isArray(genres)) {
+    for (const genre of genres.slice(0, 4)) {
+      metaPills.push(<Pill key={`genre-${genre}`}>{String(genre)}</Pill>);
+    }
+  }
+  if (detail.collection !== null) {
+    metaPills.push(
+      <Link key="collection" to={`/items/${detail.collection.id}`} className={classes.ext}>
+        系列 <b>{detail.collection.title}</b>
+      </Link>,
+    );
+  }
+
+  const hero = (
+    <div className={classes.hero}>
+      {detail.fanart_url !== null && (
+        <div className={classes.heroBg} style={{ backgroundImage: `url("${detail.fanart_url}")` }} />
       )}
-      <Stack gap="xs">
-        <Title order={2}>{detail.title}</Title>
-        {detail.subtitle !== null && <Text c="dimmed">{detail.subtitle}</Text>}
-        {detail.year !== null && <Text>{detail.year}</Text>}
-        <Group gap="xs">
-          {Object.entries(detail.external_ids).map(([provider, value]) => {
-            const href = externalLink(provider, value, detail.kind);
-            const badge = (
-              <Badge variant="outline">
-                {provider.toUpperCase()} {value}
-              </Badge>
-            );
-            return href !== null ? (
-              <Anchor key={provider} href={href} target="_blank" rel="noreferrer">
-                {badge}
-              </Anchor>
-            ) : (
-              <span key={provider}>{badge}</span>
-            );
-          })}
-        </Group>
-        {detail.collection !== null && (
-          <Anchor component={Link} to={`/items/${detail.collection.id}`}>
-            系列：{detail.collection.title}
-          </Anchor>
-        )}
-        {detail.show !== null && (
-          <Anchor component={Link} to={`/items/${detail.show.id}`}>
-            {detail.show.title}
-            {detail.position !== null ? ` · ${detail.position}` : ""}
-          </Anchor>
-        )}
-        <Text size="sm" c="dimmed">
-          {detail.scraped_at !== null ? `上次刮削 ${formatTime(detail.scraped_at)}` : "还没刮削"}
-        </Text>
-        {isWork && (
-          <Group gap="md">
-            <Group gap="xs">
+      <span className={classes.scrapedAt}>
+        {detail.scraped_at !== null ? `上次刮削 ${formatTime(detail.scraped_at)}` : "还没刮削"}
+      </span>
+      <div className={classes.heroInner}>
+        <div className={`${classes.poster} ${landscape ? classes.landscape : ""}`}>
+          {detail.poster_url !== null ? (
+            <img src={detail.poster_url} alt={detail.title} />
+          ) : (
+            <div className={classes.posterBlank} style={landscape ? { aspectRatio: "16 / 9" } : undefined}>
+              <IconImage size={32} />
+            </div>
+          )}
+        </div>
+        <div className={classes.heroText}>
+          {detail.show !== null && (
+            <Link to={`/items/${detail.show.id}`} className={classes.crumb} style={{ marginBottom: 8 }}>
+              {detail.show.title}
+              {detail.position !== null ? ` · ${detail.position}` : ""}
+            </Link>
+          )}
+          {logo !== null ? (
+            <>
+              <img className={classes.logo} src={logo} alt={detail.title} />
+              <h1 className="mo-sr-only">{detail.title}</h1>
+            </>
+          ) : (
+            <h1 className={classes.title}>{detail.title}</h1>
+          )}
+          {(detail.subtitle !== null || (logo !== null && detail.year !== null)) && (
+            <div className={classes.subtitle}>
+              {logo !== null ? `${detail.title}${detail.year !== null ? `（${detail.year}）` : ""}` : detail.subtitle}
+            </div>
+          )}
+          {metaPills.length > 0 && <div className={classes.meta}>{metaPills}</div>}
+          {tagline !== null && <div className={classes.tagline}>「{tagline}」</div>}
+          {isWork && (
+            <div className={classes.actions}>
               <Button
+                leftSection={<IconScrape size={16} />}
                 loading={busy && !arranging}
                 disabled={busy}
                 onClick={() => scrape.mutate()}
@@ -252,6 +376,7 @@ export function ItemDetailPage() {
               </Button>
               <Button
                 variant="default"
+                leftSection={<IconRefresh size={16} />}
                 disabled={busy}
                 onClick={() => {
                   rematch.reset();
@@ -263,6 +388,7 @@ export function ItemDetailPage() {
               {pluginType && (
                 <Button
                   variant="default"
+                  leftSection={<IconLink size={16} />}
                   disabled={busy}
                   onClick={() => {
                     supplement.reset();
@@ -272,12 +398,10 @@ export function ItemDetailPage() {
                   补充来源
                 </Button>
               )}
-            </Group>
-            {canArrange && (
-              <>
-                <Divider orientation="vertical" />
+              {canArrange && (
                 <Button
                   variant="default"
+                  leftSection={<IconOrganize size={16} />}
                   loading={arranging}
                   disabled={busy}
                   onClick={() => {
@@ -287,138 +411,273 @@ export function ItemDetailPage() {
                 >
                   整理
                 </Button>
-              </>
-            )}
-          </Group>
-        )}
-      </Stack>
-    </Group>
+              )}
+            </div>
+          )}
+          {Object.keys(detail.external_ids).length > 0 && (
+            <div className={classes.actions} style={{ marginTop: 14, gap: 6 }}>
+              {Object.entries(detail.external_ids).map(([provider, value]) => {
+                const href = externalLink(provider, value, detail.kind, series);
+                const body = (
+                  <>
+                    <b>{sourceLabel(provider)}</b> {value}
+                    {href !== null && <IconExternal size={11} />}
+                  </>
+                );
+                return href !== null ? (
+                  <a key={provider} className={classes.ext} href={href} target="_blank" rel="noreferrer">
+                    {body}
+                  </a>
+                ) : (
+                  <span key={provider} className={classes.ext}>
+                    {body}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 
-  return (
-    <Stack maw={1100}>
-      <Anchor component={Link} to={`/libraries/${detail.library_id}`} size="sm">
-        ← {detail.library_name}
-      </Anchor>
-      {detail.fanart_url !== null ? (
-        <BackgroundImage src={detail.fanart_url} radius="md">
-          <div
-            style={{
-              background: "rgba(255,255,255,0.85)",
-              borderRadius: "var(--mantine-radius-md)",
-            }}
-          >
-            {header}
-          </div>
-        </BackgroundImage>
-      ) : (
-        <Paper withBorder>{header}</Paper>
+  const sectionHead = (title: string, extra?: ReactNode, more?: { label: string; tab: string }) => (
+    <div className={classes.sectionHead}>
+      <h3>{title}</h3>
+      {extra}
+      {more !== undefined && (
+        <button type="button" className={classes.more} onClick={() => setTab(more.tab)}>
+          {more.label}
+        </button>
       )}
+    </div>
+  );
+
+  const personGrid = (people: PersonValue[]) => (
+    <div className={classes.people}>
+      {people.map((person, index) => (
+        <div key={`${person.id}-${index}`} className={classes.person}>
+          <Avatar src={person.photo_url} alt={person.name} size={72} radius={999} mx="auto">
+            {person.name.slice(0, 1)}
+          </Avatar>
+          <b title={person.name}>{person.name}</b>
+          {(person.character ?? person.original_name) !== null && (
+            <small title={person.character ?? person.original_name ?? ""}>
+              {person.character ?? person.original_name}
+            </small>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  const imageSlot = (field: FieldOut) => {
+    const images = Array.isArray(field.value)
+      ? (field.value as ImageValue[]).filter((image) => image.url !== null)
+      : [];
+    const url = images[0]?.url ?? null;
+    const transparent = ["clearlogo", "clearart", "logo", "characterart"].includes(field.key);
+    return (
+      <div key={field.key} className={`${classes.slot} ${classes.hoverRow} ${url === null ? classes.slotEmpty : ""}`}>
+        {url !== null ? (
+          <div
+            className={`${classes.slotPic} ${transparent ? classes.checker : ""} ${
+              ["fanart", "thumb", "landscape", "banner"].includes(field.key) ? classes.cover : ""
+            }`}
+          >
+            <img src={url} alt={field.label} loading="lazy" />
+          </div>
+        ) : (
+          <div className={classes.slotPic}>
+            <IconImage size={22} />
+            缺{field.label}
+          </div>
+        )}
+        <div className={classes.slotCap}>
+          <Text size="sm" fw={600} c="var(--mo-text)">
+            {field.label}
+          </Text>
+          {images.length > 1 && <span className="mo-mono">{images.length} 张</span>}
+          <span style={{ marginLeft: "auto" }}>{actions(field)}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const overviewTab = (
+    <>
+      {overviewFields.map((field) => (
+        <div key={field.key} className={`${classes.section} ${classes.hoverRow}`}>
+          {sectionHead(field.label, actions(field))}
+          {isEmpty(field.value) ? (
+            <div className={classes.empty}>还没有{field.label}</div>
+          ) : (
+            <div className={classes.overview}>{String(field.value)}</div>
+          )}
+        </div>
+      ))}
       {detail.parts.length > 0 && (
-        <Paper withBorder p="md">
-          <Title order={4} mb="sm">
-            系列里的电影
-          </Title>
-          <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }}>
+        <div className={classes.section}>
+          {sectionHead("系列里的电影", <small>{detail.parts.length} 部</small>)}
+          <SimpleGrid cols={{ base: 2, sm: 4, lg: 5 }}>
             {detail.parts.map((part) => (
               <PosterCard key={part.id} item={part} />
             ))}
           </SimpleGrid>
-        </Paper>
+        </div>
       )}
       {detail.seasons.length > 0 && (
-        <Paper withBorder p="md">
-          <Title order={4} mb="sm">
-            季和集
-          </Title>
+        <div className={classes.section}>
+          {sectionHead("季和集", <small>{detail.seasons.length} 季</small>)}
           <SeasonList seasons={detail.seasons} />
-        </Paper>
+        </div>
       )}
-      {detail.sections.map((section) => (
-        <Paper key={section.name} withBorder p="md">
-          <Title order={4} mb="sm">
-            {section.name}
-          </Title>
-          <Table verticalSpacing="xs">
-            <Table.Tbody>
-              {section.fields.map((field) => (
-                <Table.Tr key={field.key}>
-                  <Table.Td w={120}>
-                    <Text size="sm" fw={500}>
-                      {field.label}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <FieldValue field={field} />
-                  </Table.Td>
-                  <Table.Td w={70}>
-                    {field.source !== null && (
-                      <Badge
-                        size="sm"
-                        variant="light"
-                        color={field.source === "manual" ? "orange" : "blue"}
-                      >
-                        {SOURCE_LABELS[field.source] ??
-                          sources.data?.find((source) => source.id === field.source)?.name ??
-                          field.source}
-                      </Badge>
-                    )}
-                  </Table.Td>
-                  <Table.Td w={140}>
-                    <Group gap={4} wrap="nowrap">
-                      {field.editable && (
-                        <Button
-                          size="compact-xs"
-                          variant="subtle"
-                          aria-label={`编辑${field.label}`}
-                          onClick={() => {
-                            edit.reset();
-                            setEditing(field);
-                          }}
-                        >
-                          编辑
-                        </Button>
-                      )}
-                      {field.lockable && (
-                        <Button
-                          size="compact-xs"
-                          variant={field.locked ? "light" : "subtle"}
-                          color={field.locked ? "orange" : "gray"}
-                          aria-label={`${field.locked ? "解锁" : "锁定"}${field.label}`}
-                          disabled={locks.isPending}
-                          onClick={() => toggleLock(field)}
-                        >
-                          {field.locked ? "解锁" : "锁定"}
-                        </Button>
-                      )}
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
+      {mainCast !== undefined && !isEmpty(mainCast.value) && (
+        <div className={classes.section}>
+          {sectionHead(
+            mainCast.label,
+            <small>{(mainCast.value as PersonValue[]).length} 人</small>,
+            { label: "全部演职员", tab: "people" },
+          )}
+          {crewFields.length > 0 && (
+            <div className={classes.crew}>
+              {crewFields.map((field) => (
+                <div key={field.key}>
+                  <span>{field.label}</span>
+                  <b>
+                    {(field.value as PersonValue[])
+                      .slice(0, 3)
+                      .map((person) => person.name)
+                      .join("、")}
+                  </b>
+                </div>
               ))}
-            </Table.Tbody>
-          </Table>
-        </Paper>
-      ))}
-      {sourceFiles.length > 0 && (
-        <Paper withBorder p="md">
-          <Title order={4} mb="sm">
-            文件
-          </Title>
-          {sourceFiles.map((file) => (
-            <Group key={file.id} gap="xs">
-              <Badge size="sm" variant="outline">
-                {FILE_KIND_LABELS[file.file_kind]}
-              </Badge>
-              <Text size="sm" ff="monospace">
-                {file.path}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {formatSize(file.size)}
-              </Text>
-            </Group>
-          ))}
-        </Paper>
+            </div>
+          )}
+          {personGrid((mainCast.value as PersonValue[]).slice(0, CAST_SHOWN))}
+        </div>
       )}
+      {imagesFilled > 0 && (
+        <div className={classes.section}>
+          {sectionHead("图片", <small>{imagesFilled} / {imageFields.length}</small>, {
+            label: "全部图片",
+            tab: "images",
+          })}
+          <div className={classes.images}>
+            {imageFields.filter((field) => firstImage(field) !== null).slice(0, 4).map(imageSlot)}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const peopleTab =
+    peopleFields.length === 0 ? (
+      <div className={classes.empty}>这个类型没有人员字段</div>
+    ) : (
+      peopleFields.map((field) => (
+        <div key={field.key} className={`${classes.section} ${classes.hoverRow}`}>
+          {sectionHead(
+            field.label,
+            <>
+              <small>{Array.isArray(field.value) ? field.value.length : 0} 人</small>
+              <span style={{ marginLeft: "auto" }}>{actions(field)}</span>
+            </>,
+          )}
+          {isEmpty(field.value) ? (
+            <div className={classes.empty}>没有{field.label}</div>
+          ) : (
+            personGrid(field.value as PersonValue[])
+          )}
+        </div>
+      ))
+    );
+
+  const filesTab =
+    sourceFiles.length === 0 ? (
+      <div className={classes.empty}>
+        {detail.seasons.length > 0 ? "文件在各集里，展开季和集查看" : "没有关联的文件"}
+      </div>
+    ) : (
+      <Paper withBorder radius="lg" style={{ overflow: "hidden" }}>
+        {sourceFiles.map((file) => (
+          <div key={file.id} className={classes.file}>
+            <span className={`${classes.fileIcon} ${file.file_kind === "video" ? "" : classes.minor}`}>
+              {FILE_KIND_ICONS[file.file_kind] ?? <IconFile size={16} />}
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className={classes.path}>{file.path}</div>
+              <Text size="xs" c="dimmed" mt={2}>
+                {FILE_KIND_LABELS[file.file_kind]} · {formatSize(file.size)}
+              </Text>
+            </div>
+          </div>
+        ))}
+      </Paper>
+    );
+
+  const panel = (
+    <aside className={classes.panel} aria-label="资料">
+      <div className={classes.panelHead}>
+        <h3>资料</h3>
+        <Text size="xs" c="dimmed" ml="auto">
+          {allFields.filter((field) => !isEmpty(field.value)).length} / {allFields.length} 项有值
+        </Text>
+      </div>
+      {panelSections.map((section) => (
+        <div key={section.name}>
+          {panelSections.length > 1 && <div className={classes.group}>{section.name}</div>}
+          {section.fields.map((field) => (
+            <div key={field.key} className={`${classes.kv} ${classes.hoverRow}`}>
+              <span className={classes.kvLabel}>{field.label}</span>
+              <div className={classes.kvValue}>
+                {field.value_type === "tags" && Array.isArray(field.value) && field.value.length > 0 ? (
+                  <TagsValue tags={field.value as string[]} />
+                ) : (
+                  <FieldValue field={field} />
+                )}
+              </div>
+              {actions(field)}
+            </div>
+          ))}
+        </div>
+      ))}
+      <div className={classes.hint}>
+        <IconInfo size={14} />
+        手改的字段会自动锁定，再次刮削不覆盖。
+      </div>
+    </aside>
+  );
+
+  return (
+    <div style={{ maxWidth: 1480 }}>
+      <Link to={`/libraries/${detail.library_id}`} className={classes.crumb}>
+        <IconBack size={14} /> {detail.library_name}
+      </Link>
+      {hero}
+      <div className={classes.body}>
+        <Tabs value={tab} onChange={setTab} keepMounted={false}>
+          <Tabs.List mb="lg">
+            <Tabs.Tab value="overview">概览</Tabs.Tab>
+            <Tabs.Tab value="people">演职员 {peopleCount > 0 && <span className="mo-mono">{peopleCount}</span>}</Tabs.Tab>
+            <Tabs.Tab value="images">
+              图片 <span className="mo-mono">{imagesFilled}/{imageFields.length}</span>
+            </Tabs.Tab>
+            <Tabs.Tab value="files">文件 {sourceFiles.length > 0 && <span className="mo-mono">{sourceFiles.length}</span>}</Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="overview">{overviewTab}</Tabs.Panel>
+          <Tabs.Panel value="people">{peopleTab}</Tabs.Panel>
+          <Tabs.Panel value="images">
+            {imageFields.length === 0 ? (
+              <div className={classes.empty}>这个类型没有图片字段</div>
+            ) : (
+              <div className={classes.images}>{imageFields.map(imageSlot)}</div>
+            )}
+          </Tabs.Panel>
+          <Tabs.Panel value="files">{filesTab}</Tabs.Panel>
+        </Tabs>
+        {panel}
+      </div>
       {editing !== null && (
         <FieldEditModal
           field={editing}
@@ -454,7 +713,7 @@ export function ItemDetailPage() {
       {rematching && !pluginType && (
         <TmdbSearchModal
           title="重新匹配"
-          kind={isSeriesType(dataTypes.data, detail.data_type_id) ? "tv" : "movie"}
+          kind={series ? "tv" : "movie"}
           initialQuery={detail.title}
           initialYear={detail.year}
           picking={rematch.isPending}
@@ -490,6 +749,6 @@ export function ItemDetailPage() {
         onConfirm={() => arrange.mutate()}
         confirming={arrange.isPending}
       />
-    </Stack>
+    </div>
   );
 }

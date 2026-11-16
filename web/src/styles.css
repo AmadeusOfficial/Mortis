@@ -23,6 +23,15 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.mo-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* 外框和侧栏。 */
 .mo-main {
   background: var(--mo-bg);

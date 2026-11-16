@@ -27,10 +27,17 @@ export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
 }
 
-export function SourceBadge({ source }: { source: string }) {
+export function SourceBadge({ source, label }: { source: string; label?: string }) {
+  if (source === "manual") {
+    return (
+      <span className="mo-pill" data-tone="warn" style={{ height: 18, fontSize: 10.5, borderRadius: 4 }}>
+        手改
+      </span>
+    );
+  }
   return (
     <span className="mo-pill" data-tone="source">
-      {sourceLabel(source)}
+      {label ?? sourceLabel(source)}
     </span>
   );
 }
