@@ -318,6 +318,9 @@ export interface Library {
   is_auto_scrape: boolean;
   item_count: number;
   file_count: number;
+  scraped_count: number;
+  issue_count: number;
+  sample_posters: string[];
   paths: string[];
   created_at: string;
   updated_at: string;
@@ -399,6 +402,7 @@ export interface WallItem {
   year: number | null;
   poster_url: string | null;
   is_scraped: boolean;
+  issue: string | null;
 }
 
 export interface PersonValue {
