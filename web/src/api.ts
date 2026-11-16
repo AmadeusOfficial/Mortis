@@ -255,11 +255,31 @@ export interface FieldOut {
   editable: boolean;
 }
 
+export interface EpisodeInfo {
+  id: number;
+  number: number | null;
+  title: string;
+  air_date: string | null;
+  has_file: boolean;
+  still_url: string | null;
+}
+
+export interface SeasonInfo {
+  id: number;
+  number: number | null;
+  title: string;
+  poster_url: string | null;
+  episode_count: number;
+  file_count: number;
+  episodes: EpisodeInfo[];
+}
+
 export interface ItemDetail {
   id: number;
   library_id: number;
+  data_type_id: string;
   library_name: string;
-  kind: "work" | "collection";
+  kind: "work" | "collection" | "season" | "episode";
   title: string;
   subtitle: string | null;
   year: number | null;
@@ -268,6 +288,12 @@ export interface ItemDetail {
   external_ids: Record<string, string>;
   collection: { id: number; title: string; poster_url: string | null } | null;
   parts: WallItem[];
+  // 季和集所属的剧；其他条目为 null。
+  show: { id: number; title: string; poster_url: string | null } | null;
+  // 季「第 1 季」，集「第 1 季 第 2 集」；其他条目为 null。
+  position: string | null;
+  // 只有电视剧的剧才非空。
+  seasons: SeasonInfo[];
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
   sections: { name: string; fields: FieldOut[] }[];
@@ -352,10 +378,13 @@ export interface UnmatchedFile {
   id: number;
   library_id: number;
   library_name: string;
+  data_type_id: string;
   path: string;
   size: number | null;
   guess_title: string;
   guess_year: number | null;
+  // 电视剧库按剧目录合并成一行，path 是剧目录，这里是目录下没匹配的视频数。
+  video_count: number;
 }
 
 export const fetchUnmatched = (libraryId: number | null) =>
@@ -396,12 +425,14 @@ export const fetchLibraryArrangePreview = (id: number) =>
   request<LibraryArrangePreview>("GET", `/api/libraries/${id}/arrange-preview`);
 export const arrangeLibrary = (id: number) =>
   request<Enqueued>("POST", `/api/libraries/${id}/arrange`);
-export const searchTmdbMovies = (query: string, year: number | null) => {
+export type SearchKind = "movie" | "tv";
+
+export const searchTmdbMovies = (query: string, year: number | null, kind: SearchKind = "movie") => {
   const params = new URLSearchParams({ query });
   if (year !== null) {
     params.set("year", String(year));
   }
-  return request<MovieHit[]>("GET", `/api/tmdb/search/movie?${params}`);
+  return request<MovieHit[]>("GET", `/api/tmdb/search/${kind}?${params}`);
 };
 
 export function isTaskBusy(task: TaskRow): boolean {

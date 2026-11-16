@@ -35,6 +35,7 @@ import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
+import { SeasonList } from "../components/SeasonList";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { formatSize, formatTime } from "../format";
 import { useTaskWatcher } from "../useTaskWatcher";
@@ -139,9 +140,13 @@ export function ItemDetailPage() {
       field.locked ? lockedKeys.filter((key) => key !== field.key) : [...lockedKeys, field.key],
     );
   const busy = watcher.watching || scrape.isPending;
-  const hasVideo = detail.files.some((file) => file.file_kind === "video");
+  const hasVideo =
+    detail.files.some((file) => file.file_kind === "video") ||
+    detail.seasons.some((season) => season.file_count > 0);
   const sourceFiles = detail.files.filter((file) => file.file_kind in FILE_KIND_LABELS);
-  const canArrange = detail.kind === "work" && hasVideo && detail.scraped_at !== null;
+  // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
+  const isWork = detail.kind === "work";
+  const canArrange = isWork && hasVideo && detail.scraped_at !== null;
 
   const header = (
     <Group align="flex-start" wrap="nowrap" p="md">
@@ -176,10 +181,16 @@ export function ItemDetailPage() {
             系列：{detail.collection.title}
           </Anchor>
         )}
+        {detail.show !== null && (
+          <Anchor component={Link} to={`/items/${detail.show.id}`}>
+            {detail.show.title}
+            {detail.position !== null ? ` · ${detail.position}` : ""}
+          </Anchor>
+        )}
         <Text size="sm" c="dimmed">
           {detail.scraped_at !== null ? `上次刮削 ${formatTime(detail.scraped_at)}` : "还没刮削"}
         </Text>
-        {detail.kind === "work" && (
+        {isWork && (
           <Group gap="md">
             <Group gap="xs">
               <Button
@@ -251,6 +262,14 @@ export function ItemDetailPage() {
               <PosterCard key={part.id} item={part} />
             ))}
           </SimpleGrid>
+        </Paper>
+      )}
+      {detail.seasons.length > 0 && (
+        <Paper withBorder p="md">
+          <Title order={4} mb="sm">
+            季和集
+          </Title>
+          <SeasonList seasons={detail.seasons} />
         </Paper>
       )}
       {detail.sections.map((section) => (
@@ -348,6 +367,7 @@ export function ItemDetailPage() {
       {rematching && (
         <TmdbSearchModal
           title="重新匹配"
+          kind={detail.data_type_id === "tv" ? "tv" : "movie"}
           initialQuery={detail.title}
           initialYear={detail.year}
           picking={rematch.isPending}

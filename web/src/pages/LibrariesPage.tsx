@@ -34,6 +34,11 @@ const AUTOMATION_LABELS: Record<string, string> = {
   schedule: "定时扫描",
 };
 
+// 条目数量的单位按库的数据类型：电视剧叫「部剧」，其余叫「部电影」。
+function itemUnit(dataTypeId: string): string {
+  return dataTypeId === "tv" ? "部剧" : "部电影";
+}
+
 export function LibrariesPage() {
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
   const [editing, setEditing] = useState<Library | "new" | null>(null);
@@ -108,7 +113,7 @@ function LibraryCard({
             <Badge variant="light">{library.data_type_name}</Badge>
           </Group>
           <Text size="sm" c="dimmed">
-            {library.item_count} 部电影 · {library.file_count} 个视频
+            {library.item_count} {itemUnit(library.data_type_id)} · {library.file_count} 个视频
           </Text>
           {library.paths.map((path) => (
             <Text key={path} size="sm" ff="monospace">
@@ -151,7 +156,10 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
   const dataTypes = useQuery({ queryKey: ["data-types"], queryFn: fetchDataTypes });
   const [name, setName] = useState(library?.name ?? "电影");
   const [dataTypeId, setDataTypeId] = useState<string | null>(library?.data_type_id ?? "movie");
+  // 用户在新建时手动改过库名后，就不再跟随数据类型的名字。
+  const [nameEdited, setNameEdited] = useState(false);
   const [pathsText, setPathsText] = useState(library?.paths.join("\n") ?? "");
+  const dataTypeName = dataTypes.data?.find((type) => type.id === dataTypeId)?.name ?? "";
   const save = useMutation({
     mutationFn: () => {
       const paths = pathsText
@@ -181,14 +189,24 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
       <Stack>
         <TextInput
           label="库名"
+          placeholder={dataTypeName}
           value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
+          onChange={(event) => {
+            setNameEdited(true);
+            setName(event.currentTarget.value);
+          }}
         />
         <Select
           label="数据类型"
           data={(dataTypes.data ?? []).map((type) => ({ value: type.id, label: type.name }))}
           value={dataTypeId}
-          onChange={setDataTypeId}
+          onChange={(value) => {
+            setDataTypeId(value);
+            // 新建且没手动改过库名时，库名跟着所选类型的名字走。
+            if (library === null && !nameEdited && value !== null) {
+              setName(dataTypes.data?.find((type) => type.id === value)?.name ?? "");
+            }
+          }}
           allowDeselect={false}
           disabled={library !== null}
           description={library !== null ? "建好后不能改类型" : undefined}
@@ -234,8 +252,8 @@ function DeleteLibraryModal({ library, onClose }: { library: Library; onClose: (
     <Modal opened onClose={onClose} title="删除媒体库">
       <Stack>
         <Text>
-          删除媒体库「{library.name}」？库里的 {library.item_count} 部电影和 {library.file_count}{" "}
-          个视频的记录会一起删除，硬盘上的文件不动。
+          删除媒体库「{library.name}」？库里的 {library.item_count}{" "}
+          {itemUnit(library.data_type_id)}和 {library.file_count} 个视频的记录会一起删除，硬盘上的文件不动。
         </Text>
         {remove.isError && (
           <Alert color="red" title="删除失败">
