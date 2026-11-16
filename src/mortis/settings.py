@@ -12,6 +12,11 @@ def default_data_dir() -> Path:
     return Path.home() / ".mortis"
 
 
+def default_plugins_dir() -> Path | None:
+    bundled = Path(__file__).resolve().parents[2] / "plugins"
+    return bundled if bundled.is_dir() else None
+
+
 def _is_blank(value: object) -> bool:
     return isinstance(value, str) and not value.strip()
 
@@ -25,13 +30,15 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = Field(default=8100, ge=1, le=65535)
     web_dist: Path | None = None
+    plugins_dir: Path | None = Field(default_factory=default_plugins_dir)
+    """程序自带的插件目录。数据目录下的 plugins 另外加载，同 id 时覆盖这里的。"""
 
     @field_validator("data_dir", mode="before")
     @classmethod
     def _blank_data_dir_is_default(cls, value: object) -> object:
         return default_data_dir() if _is_blank(value) else value
 
-    @field_validator("web_dist", mode="before")
+    @field_validator("web_dist", "plugins_dir", mode="before")
     @classmethod
     def _blank_web_dist_is_unset(cls, value: object) -> object:
         return None if _is_blank(value) else value

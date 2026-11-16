@@ -388,6 +388,9 @@ class AppConfig(BaseModel):
     tv: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
     anime: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
+    disabled_plugins: list[str] = []
+    plugins: dict[str, dict[str, Any]] = {}
+    """每个插件一节，按插件自己的 Settings 模型校验。"""
 
 
 CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
@@ -406,6 +409,7 @@ class Secrets(BaseModel):
     tmdb_api_key: str = ""
     proxy_username: str = ""
     proxy_password: str = ""
+    plugins: dict[str, dict[str, Any]] = {}
 
 
-SECRET_KEYS: tuple[str, ...] = tuple(Secrets.model_fields)
+SECRET_KEYS: tuple[str, ...] = tuple(key for key in Secrets.model_fields if key != "plugins")

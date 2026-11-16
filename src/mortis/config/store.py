@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ class ConfigStore:
     def __init__(self, data_dir: Path) -> None:
         self.config_path = data_dir / CONFIG_FILE
         self.secrets_path = data_dir / SECRETS_FILE
+        self._lock = threading.RLock()
 
     def load_config(self) -> AppConfig:
         return _load(self.config_path, AppConfig)
@@ -42,11 +44,39 @@ class ConfigStore:
         _write(self.config_path, raw)
         return config
 
+    def save_plugin(
+        self, plugin_id: str, *, values: dict[str, Any] | None = None, disabled: bool | None = None
+    ) -> AppConfig:
+        with self._lock:
+            raw = _read_raw(self.config_path)
+            if values is not None:
+                plugins = raw.get("plugins")
+                plugins = dict(plugins) if isinstance(plugins, dict) else {}
+                plugins[plugin_id] = values
+                raw["plugins"] = plugins
+            if disabled is not None:
+                old = raw.get("disabled_plugins")
+                names = [name for name in old if name != plugin_id] if isinstance(old, list) else []
+                raw["disabled_plugins"] = [*names, plugin_id] if disabled else names
+            config = _validate(self.config_path, raw, AppConfig)
+            _write(self.config_path, raw)
+            return config
+
     def load_secrets(self) -> Secrets:
         return _load(self.secrets_path, Secrets)
 
     def save_secrets(self, secrets: Secrets) -> None:
-        _save(self.secrets_path, secrets)
+        with self._lock:
+            _save(self.secrets_path, secrets)
+
+    def update_plugin_secrets(self, plugin_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+        """只改给出的键。令牌续期和设置页保存可能同时发生，读改写在锁里做。"""
+        with self._lock:
+            secrets = self.load_secrets()
+            values = {**secrets.plugins.get(plugin_id, {}), **changes}
+            secrets.plugins[plugin_id] = values
+            _save(self.secrets_path, secrets)
+            return values
 
 
 def _read_raw(path: Path) -> dict[str, Any]:

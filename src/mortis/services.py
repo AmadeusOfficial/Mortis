@@ -8,6 +8,7 @@ import httpx2 as httpx
 
 from mortis.config.store import ConfigStore
 from mortis.net.http import build_client
+from mortis.plugins.registry import PluginRegistry
 
 
 class KeyedLocks:
@@ -33,6 +34,7 @@ class Services:
     config_store: ConfigStore
     http_transport: httpx.BaseTransport | None = None
     locks: KeyedLocks = field(default_factory=KeyedLocks)
+    plugins: PluginRegistry = field(default_factory=PluginRegistry)
 
     def http_client(self) -> httpx.Client:
         return build_client(

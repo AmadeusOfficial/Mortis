@@ -120,7 +120,8 @@ def test_bad_name_rejected(
 
 def test_unknown_data_type_rejected(client: TestClient, dirs: dict[str, Path]) -> None:
     response = client.post(
-        "/api/libraries", json={"name": "x", "data_type_id": "galgame", "paths": [str(dirs["a"])]}
+        "/api/libraries",
+        json={"name": "x", "data_type_id": "nosuchtype", "paths": [str(dirs["a"])]},
     )
     assert response.status_code == 422
     assert "没有这种数据类型" in response.json()["detail"]

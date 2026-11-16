@@ -14,6 +14,7 @@ from mortis.api.routes import images as image_routes
 from mortis.api.routes import items as item_routes
 from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import output as output_routes
+from mortis.api.routes import plugins as plugin_routes
 from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import tasks as task_routes
 from mortis.api.routes import tmdb as tmdb_routes
@@ -23,6 +24,7 @@ from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
 from mortis.errors import UserError
+from mortis.plugins.registry import PluginRegistry, plugin_folders
 from mortis.services import Services
 from mortis.settings import Settings
 from mortis.tasks import repo as task_repo
@@ -58,8 +60,11 @@ def create_app(
     session_factory = make_session_factory(engine)
     config_store = ConfigStore(resolved.data_dir)
     startup_config = _startup_config(config_store)
+    plugins = PluginRegistry(plugin_folders(resolved))
+    plugins.load(startup_config.disabled_plugins)
     with session_factory() as session:
         ensure_builtin_types(session)
+        plugins.sync_catalog(session)
         session.commit()
         task_repo.recover_running(session)
         task_repo.prune(
@@ -67,7 +72,7 @@ def create_app(
         )
     # 启动安装用过的连接不留在池里；没进 lifespan 的调用方（只读静态页的测试）也不会漏连接。
     engine.dispose()
-    services = Services(resolved.data_dir, config_store, http_transport)
+    services = Services(resolved.data_dir, config_store, http_transport, plugins=plugins)
     runner = TaskRunner(
         session_factory,
         services,
@@ -118,6 +123,7 @@ def create_app(
     app.include_router(output_routes.router)
     app.include_router(image_routes.router)
     app.include_router(tmdb_routes.router)
+    app.include_router(plugin_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)

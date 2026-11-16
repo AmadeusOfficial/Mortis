@@ -1,5 +1,8 @@
 # 莫提斯普通设置示例。真实文件是数据目录下的 config.toml，由设置页写入，不进 git。
 
+# 停用的插件 id；插件自己的设置写在 [plugins.<id>]
+disabled_plugins = []
+
 [network]
 # 代理主机，留空表示不用代理
 proxy_host = "127.0.0.1"

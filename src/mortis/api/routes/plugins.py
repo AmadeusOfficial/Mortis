@@ -1,0 +1,196 @@
+from typing import Any
+
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from mortis.api.deps import ServicesDep
+from mortis.errors import UserError
+from mortis.plugin_api import SourceError, SourcePlugin
+from mortis.plugins.host import PluginHost, open_host, plugin_secrets, plugin_settings
+from mortis.plugins.oauth import OAuthStates, authorize_url, client_values, exchange_code
+from mortis.plugins.registry import PluginInfo
+from mortis.services import Services
+
+router = APIRouter(prefix="/api")
+_states = OAuthStates()
+TOKEN_KEYS = frozenset({"refresh_token", "expires_at", "redirect_uri"})
+"""宿主登录时写的键，设置页不显示也不能改。"""
+
+
+class PluginOut(BaseModel):
+    id: str
+    name: str
+    version: str
+    kind: str
+    origin: str
+    enabled: bool
+    error: str | None
+    data_type: str | None = None
+    settings_schema: dict[str, Any] | None = None
+    settings: dict[str, Any] | None = None
+    secrets_schema: dict[str, Any] | None = None
+    secrets: dict[str, bool] | None = None
+    oauth: bool = False
+    logged_in: bool = False
+    expires_at: int | None = None
+    notice: str | None = None
+
+
+class PluginUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    settings: dict[str, Any] | None = None
+    secrets: dict[str, str] | None = None
+
+
+def _secret_keys(plugin: SourcePlugin) -> list[str]:
+    return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
+
+
+def _out(services: Services, info: PluginInfo) -> PluginOut:
+    out = PluginOut(
+        id=info.id,
+        name=info.name,
+        version=info.version,
+        kind=info.kind,
+        origin=info.origin,
+        enabled=info.enabled,
+        error=info.error,
+    )
+    plugin = info.plugin
+    if not isinstance(plugin, SourcePlugin):
+        return out
+    store = services.config_store
+    secrets = store.load_secrets()
+    values = secrets.plugins.get(plugin.id, {})
+    keys = _secret_keys(plugin)
+    schema = plugin.Secrets.model_json_schema()
+    schema["properties"] = {
+        key: value for key, value in schema.get("properties", {}).items() if key in keys
+    }
+    out.data_type = plugin.data_type
+    out.settings_schema = plugin.Settings.model_json_schema()
+    out.settings = plugin_settings(store.load_config(), plugin).model_dump(mode="json")
+    out.secrets_schema = schema
+    out.secrets = {key: bool(getattr(plugin_secrets(secrets, plugin), key)) for key in keys}
+    out.oauth = plugin.oauth is not None
+    out.logged_in = bool(values.get("access_token"))
+    out.expires_at = int(values["expires_at"]) if values.get("expires_at") else None
+    with services.http_client() as client:
+        host = PluginHost(plugin, client, store, lambda _message: None)
+        out.notice = plugin.disabled_reason(host)
+    return out
+
+
+def _reload(services: Services, request: Request) -> None:
+    services.plugins.load(services.config_store.load_config().disabled_plugins)
+    with services.locks.hold("catalog-write"), request.app.state.session_factory() as session:
+        services.plugins.sync_catalog(session)
+        session.commit()
+
+
+def _source(services: Services, plugin_id: str) -> SourcePlugin:
+    plugin = services.plugins.source(plugin_id)
+    if plugin is None:
+        raise UserError("插件不存在或没有启用", status_code=404)
+    return plugin
+
+
+@router.get("/plugins", response_model=list[PluginOut])
+def list_plugins(services: ServicesDep) -> list[PluginOut]:
+    return [_out(services, info) for info in services.plugins.all()]
+
+
+@router.post("/plugins/reload", response_model=list[PluginOut])
+def reload_plugins(services: ServicesDep, request: Request) -> list[PluginOut]:
+    _reload(services, request)
+    return list_plugins(services)
+
+
+@router.put("/plugins/{plugin_id}", response_model=PluginOut)
+def update_plugin(
+    plugin_id: str, update: PluginUpdate, services: ServicesDep, request: Request
+) -> PluginOut:
+    info = services.plugins.get(plugin_id)
+    if info is None:
+        raise UserError("插件不存在", status_code=404)
+    store = services.config_store
+    plugin = info.plugin
+    if (update.settings is not None or update.secrets is not None) and not isinstance(
+        plugin, SourcePlugin
+    ):
+        raise UserError("这个插件没有可改的设置")
+    if update.settings is not None:
+        assert isinstance(plugin, SourcePlugin)
+        try:
+            values = plugin.Settings.model_validate(update.settings).model_dump(mode="json")
+        except ValidationError as error:
+            problems = "；".join(
+                f"{'.'.join(str(part) for part in item['loc'])}：{item['msg']}"
+                for item in error.errors(include_input=False, include_url=False)
+            )
+            raise UserError(f"设置不合法：{problems}") from None
+        store.save_plugin(plugin_id, values=values)
+    if update.secrets is not None:
+        assert isinstance(plugin, SourcePlugin)
+        allowed = set(_secret_keys(plugin))
+        unknown = sorted(set(update.secrets) - allowed)
+        if unknown:
+            raise UserError(f"没有这些密钥：{'、'.join(unknown)}")
+        store.update_plugin_secrets(
+            plugin_id, {key: value.strip() for key, value in update.secrets.items()}
+        )
+    if update.enabled is not None and update.enabled != info.enabled:
+        store.save_plugin(plugin_id, disabled=not update.enabled)
+        _reload(services, request)
+    refreshed = services.plugins.get(plugin_id)
+    assert refreshed is not None
+    return _out(services, refreshed)
+
+
+@router.get("/plugins/{plugin_id}/oauth/login")
+def oauth_login(plugin_id: str, services: ServicesDep, request: Request) -> RedirectResponse:
+    plugin = _source(services, plugin_id)
+    if plugin.oauth is None:
+        raise UserError(f"{plugin.name} 不需要登录")
+    values = services.config_store.load_secrets().plugins.get(plugin.id, {})
+    client_id, client_secret = client_values(plugin, values)
+    if not client_id or not client_secret:
+        raise UserError(f"先在设置页填 {plugin.name} 的 App ID 和 App Secret")
+    redirect_uri = str(request.url_for("oauth_callback", plugin_id=plugin_id))
+    state = _states.issue(plugin_id, redirect_uri)
+    return RedirectResponse(authorize_url(plugin, client_id, redirect_uri, state))
+
+
+@router.get("/plugins/{plugin_id}/oauth/callback", name="oauth_callback")
+def oauth_callback(
+    plugin_id: str,
+    services: ServicesDep,
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+) -> RedirectResponse:
+    plugin = _source(services, plugin_id)
+    redirect_uri = _states.take(plugin_id, state)
+    if redirect_uri is None:
+        raise UserError("登录已过期或来源不对，请回设置页重新登录")
+    if not code:
+        raise UserError("授权页没有返回授权码")
+    with open_host(services, plugin, lambda _message: None) as host:
+        try:
+            exchange_code(host, code, redirect_uri)
+        except SourceError as error:
+            raise UserError(f"登录失败：{error.message}") from None
+    return RedirectResponse(f"/settings?plugin={plugin_id}&login=ok")
+
+
+@router.delete("/plugins/{plugin_id}/oauth", response_model=PluginOut)
+def oauth_logout(plugin_id: str, services: ServicesDep) -> PluginOut:
+    plugin = _source(services, plugin_id)
+    services.config_store.update_plugin_secrets(
+        plugin.id, {"access_token": "", "refresh_token": "", "expires_at": 0}
+    )
+    info = services.plugins.get(plugin_id)
+    assert info is not None
+    return _out(services, info)
