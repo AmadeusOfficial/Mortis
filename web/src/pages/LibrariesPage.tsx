@@ -26,6 +26,7 @@ import {
   fetchLibraries,
   updateLibrary,
 } from "../api";
+import { itemUnit, useDataTypes } from "../dataTypes";
 import { LibraryActions } from "../libraryActions";
 
 const AUTOMATION_LABELS: Record<string, string> = {
@@ -34,13 +35,9 @@ const AUTOMATION_LABELS: Record<string, string> = {
   schedule: "定时扫描",
 };
 
-// 条目数量的单位按库的数据类型：电视剧叫「部剧」，其余叫「部电影」。
-function itemUnit(dataTypeId: string): string {
-  return dataTypeId === "tv" ? "部剧" : "部电影";
-}
-
 export function LibrariesPage() {
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
+  const dataTypes = useDataTypes();
   const [editing, setEditing] = useState<Library | "new" | null>(null);
   const [deleting, setDeleting] = useState<Library | null>(null);
 
@@ -64,6 +61,7 @@ export function LibrariesPage() {
           <LibraryCard
             key={library.id}
             library={library}
+            itemUnit={itemUnit(dataTypes.data, library.data_type_id)}
             onEdit={() => setEditing(library)}
             onDelete={() => setDeleting(library)}
           />
@@ -75,7 +73,11 @@ export function LibrariesPage() {
         />
       )}
       {deleting !== null && (
-        <DeleteLibraryModal library={deleting} onClose={() => setDeleting(null)} />
+        <DeleteLibraryModal
+          library={deleting}
+          itemUnit={itemUnit(dataTypes.data, deleting.data_type_id)}
+          onClose={() => setDeleting(null)}
+        />
       )}
     </Stack>
   );
@@ -83,10 +85,12 @@ export function LibrariesPage() {
 
 function LibraryCard({
   library,
+  itemUnit,
   onEdit,
   onDelete,
 }: {
   library: Library;
+  itemUnit: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -113,7 +117,7 @@ function LibraryCard({
             <Badge variant="light">{library.data_type_name}</Badge>
           </Group>
           <Text size="sm" c="dimmed">
-            {library.item_count} {itemUnit(library.data_type_id)} · {library.file_count} 个视频
+            {library.item_count} {itemUnit} · {library.file_count} 个视频
           </Text>
           {library.paths.map((path) => (
             <Text key={path} size="sm" ff="monospace">
@@ -237,7 +241,15 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
   );
 }
 
-function DeleteLibraryModal({ library, onClose }: { library: Library; onClose: () => void }) {
+function DeleteLibraryModal({
+  library,
+  itemUnit,
+  onClose,
+}: {
+  library: Library;
+  itemUnit: string;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const remove = useMutation({
     mutationFn: () => deleteLibrary(library.id),
@@ -252,8 +264,8 @@ function DeleteLibraryModal({ library, onClose }: { library: Library; onClose: (
     <Modal opened onClose={onClose} title="删除媒体库">
       <Stack>
         <Text>
-          删除媒体库「{library.name}」？库里的 {library.item_count}{" "}
-          {itemUnit(library.data_type_id)}和 {library.file_count} 个视频的记录会一起删除，硬盘上的文件不动。
+          删除媒体库「{library.name}」？库里的 {library.item_count} {itemUnit}和{" "}
+          {library.file_count} 个视频的记录会一起删除，硬盘上的文件不动。
         </Text>
         {remove.isError && (
           <Alert color="red" title="删除失败">

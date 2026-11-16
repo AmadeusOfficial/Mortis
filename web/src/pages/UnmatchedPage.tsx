@@ -10,6 +10,7 @@ import {
   fetchUnmatched,
 } from "../api";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
+import { isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize } from "../format";
 
 function splitPath(path: string): [string, string] {
@@ -20,6 +21,7 @@ function splitPath(path: string): [string, string] {
 export function UnmatchedPage() {
   const queryClient = useQueryClient();
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
+  const dataTypes = useDataTypes();
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const selected = libraryId === null ? null : Number(libraryId);
   const files = useQuery({
@@ -88,7 +90,8 @@ export function UnmatchedPage() {
                   <Table.Td>
                     <Text size="sm" ff="monospace">
                       {name}
-                      {file.data_type_id === "tv" && ` · ${file.video_count} 个视频`}
+                      {isSeriesType(dataTypes.data, file.data_type_id) &&
+                        ` · ${file.video_count} 个视频`}
                     </Text>
                     <Text size="xs" c="dimmed" ff="monospace">
                       {folder}
@@ -128,7 +131,7 @@ export function UnmatchedPage() {
       {binding !== null && (
         <TmdbSearchModal
           title={`匹配 ${splitPath(binding.path)[1]}`}
-          kind={binding.data_type_id === "tv" ? "tv" : "movie"}
+          kind={isSeriesType(dataTypes.data, binding.data_type_id) ? "tv" : "movie"}
           initialQuery={binding.guess_title}
           initialYear={binding.guess_year}
           picking={bind.isPending}

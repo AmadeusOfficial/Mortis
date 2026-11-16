@@ -37,6 +37,7 @@ import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonList } from "../components/SeasonList";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
+import { isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import { useTaskWatcher } from "../useTaskWatcher";
 
@@ -59,6 +60,7 @@ export function ItemDetailPage() {
   const id = Number(useParams().itemId);
   const queryClient = useQueryClient();
   const item = useQuery({ queryKey: ["item", id], queryFn: () => fetchItem(id) });
+  const dataTypes = useDataTypes();
   const [editing, setEditing] = useState<FieldOut | null>(null);
   const [rematching, setRematching] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -373,7 +375,7 @@ export function ItemDetailPage() {
       {rematching && (
         <TmdbSearchModal
           title="重新匹配"
-          kind={detail.data_type_id === "tv" ? "tv" : "movie"}
+          kind={isSeriesType(dataTypes.data, detail.data_type_id) ? "tv" : "movie"}
           initialQuery={detail.title}
           initialYear={detail.year}
           picking={rematch.isPending}

@@ -166,10 +166,11 @@ export interface AppConfig {
   files: FilesConfig;
   movie: MovieScrapeConfig;
   tv: TvScrapeConfig;
+  anime: TvScrapeConfig;
   tasks: TasksConfig;
 }
 
-export type SettingsSection = "network" | "files" | "movie" | "tv" | "tasks";
+export type SettingsSection = "network" | "files" | "movie" | "tv" | "anime" | "tasks";
 
 export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password";
 export type SecretsStatus = Record<SecretKey, boolean>;

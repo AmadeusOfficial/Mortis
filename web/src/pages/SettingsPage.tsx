@@ -1,4 +1,4 @@
-import {
+﻿import {
   Alert,
   Button,
   Checkbox,
@@ -53,7 +53,8 @@ export function SettingsPage() {
           <NetworkSection />
           <TmdbSection />
           <MovieSection />
-          <TvSection />
+          <SeriesSection section="tv" label="电视剧" />
+          <SeriesSection section="anime" label="动漫" />
           <FilesSection />
           <TasksSection />
         </>
@@ -564,28 +565,36 @@ const TV_IMAGE_LABELS: [keyof TvImages, string][] = [
 const TV_TEMPLATE_HINT =
   "可用 ${showTitle} ${showOriginalTitle} ${showYear} ${seasonNr} ${seasonNr2} ${episodeNr} ${episodeNr2} ${title}（集标题）${tmdb} ${imdb}；${前缀,标记,后缀} 只在标记有值时出现";
 
-function TvSection() {
-  const { draft: tv, setDraft, save } = useSection("tv", "电视剧刮削设置");
+function SeriesSection({
+  section,
+  label,
+}: {
+  section: "tv" | "anime";
+  label: string;
+}) {
+  const { draft, setDraft, save } = useSection(section, `${label}刮削设置`);
   const [skipText, setSkipText] = useState<string | null>(null);
-  if (tv === null) {
+  if (draft === null) {
     return null;
   }
-  const set = (patch: Partial<TvScrapeConfig>) => setDraft({ ...tv, ...patch });
-  const setOutput = (patch: Partial<TvOutputConfig>) => set({ output: { ...tv.output, ...patch } });
-  const skip = skipText ?? tv.skip_folders.join("\n");
-  const country = tv.certification_country;
+  const series = draft;
+  const set = (patch: Partial<TvScrapeConfig>) => setDraft({ ...series, ...patch });
+  const setOutput = (patch: Partial<TvOutputConfig>) =>
+    set({ output: { ...series.output, ...patch } });
+  const skip = skipText ?? series.skip_folders.join("\n");
+  const country = series.certification_country;
   const countryInvalid = !/^[A-Z]{2}$/.test(country);
 
   return (
     <Paper withBorder p="md">
       <Stack>
-        <Title order={4}>电视剧刮削</Title>
+        <Title order={4}>{label}刮削</Title>
         <Group grow align="flex-start">
           <Select
             label="刮削语言"
             data={LANGUAGES}
             allowDeselect={false}
-            value={tv.language}
+            value={series.language}
             onChange={(value) => value !== null && set({ language: value })}
           />
           <TextInput
@@ -606,12 +615,12 @@ function TvSection() {
           max={1}
           step={0.05}
           decimalScale={2}
-          value={tv.match_threshold}
+          value={series.match_threshold}
           onChange={(value) => typeof value === "number" && set({ match_threshold: value })}
         />
         <Switch
           label="包含成人内容"
-          checked={tv.include_adult}
+          checked={series.include_adult}
           onChange={(event) => set({ include_adult: event.currentTarget.checked })}
         />
         <Group grow align="flex-start">
@@ -619,27 +628,27 @@ function TvSection() {
             label="海报尺寸"
             data={POSTER_SIZES}
             allowDeselect={false}
-            value={tv.poster_size}
+            value={series.poster_size}
             onChange={(value) => value !== null && set({ poster_size: value })}
           />
           <Select
             label="同人画尺寸"
             data={FANART_SIZES}
             allowDeselect={false}
-            value={tv.fanart_size}
+            value={series.fanart_size}
             onChange={(value) => value !== null && set({ fanart_size: value })}
           />
           <Select
             label="集缩略图尺寸"
             data={STILL_SIZES}
             allowDeselect={false}
-            value={tv.still_size}
+            value={series.still_size}
             onChange={(value) => value !== null && set({ still_size: value })}
           />
         </Group>
         <Switch
           label="优先无文字的同人画"
-          checked={tv.prefer_textless_fanart}
+          checked={series.prefer_textless_fanart}
           onChange={(event) => set({ prefer_textless_fanart: event.currentTarget.checked })}
         />
         <Stack gap={6}>
@@ -651,9 +660,9 @@ function TvSection() {
               <Checkbox
                 key={key}
                 label={label}
-                checked={tv.images[key]}
+                checked={series.images[key]}
                 onChange={(event) =>
-                  set({ images: { ...tv.images, [key]: event.currentTarget.checked } })
+                  set({ images: { ...series.images, [key]: event.currentTarget.checked } })
                 }
               />
             ))}
@@ -662,12 +671,12 @@ function TvSection() {
         <Switch
           label="显示缺少的集"
           description="已播出但本地没有文件的集也列出来，灰色标「缺」"
-          checked={tv.show_missing_episodes}
+          checked={series.show_missing_episodes}
           onChange={(event) => set({ show_missing_episodes: event.currentTarget.checked })}
         />
         <Switch
           label="显示缺少的特别篇"
-          checked={tv.show_missing_specials}
+          checked={series.show_missing_specials}
           onChange={(event) => set({ show_missing_specials: event.currentTarget.checked })}
         />
         <Textarea
@@ -687,7 +696,7 @@ function TvSection() {
           </Text>
           <Switch
             label="刮削后自动整理"
-            checked={tv.output.organize_after_scrape}
+            checked={series.output.organize_after_scrape}
             onChange={(event) =>
               setOutput({ organize_after_scrape: event.currentTarget.checked })
             }
@@ -695,13 +704,13 @@ function TvSection() {
           <Switch
             label="整理时重命名"
             description="按下面的模板改剧目录、季目录和文件名"
-            checked={tv.output.organize_rename}
+            checked={series.output.organize_rename}
             onChange={(event) => setOutput({ organize_rename: event.currentTarget.checked })}
           />
           <Switch
             label="整理时写 NFO 和图片"
             description="tvshow.nfo 和剧图写进剧目录，season.nfo 写进季目录，集 NFO 和缩略图写在视频旁边"
-            checked={tv.output.organize_write_files}
+            checked={series.output.organize_write_files}
             onChange={(event) =>
               setOutput({ organize_write_files: event.currentTarget.checked })
             }
@@ -709,18 +718,18 @@ function TvSection() {
           <TextInput
             label="剧目录模板"
             description={TV_TEMPLATE_HINT}
-            value={tv.output.show_template}
+            value={series.output.show_template}
             onChange={(event) => setOutput({ show_template: event.currentTarget.value })}
           />
           <TextInput
             label="季目录模板"
-            value={tv.output.season_template}
+            value={series.output.season_template}
             onChange={(event) => setOutput({ season_template: event.currentTarget.value })}
           />
           <TextInput
             label="文件模板"
             description="一个文件里有多集时，${episodeNr2} 写成 01E02"
-            value={tv.output.file_template}
+            value={series.output.file_template}
             onChange={(event) => setOutput({ file_template: event.currentTarget.value })}
           />
           <Group grow align="flex-start">
@@ -728,40 +737,40 @@ function TvSection() {
               label="剧目录名空格换成"
               placeholder="不换"
               maxLength={3}
-              value={tv.output.show_space}
+              value={series.output.show_space}
               onChange={(event) => setOutput({ show_space: event.currentTarget.value })}
             />
             <TextInput
               label="季目录名空格换成"
               placeholder="不换"
               maxLength={3}
-              value={tv.output.season_space}
+              value={series.output.season_space}
               onChange={(event) => setOutput({ season_space: event.currentTarget.value })}
             />
             <TextInput
               label="文件名空格换成"
               maxLength={3}
-              value={tv.output.file_space}
+              value={series.output.file_space}
               onChange={(event) => setOutput({ file_space: event.currentTarget.value })}
             />
             <TextInput
               label="冒号换成"
               description="只换半角冒号，全角「：」保留"
               maxLength={3}
-              value={tv.output.colon_replacement}
+              value={series.output.colon_replacement}
               onChange={(event) => setOutput({ colon_replacement: event.currentTarget.value })}
             />
           </Group>
           <Switch
             label="NFO 写入锁定标记"
-            checked={tv.output.nfo_write_lockdata}
+            checked={series.output.nfo_write_lockdata}
             onChange={(event) =>
               setOutput({ nfo_write_lockdata: event.currentTarget.checked })
             }
           />
           <Switch
             label="NFO 只写一个制片公司"
-            checked={tv.output.nfo_single_studio}
+            checked={series.output.nfo_single_studio}
             onChange={(event) =>
               setOutput({ nfo_single_studio: event.currentTarget.checked })
             }
@@ -778,12 +787,12 @@ function TvSection() {
                 .map((line) => line.trim())
                 .filter((line) => line !== "");
               save.mutate(
-                { ...tv, skip_folders: skipFolders },
+                { ...series, skip_folders: skipFolders },
                 { onSuccess: () => setSkipText(null) },
               );
             }}
           >
-            保存电视剧刮削设置
+            保存{label}刮削设置
           </Button>
         </Group>
       </Stack>
