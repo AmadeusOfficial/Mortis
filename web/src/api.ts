@@ -161,16 +161,53 @@ export interface TasksConfig {
   keep_days: number;
 }
 
-export interface AppConfig {
-  network: NetworkConfig;
-  files: FilesConfig;
+// 插件数据类型的类型级设置：识别阈值和扫描时跳过的目录。
+export interface PluginTypeConfig {
+  match_threshold: number;
+  skip_folders: string[];
+}
+
+export type TypeSection = MovieScrapeConfig | TvScrapeConfig | PluginTypeConfig;
+
+export interface TypesConfig {
   movie: MovieScrapeConfig;
   tv: TvScrapeConfig;
   anime: TvScrapeConfig;
-  tasks: TasksConfig;
+  // 插件类型另外按 id 存一节；后端没写过时不在返回里。
+  [typeId: string]: TypeSection;
 }
 
-export type SettingsSection = "network" | "files" | "movie" | "tv" | "anime" | "tasks";
+export interface AppConfig {
+  network: NetworkConfig;
+  files: FilesConfig;
+  tasks: TasksConfig;
+  types: TypesConfig;
+  // 每个来源或插件自己的设置，按插件 id 分节。
+  sources: Record<string, Record<string, unknown>>;
+  plugins: { disabled: string[] };
+}
+
+// 只有这三节是通用的；每种数据类型的设置在 types 下，用 saveTypeSettings 存。
+export type SettingsSection = "network" | "files" | "tasks";
+
+export function isBuiltinSection(
+  value: TypeSection,
+): value is MovieScrapeConfig | TvScrapeConfig {
+  return "output" in value;
+}
+
+export function defaultPluginTypeConfig(): PluginTypeConfig {
+  return { match_threshold: 0.75, skip_folders: [] };
+}
+
+// 取一个类型的设置；后端没写过这一节时用默认值补齐。
+export function typeSection(types: TypesConfig | undefined, dataTypeId: string): TypeSection {
+  const value = types?.[dataTypeId];
+  if (value !== undefined && isBuiltinSection(value)) {
+    return value;
+  }
+  return { ...defaultPluginTypeConfig(), ...value };
+}
 
 export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password";
 export type SecretsStatus = Record<SecretKey, boolean>;
@@ -482,6 +519,9 @@ export const fetchSystemInfo = () => request<SystemInfo>("GET", "/api/system/inf
 export const fetchSettings = () => request<AppConfig>("GET", "/api/settings");
 export const saveSettingsSection = <K extends SettingsSection>(name: K, section: AppConfig[K]) =>
   request<AppConfig>("PUT", `/api/settings/${name}`, section);
+// 一整个数据类型的设置：内置类型按各自的模型校验，插件类型只有阈值和跳过目录。
+export const saveTypeSettings = (typeId: string, value: TypeSection) =>
+  request<AppConfig>("PUT", `/api/settings/types/${encodeURIComponent(typeId)}`, value);
 export const fetchSecretsStatus = () => request<SecretsStatus>("GET", "/api/secrets");
 export const saveSecrets = (update: SecretsUpdate) =>
   request<SecretsStatus>("PUT", "/api/secrets", update);

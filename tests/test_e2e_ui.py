@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+﻿from collections.abc import Iterator
 from pathlib import Path
 
 import httpx2 as httpx
@@ -78,11 +78,15 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
 
 def test_settings_save_secret_and_check(page: Page, base_url: str, data_dir: Path) -> None:
     page.goto(base_url + "/settings")
+    # 默认分区是「通用 → 网络」，窄屏是 Select，宽屏是左侧导航。
     expect(page.get_by_label("代理主机")).to_have_value("127.0.0.1")
 
     page.get_by_label("代理端口").fill("1080")
     page.get_by_role("button", name="保存网络设置").click()
     expect(page.get_by_text("网络设置已保存")).to_be_visible()
+
+    page.get_by_role("link", name="TMDB", exact=True).click()
+    expect(page).to_have_url(base_url + "/settings?section=source.tmdb")
 
     # 按钮的无障碍名称里也含「TMDB API Key」，要精确匹配标签。
     page.get_by_label("TMDB API Key", exact=True).fill("e2e-key")
@@ -94,9 +98,47 @@ def test_settings_save_secret_and_check(page: Page, base_url: str, data_dir: Pat
     expect(page.get_by_text("连接成功").first).to_be_visible()
 
     page.reload()
+    expect(page).to_have_url(base_url + "/settings?section=source.tmdb")
+    page.get_by_role("link", name="网络", exact=True).click()
     expect(page.get_by_label("代理端口")).to_have_value("1080")
     secrets_text = (data_dir / "secrets.toml").read_text(encoding="utf-8")
     config_text = (data_dir / "config.toml").read_text(encoding="utf-8")
     assert "e2e-key" in secrets_text
     assert "e2e-key" not in config_text
     assert "proxy_port = 1080" in config_text
+
+
+def test_settings_type_threshold_survives_reload(page: Page, base_url: str) -> None:
+    page.goto(base_url + "/settings")
+    page.get_by_role("link", name="电影", exact=True).click()
+    expect(page.get_by_role("heading", name="电影 设置")).to_be_visible()
+
+    page.get_by_label("匹配阈值").fill("0.6")
+    page.get_by_role("button", name="保存电影设置").click()
+    expect(page.get_by_text("电影设置已保存")).to_be_visible()
+
+    page.reload()
+    expect(page.get_by_label("匹配阈值")).to_have_value("0.6")
+
+
+def test_settings_plugin_type_has_no_tmdb_blocks(page: Page, base_url: str) -> None:
+    types = page.request.get(base_url + "/api/data-types").json()
+    plugin_type = next((item for item in types if item["plugin_id"] is not None), None)
+    if plugin_type is None:
+        pytest.skip("这个环境里没有插件数据类型")
+
+    page.goto(f"{base_url}/settings?section=type.{plugin_type['id']}")
+    expect(page.get_by_role("heading", name=f"{plugin_type['name']} 设置")).to_be_visible()
+    # 插件类型只有识别和扫描和来源，没有 TMDB 的刮削、整理。
+    expect(page.get_by_role("heading", name="识别和扫描", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="来源", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="刮削", exact=True)).to_have_count(0)
+    expect(page.get_by_role("heading", name="整理", exact=True)).to_have_count(0)
+    expect(page.get_by_text("用于：电影、电视剧、动漫")).to_have_count(0)
+
+    page.get_by_label("匹配阈值").fill("0.5")
+    page.get_by_role("button", name=f"保存{plugin_type['name']}设置").click()
+    expect(page.get_by_text(f"{plugin_type['name']}设置已保存")).to_be_visible()
+
+    page.reload()
+    expect(page.get_by_label("匹配阈值")).to_have_value("0.5")

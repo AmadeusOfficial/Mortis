@@ -60,9 +60,13 @@ function moveEntry(entries: OrderEntry[], index: number, delta: number): OrderEn
   return next;
 }
 
-export function SourceOrdersSection() {
+export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
   const dataTypes = useQuery({ queryKey: ["data-types"], queryFn: fetchDataTypes });
-  const pluginTypes = (dataTypes.data ?? []).filter((type) => type.plugin_id !== null);
+  // 数据类型页只渲染自己那一份；不给参数时列出所有插件类型。
+  const pluginTypes = (dataTypes.data ?? []).filter(
+    (type) =>
+      type.plugin_id !== null && (dataTypeId === undefined || type.id === dataTypeId),
+  );
 
   if (dataTypes.isError) {
     return (
@@ -80,6 +84,10 @@ export function SourceOrdersSection() {
     return null;
   }
   if (pluginTypes.length === 0) {
+    // 指定了类型时它自己没有来源顺序，整块不显示。
+    if (dataTypeId !== undefined) {
+      return null;
+    }
     return (
       <Paper withBorder p="md">
         <Stack>

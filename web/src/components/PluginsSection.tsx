@@ -20,6 +20,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import {
   type DataType,
   type JsonSchema,
@@ -86,27 +87,24 @@ export interface LoginResult {
   reason: string | null;
 }
 
-export function PluginsSection({
-  loginResult,
-  onLoginHandled,
-}: {
-  // 授权页跳回设置页后的结果，这里只负责提示一次。
-  loginResult: LoginResult | null;
-  onLoginHandled: () => void;
-}) {
-  const queryClient = useQueryClient();
+// 把插件列表读出来，并给出「服务哪种数据类型」的名字。
+export function usePlugins() {
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
   const dataTypes = useQuery({ queryKey: ["data-types"], queryFn: fetchDataTypes });
-  const anchor = useRef<HTMLDivElement>(null);
-  const loginHandled = useRef(false);
+  const typeName = (id: string | null): string => {
+    if (id === null) {
+      return "";
+    }
+    const found: DataType | undefined = dataTypes.data?.find((type) => type.id === id);
+    return found?.name ?? id;
+  };
+  return { plugins, dataTypes, typeName };
+}
 
-  const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["plugins"] });
-    void queryClient.invalidateQueries({ queryKey: ["data-types"] });
-    void queryClient.invalidateQueries({ queryKey: ["libraries"] });
-    // 启停来源插件会改变各类型的可用来源，来源顺序要跟着重读。
-    void queryClient.invalidateQueries({ queryKey: ["source-orders"] });
-  }, [queryClient]);
+// 插件页：只管理启用、重载和加载错误，设置表单在各来源和类型页里。
+export function PluginsSection() {
+  const { plugins, typeName } = usePlugins();
+  const queryClient = useQueryClient();
 
   const reload = useMutation({
     mutationFn: reloadPlugins,
@@ -123,6 +121,108 @@ export function PluginsSection({
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updatePlugin(id, { enabled }),
     onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      void queryClient.invalidateQueries({ queryKey: ["data-types"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["source-orders"] });
+      notifications.show({
+        message: saved.enabled ? `已启用 ${saved.name}` : `已停用 ${saved.name}`,
+      });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+
+  return (
+    <Paper withBorder p="md">
+      <Stack>
+        <Group justify="space-between">
+          <Title order={4}>插件</Title>
+          <Button variant="default" loading={reload.isPending} onClick={() => reload.mutate()}>
+            重新加载插件
+          </Button>
+        </Group>
+        <Text size="sm" c="dimmed">
+          插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里。
+        </Text>
+        {plugins.isError && (
+          <Alert color="red" title="读不到插件">
+            {plugins.error.message}
+          </Alert>
+        )}
+        {plugins.isPending && <Text c="dimmed">正在读取插件…</Text>}
+        {plugins.isSuccess && plugins.data.length === 0 && <Text c="dimmed">还没有插件。</Text>}
+        {plugins.data?.map((plugin) => (
+          <Paper key={plugin.id} withBorder p="sm">
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start" wrap="nowrap">
+                <Stack gap={4}>
+                  <Group gap="xs">
+                    <Text fw={500}>{plugin.name}</Text>
+                    {plugin.version !== "" && (
+                      <Badge variant="outline" color="gray">
+                        {plugin.version}
+                      </Badge>
+                    )}
+                    <Badge variant="light">{KIND_LABELS[plugin.kind]}</Badge>
+                    <Badge variant="outline" color="gray">
+                      {ORIGIN_LABELS[plugin.origin]}
+                    </Badge>
+                  </Group>
+                  {plugin.kind === "source" && (
+                    <Text size="sm" c="dimmed">
+                      服务的数据类型：{typeName(plugin.data_type)}
+                    </Text>
+                  )}
+                  {plugin.kind === "source" && (
+                    <Anchor component={Link} to={`/settings?section=source.${plugin.id}`} size="sm">
+                      去设置
+                    </Anchor>
+                  )}
+                </Stack>
+                <Switch
+                  label="启用"
+                  checked={plugin.enabled}
+                  disabled={toggle.isPending && toggle.variables?.id === plugin.id}
+                  onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+                />
+              </Group>
+              {plugin.error !== null && (
+                <Alert color="red" title="加载失败">
+                  {plugin.error}
+                </Alert>
+              )}
+              {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
+            </Stack>
+          </Paper>
+        ))}
+      </Stack>
+    </Paper>
+  );
+}
+
+// 一个来源插件的设置页：设置表单，需要登录的插件再加账号状态和登录方式。
+export function SourcePluginSettings({
+  pluginId,
+  loginResult,
+  onLoginHandled,
+}: {
+  pluginId: string;
+  loginResult: LoginResult | null;
+  onLoginHandled: () => void;
+}) {
+  const { plugins, typeName } = usePlugins();
+  const queryClient = useQueryClient();
+  const loginHandled = useRef(false);
+  const plugin = plugins.data?.find((item) => item.id === pluginId) ?? null;
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+    void queryClient.invalidateQueries({ queryKey: ["sources"] });
+  }, [queryClient]);
+
+  const toggle = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updatePlugin(id, { enabled }),
+    onSuccess: (saved) => {
       refresh();
       notifications.show({
         message: saved.enabled ? `已启用 ${saved.name}` : `已停用 ${saved.name}`,
@@ -132,128 +232,86 @@ export function PluginsSection({
   });
 
   useEffect(() => {
-    if (loginResult === null || loginHandled.current || plugins.data === undefined) {
+    if (loginResult === null || loginHandled.current || plugin === null) {
+      return;
+    }
+    if (loginResult.pluginId !== plugin.id) {
       return;
     }
     loginHandled.current = true;
-    const name =
-      plugins.data.find((item) => item.id === loginResult.pluginId)?.name ?? loginResult.pluginId;
-    anchor.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     notifications.show(
       loginResult.ok
-        ? { color: "green", message: `${name} 登录成功` }
-        : { color: "red", title: `${name} 没有登录`, message: loginResult.reason ?? "授权没有完成" },
+        ? { color: "green", message: `${plugin.name} 登录成功` }
+        : { color: "red", title: `${plugin.name} 没有登录`, message: loginResult.reason ?? "授权没有完成" },
     );
     void queryClient.invalidateQueries({ queryKey: ["plugins"] });
     void queryClient.invalidateQueries({ queryKey: ["plugin-account", loginResult.pluginId] });
     onLoginHandled();
-  }, [loginResult, plugins.data, queryClient, onLoginHandled]);
+  }, [loginResult, plugin, queryClient, onLoginHandled]);
 
-  const typeName = (id: string | null): string => {
-    if (id === null) {
-      return "";
-    }
-    const found: DataType | undefined = dataTypes.data?.find((type) => type.id === id);
-    return found?.name ?? id;
-  };
+  if (plugins.isError) {
+    return (
+      <Alert color="red" title="读不到插件">
+        {plugins.error.message}
+      </Alert>
+    );
+  }
+  if (plugins.isPending) {
+    return <Text c="dimmed">正在读取插件…</Text>;
+  }
+  if (plugin === null) {
+    return (
+      <Alert color="yellow" title="没有这个来源插件">
+        {pluginId} 没有安装或没有加载。
+      </Alert>
+    );
+  }
 
   return (
-    <Paper withBorder p="md" ref={anchor}>
-      <Stack>
-        <Group justify="space-between">
-          <Title order={4}>插件</Title>
-          <Button variant="default" loading={reload.isPending} onClick={() => reload.mutate()}>
-            重新加载插件
-          </Button>
-        </Group>
-        <Text size="sm" c="dimmed">
-          插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。
-        </Text>
-        {plugins.isError && (
-          <Alert color="red" title="读不到插件">
-            {plugins.error.message}
-          </Alert>
-        )}
-        {plugins.isPending && <Text c="dimmed">正在读取插件…</Text>}
-        {plugins.isSuccess && plugins.data.length === 0 && (
-          <Text c="dimmed">还没有插件。</Text>
-        )}
-        {plugins.data?.map((plugin) => (
-          <PluginCard
-            key={plugin.id}
-            plugin={plugin}
-            dataTypeName={typeName(plugin.data_type)}
-            toggling={toggle.isPending && toggle.variables?.id === plugin.id}
-            onToggle={(enabled) => toggle.mutate({ id: plugin.id, enabled })}
-            onChanged={refresh}
-          />
-        ))}
-      </Stack>
-    </Paper>
-  );
-}
-
-function PluginCard({
-  plugin,
-  dataTypeName,
-  toggling,
-  onToggle,
-  onChanged,
-}: {
-  plugin: PluginInfo;
-  dataTypeName: string;
-  toggling: boolean;
-  onToggle: (enabled: boolean) => void;
-  onChanged: () => void;
-}) {
-  return (
-    <Paper withBorder p="sm">
-      <Stack gap="sm">
-        <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <Stack gap={4}>
-            <Group gap="xs">
-              <Text fw={500}>{plugin.name}</Text>
-              {plugin.version !== "" && (
-                <Badge variant="outline" color="gray">
-                  {plugin.version}
-                </Badge>
-              )}
-              <Badge variant="light">{KIND_LABELS[plugin.kind]}</Badge>
-              <Badge variant="outline" color="gray">
-                {ORIGIN_LABELS[plugin.origin]}
-              </Badge>
-            </Group>
-            {plugin.kind === "source" && (
+    <Stack>
+      <Paper withBorder p="md">
+        <Stack gap="sm">
+          <Group justify="space-between" wrap="nowrap">
+            <Stack gap={4}>
+              <Group gap="xs">
+                <Title order={4}>{plugin.name}</Title>
+                {plugin.version !== "" && (
+                  <Badge variant="outline" color="gray">
+                    {plugin.version}
+                  </Badge>
+                )}
+                <Badge variant="light">来源</Badge>
+              </Group>
               <Text size="sm" c="dimmed">
-                服务的数据类型：{dataTypeName}
+                用于：{typeName(plugin.data_type) || "（未知类型）"}
               </Text>
-            )}
-          </Stack>
-          <Switch
-            label="启用"
-            checked={plugin.enabled}
-            disabled={toggling}
-            onChange={(event) => onToggle(event.currentTarget.checked)}
-          />
-        </Group>
-        {plugin.error !== null && (
-          <Alert color="red" title="加载失败">
-            {plugin.error}
-          </Alert>
+            </Stack>
+            <Switch
+              label="启用"
+              checked={plugin.enabled}
+              disabled={toggle.isPending}
+              onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+            />
+          </Group>
+          {plugin.error !== null && (
+            <Alert color="red" title="加载失败">
+              {plugin.error}
+            </Alert>
+          )}
+          {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
+        </Stack>
+      </Paper>
+      <Paper withBorder p="md">
+        <PluginSettingsForm plugin={plugin} onChanged={refresh} />
+      </Paper>
+      <Paper withBorder p="md">
+        {plugin.oauth ? (
+          <PluginLogin plugin={plugin} onChanged={refresh} />
+        ) : (
+          <PluginSecretsForm plugin={plugin} onChanged={refresh} />
         )}
-        {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
-        {plugin.kind === "source" && (
-          <>
-            <PluginSettingsForm plugin={plugin} onChanged={onChanged} />
-            {plugin.oauth ? (
-              <PluginLogin plugin={plugin} onChanged={onChanged} />
-            ) : (
-              <PluginSecretsForm plugin={plugin} onChanged={onChanged} />
-            )}
-          </>
-        )}
-      </Stack>
-    </Paper>
+      </Paper>
+    </Stack>
   );
 }
 
@@ -275,7 +333,11 @@ function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChang
   });
   const entries = schemaEntries(plugin.settings_schema);
   if (entries.length === 0) {
-    return null;
+    return (
+      <Text size="sm" c="dimmed">
+        {plugin.name} 没有可改的设置。
+      </Text>
+    );
   }
   const set = (key: string, value: unknown) => setDraft({ ...draft, [key]: value });
 
@@ -349,7 +411,11 @@ function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChange
   });
   const entries = schemaEntries(plugin.secrets_schema);
   if (entries.length === 0) {
-    return null;
+    return (
+      <Text size="sm" c="dimmed">
+        {plugin.name} 没有需要填的密钥。
+      </Text>
+    );
   }
   // 只提交填了内容的键；清空由每行的「清除」按钮负责。
   const filled = entries
@@ -467,19 +533,11 @@ function PluginLogin({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () 
           </Stack>
         </Group>
         <Group gap="xs" wrap="nowrap">
-          <Button
-            variant={plugin.logged_in ? "default" : "filled"}
-            onClick={() => setChoosing(true)}
-          >
+          <Button variant={plugin.logged_in ? "default" : "filled"} onClick={() => setChoosing(true)}>
             {plugin.logged_in ? "重新登录" : "登录"}
           </Button>
           {plugin.logged_in && (
-            <Button
-              variant="subtle"
-              color="red"
-              loading={logout.isPending}
-              onClick={() => logout.mutate()}
-            >
+            <Button variant="subtle" color="red" loading={logout.isPending} onClick={() => logout.mutate()}>
               退出登录
             </Button>
           )}
@@ -558,9 +616,7 @@ function LoginModal({
         </Radio.Group>
         {mode === "oauth" && !editingApp && (
           <Stack gap={4}>
-            <Text size="sm">
-              将跳到 {plugin.name} 的授权页，登录并同意授权后自动回到这里。
-            </Text>
+            <Text size="sm">将跳到 {plugin.name} 的授权页，登录并同意授权后自动回到这里。</Text>
             <Group gap={4}>
               <Text size="xs" c="dimmed">
                 已保存 OAuth 应用。
