@@ -1,0 +1,115 @@
+[
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/29/da/4916_prsn_abOlH.jpg?r=1604396645",
+      "grid": "https://lain.bgm.tv/pic/crt/g/29/da/4916_prsn_abOlH.jpg?r=1604396645",
+      "large": "https://lain.bgm.tv/pic/crt/l/29/da/4916_prsn_abOlH.jpg?r=1604396645",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/29/da/4916_prsn_abOlH.jpg?r=1604396645"
+    },
+    "name": "榊原ゆい",
+    "relation": "主题歌演出",
+    "career": [
+      "artist",
+      "seiyu"
+    ],
+    "type": 1,
+    "id": 4916,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg",
+      "grid": "https://lain.bgm.tv/pic/crt/g/da/a2/6712_prsn_s1fAo.jpg",
+      "large": "https://lain.bgm.tv/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg"
+    },
+    "name": "Gユウスケ",
+    "relation": "人物设定",
+    "career": [
+      "illustrator"
+    ],
+    "type": 1,
+    "id": 6712,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "grid": "https://lain.bgm.tv/pic/crt/g/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "large": "https://lain.bgm.tv/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787"
+    },
+    "name": "正田崇",
+    "relation": "剧本",
+    "career": [
+      "writer"
+    ],
+    "type": 1,
+    "id": 6968,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/e0/7a/7384_prsn_lt1NG.jpg",
+      "grid": "https://lain.bgm.tv/pic/crt/g/e0/7a/7384_prsn_lt1NG.jpg",
+      "large": "https://lain.bgm.tv/pic/crt/l/e0/7a/7384_prsn_lt1NG.jpg",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/e0/7a/7384_prsn_lt1NG.jpg"
+    },
+    "name": "light",
+    "relation": "开发",
+    "career": [
+      "producer"
+    ],
+    "type": 2,
+    "id": 7384,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "grid": "https://lain.bgm.tv/pic/crt/g/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "large": "https://lain.bgm.tv/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/bb/50/6968_prsn_zyD4j.jpg?r=1557689787"
+    },
+    "name": "正田崇",
+    "relation": "企画",
+    "career": [
+      "writer"
+    ],
+    "type": 1,
+    "id": 6968,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg",
+      "grid": "https://lain.bgm.tv/pic/crt/g/da/a2/6712_prsn_s1fAo.jpg",
+      "large": "https://lain.bgm.tv/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/da/a2/6712_prsn_s1fAo.jpg"
+    },
+    "name": "Gユウスケ",
+    "relation": "原画",
+    "career": [
+      "illustrator"
+    ],
+    "type": 1,
+    "id": 6712,
+    "eps": ""
+  },
+  {
+    "images": {
+      "small": "https://lain.bgm.tv/r/100/pic/crt/l/1b/e5/6125_prsn_jR1jS.jpg",
+      "grid": "https://lain.bgm.tv/pic/crt/g/1b/e5/6125_prsn_jR1jS.jpg",
+      "large": "https://lain.bgm.tv/pic/crt/l/1b/e5/6125_prsn_jR1jS.jpg",
+      "medium": "https://lain.bgm.tv/r/400/pic/crt/l/1b/e5/6125_prsn_jR1jS.jpg"
+    },
+    "name": "与猶啓至",
+    "relation": "音乐",
+    "career": [
+      "artist"
+    ],
+    "type": 1,
+    "id": 6125,
+    "eps": ""
+  }
+]
