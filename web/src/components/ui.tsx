@@ -54,7 +54,7 @@ export function FilterChip({
   children: ReactNode;
 }) {
   return (
-    <button type="button" className="mo-filter" data-active={active} onClick={onClick}>
+    <button type="button" className="mo-filter" data-active={active} aria-pressed={active} onClick={onClick}>
       {children}
       {count !== undefined && <span className="mo-mono">{count}</span>}
     </button>
