@@ -127,6 +127,7 @@ def test_broken_config_file_reports_path(data_dir: Path) -> None:
 
 def test_data_types_lists_movie(client: TestClient) -> None:
     assert client.get("/api/data-types").json() == [
+        {"id": "anime", "name": "动漫", "structure": "series"},
         {"id": "movie", "name": "电影", "structure": "item_group"},
         {"id": "tv", "name": "电视剧", "structure": "series"},
     ]
@@ -155,3 +156,12 @@ def test_each_section_saves_alone(client: TestClient) -> None:
 
 def test_section_validation_rejects_bad_threshold(client: TestClient) -> None:
     assert client.put("/api/settings/movie", json={"match_threshold": 5}).status_code == 422
+
+
+def test_tv_and_anime_sections_save_separately(client: TestClient) -> None:
+    config = client.get("/api/settings").json()
+    anime = {**config["anime"], "language": "ja-JP"}
+    saved = client.put("/api/settings/anime", json=anime).json()
+    assert (saved["anime"]["language"], saved["tv"]["language"]) == ("ja-JP", "zh-CN")
+    tv = {**saved["tv"], "match_threshold": 0.6}
+    assert client.put("/api/settings/tv", json=tv).json()["tv"]["match_threshold"] == 0.6

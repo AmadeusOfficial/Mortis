@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from mortis.catalog.anime import ANIME
 from mortis.catalog.install import InvalidDataType, ensure_builtin_types, install_data_type
 from mortis.catalog.movie import MOVIE
 from mortis.catalog.spec import DataTypeSpec, FieldSpec, validate_data_type
@@ -61,6 +62,14 @@ def test_tv_catalog_has_title_on_every_level() -> None:
             f.applies_to == level and f.field_key == "title" and f.stored_in == "items_column"
             for f in TV.fields
         ), level
+
+
+def test_anime_catalog_is_valid_series_like_tv() -> None:
+    assert validate_data_type(ANIME) == []
+    assert (ANIME.id, ANIME.name, ANIME.structure) == ("anime", "动漫", "series")
+    assert ANIME.subtitle_field == "original_title"
+    assert [f.field_key for f in ANIME.fields] == [f.field_key for f in TV.fields]
+    assert len(ANIME.fields) == len(TV.fields)
 
 
 def test_movie_catalog_covers_tmm_movie_fields() -> None:
@@ -169,7 +178,7 @@ def test_install_movie_writes_rows(session: Session) -> None:
         1,
     )
     count = session.scalar(select(func.count()).select_from(TypeField))
-    assert count == len(MOVIE.fields) + len(TV.fields)
+    assert count == len(MOVIE.fields) + len(TV.fields) + len(ANIME.fields)
 
     runtime = session.get(TypeField, ("movie", "work", "runtime"))
     assert runtime is not None
@@ -195,9 +204,9 @@ def test_install_twice_is_idempotent(session: Session) -> None:
     ensure_builtin_types(session)
     session.commit()
     assert session.scalar(select(func.count()).select_from(TypeField)) == (
-        len(MOVIE.fields) + len(TV.fields)
+        len(MOVIE.fields) + len(TV.fields) + len(ANIME.fields)
     )
-    assert session.scalar(select(func.count()).select_from(DataType)) == 2
+    assert session.scalar(select(func.count()).select_from(DataType)) == 3
 
 
 def test_install_writes_tv_row(session: Session) -> None:
@@ -215,6 +224,30 @@ def test_install_writes_tv_row(session: Session) -> None:
     )
     keys = set(session.scalars(select(TypeField.field_key).where(TypeField.data_type_id == "tv")))
     assert keys == {f.field_key for f in TV.fields}
+
+
+def test_install_writes_anime_row(session: Session) -> None:
+    ensure_builtin_types(session)
+    session.commit()
+
+    row = session.get(DataType, "anime")
+    assert row is not None
+    assert (row.name, row.structure, row.subtitle_field, row.plugin_id, row.is_enabled) == (
+        "动漫",
+        "series",
+        "original_title",
+        None,
+        1,
+    )
+    keys = set(
+        session.scalars(select(TypeField.field_key).where(TypeField.data_type_id == "anime"))
+    )
+    assert keys == {f.field_key for f in TV.fields}
+    rows = session.scalar(
+        select(func.count()).select_from(TypeField).where(TypeField.data_type_id == "anime")
+    )
+    # 每个字段一行；同一键在剧、季、集各算一行，和电视剧的目录完全一致。
+    assert rows == len(TV.fields)
 
 
 def test_reinstall_drops_removed_fields_and_keeps_is_enabled(session: Session) -> None:

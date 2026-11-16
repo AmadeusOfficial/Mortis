@@ -386,6 +386,7 @@ class AppConfig(BaseModel):
     files: FilesConfig = Field(default_factory=FilesConfig)
     movie: MovieScrapeConfig = Field(default_factory=MovieScrapeConfig)
     tv: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
+    anime: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
 
 
@@ -394,6 +395,7 @@ CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
     "files": FilesConfig,
     "movie": MovieScrapeConfig,
     "tv": TvScrapeConfig,
+    "anime": TvScrapeConfig,
     "tasks": TasksConfig,
 }
 

@@ -6,6 +6,7 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import Session, aliased
 
 from mortis.config.models import MovieScrapeConfig
+from mortis.config.types import type_config
 from mortis.db.models import (
     DataType,
     Item,
@@ -183,18 +184,19 @@ def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     item_id = int(payload["item_id"])
     force = bool(payload.get("force"))
     with ctx.session_factory() as session:
-        structure = session.scalar(
-            select(DataType.structure)
+        row = session.execute(
+            select(DataType.structure, Item.data_type_id)
             .join(Item, Item.data_type_id == DataType.id)
             .where(Item.id == item_id)
-        )
+        ).first()
+    structure = row.structure if row is not None else None
+    data_type_id = row.data_type_id if row is not None else ""
     config = ctx.services.config_store.load_config()
     if structure == "series":
         result = scrape_show(ctx, item_id, force=force)
-        config_section = config.tv
     else:
         result = scrape_movie(ctx, item_id, force=force)
-        config_section = config.movie
+    config_section = type_config(config, data_type_id)
     with ctx.session_factory() as session:
         followups = after_scrape(config_section, item_id)
         if not has_video(session, item_id):

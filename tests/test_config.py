@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from mortis.config.models import (
+    AppConfig,
     MovieOutputConfig,
     MovieScrapeConfig,
     TvImages,
@@ -11,6 +12,7 @@ from mortis.config.models import (
     TvScrapeConfig,
 )
 from mortis.config.store import ConfigStore
+from mortis.config.types import type_config
 
 
 def test_output_defaults() -> None:
@@ -187,3 +189,38 @@ def test_tv_roundtrip_through_store(tmp_path: Path) -> None:
     )
     store.save_section("tv", tv)
     assert store.load_config().tv == tv
+
+
+def test_anime_defaults_equal_tv() -> None:
+    assert AppConfig().anime == TvScrapeConfig()
+
+
+def test_anime_roundtrip_through_store_keeps_tv_apart(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path / "data")
+    anime = TvScrapeConfig(
+        language="ja-JP",
+        match_threshold=0.6,
+        still_size="original",
+        images=TvImages(actor_images=True, episode_thumb=False),
+        output=TvOutputConfig(
+            organize_rename=True,
+            file_template="${showTitle} - ${seasonNr2}x${episodeNr2}",
+        ),
+    )
+    store.save_section(
+        "tv", TvScrapeConfig(output=TvOutputConfig(season_template="第 ${seasonNr} 季"))
+    )
+    store.save_section("anime", anime)
+    config = store.load_config()
+    assert config.anime == anime
+    assert config.tv == TvScrapeConfig(output=TvOutputConfig(season_template="第 ${seasonNr} 季"))
+    assert config.anime != config.tv
+
+
+def test_type_config_returns_anime_section(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path / "data")
+    store.save_section("anime", TvScrapeConfig(language="ja-JP"))
+    config = store.load_config()
+    assert type_config(config, "anime") is config.anime
+    assert type_config(config, "tv") is config.tv
+    assert type_config(config, "movie") is config.movie

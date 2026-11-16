@@ -10,6 +10,7 @@ from mortis.config.models import (
     NetworkConfig,
     Secrets,
     TasksConfig,
+    TvScrapeConfig,
 )
 from mortis.net.http import build_client
 from mortis.sources.tmdb.check import TmdbCheck, check_tmdb_key
@@ -47,6 +48,16 @@ def write_files(section: FilesConfig, store: ConfigStoreDep) -> AppConfig:
 @router.put("/settings/movie", response_model=AppConfig)
 def write_movie(section: MovieScrapeConfig, store: ConfigStoreDep) -> AppConfig:
     return store.save_section("movie", section)
+
+
+@router.put("/settings/tv", response_model=AppConfig)
+def write_tv(section: TvScrapeConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("tv", section)
+
+
+@router.put("/settings/anime", response_model=AppConfig)
+def write_anime(section: TvScrapeConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("anime", section)
 
 
 @router.put("/settings/tasks", response_model=AppConfig)

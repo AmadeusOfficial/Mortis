@@ -10,6 +10,7 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import Session
 
 from mortis.config.models import TvScrapeConfig
+from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile, utc_now
 from mortis.organize.episodes import parse_episode
 from mortis.organize.names import subtitle_belongs_to
@@ -150,9 +151,17 @@ def _bind(session: Session, files: list[MediaFile], targets: dict[str, int], sho
     return bound
 
 
+def _show_config(ctx: TaskContext, item_id: int) -> TvScrapeConfig:
+    """电视剧和动漫各用自己的一节设置。"""
+    config = ctx.services.config_store.load_config()
+    with ctx.session_factory() as session:
+        data_type_id = session.scalar(select(Item.data_type_id).where(Item.id == item_id))
+    return type_config(config, data_type_id or "")
+
+
 def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any]:
     services = ctx.services
-    config: TvScrapeConfig = services.config_store.load_config().tv
+    config = _show_config(ctx, item_id)
     store = ImageStore(services.data_dir)
     today = date.today().isoformat()
 
