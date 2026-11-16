@@ -11,7 +11,7 @@ from mortis.db.models import Item, Library, MediaFile
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
 from mortis.items.identity import MovieRef
-from mortis.items.matching import bind_file, guess, rematch
+from mortis.items.matching import bind_file, guess, is_series, rematch, show_folder
 from mortis.output.service import rewrite_if_arranged
 from mortis.tasks import repo as task_repo
 from mortis.tasks.runner import TaskRunner
@@ -148,6 +148,7 @@ class UnmatchedFile(BaseModel):
     size: int | None
     guess_title: str
     guess_year: int | None
+    video_count: int
 
 
 def get_item(session: Session, item_id: int) -> Item:
@@ -221,8 +222,10 @@ def scrape_item(
     item_id: int, session: SessionDep, runner: RunnerDep, body: ScrapeRequest | None = None
 ) -> Enqueued:
     item = get_item(session, item_id)
-    if item.kind != "work":
+    if item.kind == "collection":
         raise ItemError("系列电影跟着其中的电影一起刮削")
+    if item.kind != "work":
+        raise ItemError("季和集跟着剧一起刮削")
     force = body.force if body is not None else True
     return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=force))
 
@@ -233,7 +236,7 @@ def rematch_item(
 ) -> Enqueued:
     item = get_item(session, item_id)
     if item.kind != "work":
-        raise ItemError("只有电影能重新匹配")
+        raise ItemError("只有电影和剧能重新匹配")
     rematch(session, item, body.tmdb_id)
     return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=False))
 
@@ -248,20 +251,32 @@ def list_unmatched(session: SessionDep, library_id: int | None = None) -> list[U
     )
     if library_id is not None:
         query = query.where(MediaFile.library_id == library_id)
-    rows = []
+    rows: list[UnmatchedFile] = []
+    shows: dict[tuple[int, str], UnmatchedFile] = {}
+    series: dict[int, bool] = {}
     for media_file, library in session.execute(query).all():
-        parsed = guess(library, media_file.path)
-        rows.append(
-            UnmatchedFile(
-                id=media_file.id,
-                library_id=library.id,
-                library_name=library.name,
-                path=media_file.path,
-                size=media_file.size,
-                guess_title=parsed.title,
-                guess_year=parsed.year,
-            )
+        if library.id not in series:
+            series[library.id] = is_series(session, library)
+        folder = show_folder(library, media_file.path) if series[library.id] else None
+        if folder is not None and (library.id, folder) in shows:
+            row = shows[(library.id, folder)]
+            row.video_count += 1
+            row.size = (row.size or 0) + (media_file.size or 0)
+            continue
+        parsed = guess(library, media_file.path, series=series[library.id])
+        row = UnmatchedFile(
+            id=media_file.id,
+            library_id=library.id,
+            library_name=library.name,
+            path=folder or media_file.path,
+            size=media_file.size,
+            guess_title=parsed.title,
+            guess_year=parsed.year,
+            video_count=1,
         )
+        if folder is not None:
+            shows[(library.id, folder)] = row
+        rows.append(row)
     return rows
 
 

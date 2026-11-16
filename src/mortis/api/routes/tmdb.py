@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from mortis.api.deps import ServicesDep
 from mortis.sources.tmdb.client import IMAGE_BASE, open_tmdb
-from mortis.sources.tmdb.search import search_movies
+from mortis.sources.tmdb.search import MovieHit, search_movies, search_tv
 
 router = APIRouter(prefix="/api/tmdb")
 
@@ -40,7 +40,10 @@ def search_movie(
     if not cleaned:
         raise HTTPException(status_code=422, detail="搜索词不能为空")
     with open_tmdb(services) as tmdb:
-        hits = search_movies(tmdb, cleaned, year)
+        return _hits(search_movies(tmdb, cleaned, year))
+
+
+def _hits(hits: list[MovieHit]) -> list[MovieHitOut]:
     return [
         MovieHitOut(
             tmdb_id=hit.tmdb_id,
@@ -53,6 +56,19 @@ def search_movie(
         )
         for hit in hits
     ]
+
+
+@router.get("/search/tv", response_model=list[MovieHitOut])
+def search_show(
+    services: ServicesDep,
+    query: str = Query(min_length=1, max_length=200),
+    year: int | None = Query(default=None, ge=1900, le=2100),
+) -> list[MovieHitOut]:
+    cleaned = query.strip()
+    if not cleaned:
+        raise HTTPException(status_code=422, detail="搜索词不能为空")
+    with open_tmdb(services) as tmdb:
+        return _hits(search_tv(tmdb, cleaned, year))
 
 
 @router.get("/image/{size}/{name}")
