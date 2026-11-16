@@ -326,5 +326,42 @@ def test_host_maps_auth_errors_and_logs_masked(client: TestClient) -> None:
     assert "abc" not in "".join(logs)
 
 
+def test_source_orders_read_write_reset(client: TestClient) -> None:
+    body = client.get("/api/data-types/doujin/source-orders").json()
+    assert [s["id"] for s in body["sources"]] == ["alpha"]
+    assert body["whole"] == [
+        {"source": "alpha", "excluded": False},
+        {"source": "beta", "excluded": False},
+    ]
+    fields = {f["key"]: f for f in body["fields"]}
+    assert fields["title"]["custom"] is False
+    assert fields["engine"]["custom"] is True
+    assert fields["engine"]["order"][1] == {"source": "alpha", "excluded": True}
+
+    changed = client.put(
+        "/api/data-types/doujin/source-orders",
+        json={
+            "orders": {
+                "": [{"source": "beta"}, {"source": "alpha"}],
+                "engine": None,
+                "title": [{"source": "alpha"}, {"source": "beta", "excluded": True}],
+            }
+        },
+    ).json()
+    fields = {f["key"]: f for f in changed["fields"]}
+    assert [e["source"] for e in changed["whole"]] == ["beta", "alpha"]
+    assert fields["engine"]["custom"] is False
+    assert fields["title"]["order"][1]["excluded"] is True
+
+    bad = client.put("/api/data-types/doujin/source-orders", json={"orders": {"nope": None}})
+    assert bad.status_code == 422
+    assert client.get("/api/data-types/movie/source-orders").status_code == 404
+
+    reset = client.post("/api/data-types/doujin/source-orders/reset").json()
+    fields = {f["key"]: f for f in reset["fields"]}
+    assert [e["source"] for e in reset["whole"]] == ["alpha", "beta"]
+    assert fields["engine"]["custom"] is True and fields["title"]["custom"] is False
+
+
 def test_mask_url_keeps_plain_params() -> None:
     assert mask_url("https://x.test/a?q=1&api_key=k") == "https://x.test/a?q=1&api_key=%2A%2A%2A"
