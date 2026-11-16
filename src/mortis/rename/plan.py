@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mortis.config.models import MovieOutputConfig
-from mortis.db.models import Item, LibraryPath, MediaFile
+from mortis.db.models import Item, ItemExternalId, LibraryPath, MediaFile
 from mortis.organize.names import strip_stack, subtitle_belongs_to
 from mortis.organize.scan import DISC_DIR_NAMES, SUBTITLE_DIR_NAMES
 from mortis.rename.template import render
@@ -36,7 +36,14 @@ class RenamePlan:
         return bool(self.folder_to or any(m.source != m.target for m in self.moves))
 
 
-def tokens_of(item: Item) -> dict[str, str | None]:
+def tokens_of(session: Session, item: Item) -> dict[str, str | None]:
+    ids = dict(
+        session.execute(
+            select(ItemExternalId.provider, ItemExternalId.external_id).where(
+                ItemExternalId.item_id == item.id, ItemExternalId.provider.in_(("tmdb", "imdb"))
+            )
+        ).all()
+    )
     return {
         "title": item.title,
         "originalTitle": item.original_title,
@@ -44,6 +51,8 @@ def tokens_of(item: Item) -> dict[str, str | None]:
         "edition": None,
         "videoFormat": None,
         "audioCodec": None,
+        "tmdb": ids.get("tmdb"),
+        "imdb": ids.get("imdb"),
     }
 
 
@@ -76,7 +85,7 @@ def plan_rename(session: Session, item: Item, output: MovieOutputConfig) -> Rena
         plan.problems.append("视频分散在多个目录，不重命名")
         return plan
     (folder, is_disc), *_ = folders
-    tokens = tokens_of(item)
+    tokens = tokens_of(session, item)
     try:
         folder_name = render(
             output.folder_template,

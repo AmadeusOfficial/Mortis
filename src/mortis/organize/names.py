@@ -10,10 +10,14 @@ _JUNK = re.compile(
     r"2160p|1080p|1080i|720p|576p|480p|4k|uhd|hdr10\+?|hdr|dovi|"
     r"blu-?ray|bdrip|brrip|bdremux|remux|bd(?:1080|720|2160)p?|web-?dl|webrip|hdtv|"
     r"dvdrip|dvdscr|hdrip|x264|x265|h\.?264|h\.?265|hevc|avc|10bit|8bit|"
-    r"aac|ac3|eac3|dts|truehd|atmos|proper|repack|unrated|remastered|imax"
+    r"aac|ac3|eac3|dts|truehd|atmos|proper|repack|unrated|remastered|imax|"
+    r"[0-9]{3,4}x[0-9]{3,4}"
     r")(?![a-z0-9])"
     r"|中英字幕|国英双语|中字|双语"
 )
+_PAREN = re.compile(r"\(([^()]*)\)")
+# 文件名常写「第01章」，TMDB 写「第一章」，带着章节号搜不到。
+_CHAPTER = re.compile(r"(?:^|\s)-?\s*第\s*[0-9]+\s*[章話话部集](?=\s|$)")
 _STACK = re.compile(
     r"(?i)[ ._-]*[\[(]?(?:cd|dvd|part|pt|disc|disk)[ ._-]*([0-9]{1,2}|[a-d])[\])]?$"
 )
@@ -30,14 +34,17 @@ class ParsedName:
 
 
 def _clean(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip(_EDGE + ")]}").strip()
+    text = re.sub(r"\s+", " ", text).strip(_EDGE + ")]}").strip()
+    if text.count("(") > text.count(")"):
+        text += ")"
+    return text
 
 
 def _variants(title: str) -> tuple[str, ...]:
     tokens = title.split(" ")
     cjk = " ".join(token for token in tokens if _CJK.search(token))
     latin = " ".join(token for token in tokens if not _CJK.search(token))
-    result = [title]
+    result = [title, _clean(_CHAPTER.sub(" ", title))]
     if cjk and _LATIN.search(latin):
         result += [cjk, latin]
     return tuple(dict.fromkeys(item for item in result if item))
@@ -46,6 +53,7 @@ def _variants(title: str) -> tuple[str, ...]:
 def parse_name(name: str) -> ParsedName:
     text = unicodedata.normalize("NFKC", name)
     text = _BRACKETS.sub(" ", text)
+    text = _PAREN.sub(lambda m: " " if _JUNK.search(m.group(1)) else m.group(0), text)
     text = re.sub(r"[._]+", " ", text)
     year: int | None = None
     cut = len(text)

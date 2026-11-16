@@ -38,6 +38,22 @@ def test_mixed_cjk_and_latin_give_extra_search_titles() -> None:
     assert parse_name("The.Matrix.1999").search_titles == ("The Matrix",)
 
 
+def test_release_info_in_parentheses_is_dropped() -> None:
+    parsed = parse_name(
+        "[Seed-Raws] 劇場版 空の境界 - 第02章 殺人考察（前） (BD 1280x720 HEVC AACx2 [5.1+2.0])"
+    )
+    assert parsed.title == "劇場版 空の境界 - 第02章 殺人考察(前)"
+    assert parsed.search_titles == (
+        "劇場版 空の境界 - 第02章 殺人考察(前)",
+        "劇場版 空の境界 殺人考察(前)",
+    )
+
+
+def test_chapter_number_kept_when_it_is_the_title() -> None:
+    assert parse_name("Movie (1999)").title == "Movie"
+    assert parse_name("第9区.2009").search_titles == ("第9区",)
+
+
 @pytest.mark.parametrize(
     ("stem", "base", "part"),
     [

@@ -298,7 +298,7 @@ const IMAGE_LABELS: [keyof MovieImages, string][] = [
 ];
 
 const TEMPLATE_HINT =
-  "可用 ${title} ${originalTitle} ${year} ${edition} ${videoFormat} ${audioCodec}；${前缀,标记,后缀} 只在标记有值时出现";
+  "可用 ${title} ${originalTitle} ${year} ${edition} ${videoFormat} ${audioCodec} ${tmdb} ${imdb}；${前缀,标记,后缀} 只在标记有值时出现；给 Plex 用可在目录模板末尾加 ${{tmdb-,tmdb,}}";
 
 function splitWords(text: string): string[] {
   return text

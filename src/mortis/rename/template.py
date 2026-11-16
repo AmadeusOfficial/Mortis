@@ -3,7 +3,16 @@
 import re
 from collections.abc import Mapping
 
-TOKENS = ("title", "originalTitle", "year", "edition", "videoFormat", "audioCodec")
+TOKENS = (
+    "title",
+    "originalTitle",
+    "year",
+    "edition",
+    "videoFormat",
+    "audioCodec",
+    "tmdb",
+    "imdb",
+)
 
 _IDENT = re.compile(r"[A-Za-z][A-Za-z0-9]*\Z")
 _FORBIDDEN = '<>"\\/|?*'
@@ -60,7 +69,12 @@ def _collapse(text: str, space: str) -> str:
             continue
         kept.append(char)
     text = "".join(kept)
-    if not space or space == ".":
+    if not space:
+        return text
+    # 照 TMM：空格换掉后，夹着破折号的 "War.-.2005"、"War-.Cut" 收成一个替身。
+    mark = re.escape(space)
+    text = re.sub(rf"(?:{mark})+-+(?:{mark})*|-+(?:{mark})+", space, text)
+    if space == ".":
         return text
     for char in sorted(set(space)):
         if char == ".":
@@ -73,6 +87,20 @@ def _collapse(text: str, space: str) -> str:
     return text
 
 
+def _closing(template: str, index: int) -> int:
+    """找到和 "${" 配对的 "}"；前后缀里可以有成对的花括号，如 Plex 的 ${{tmdb-,tmdb,}}。"""
+    depth = 0
+    for position in range(index, len(template)):
+        char = template[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            if depth == 0:
+                return position
+            depth -= 1
+    return -1
+
+
 def render(template: str, tokens: Mapping[str, str | None], *, space: str, colon: str) -> str:
     """按模板生成一个名字。space 是空格替身（空串表示保留空格），colon 是冒号替身。"""
     pieces: list[str] = []
@@ -83,7 +111,7 @@ def render(template: str, tokens: Mapping[str, str | None], *, space: str, colon
             pieces.append(template[index:])
             break
         pieces.append(template[index:start])
-        end = template.find("}", start + 2)
+        end = _closing(template, start + 2)
         if end < 0:
             raise _bad_template(template[start:])
         original = template[start : end + 1]
