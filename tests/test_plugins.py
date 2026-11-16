@@ -365,3 +365,6 @@ def test_source_orders_read_write_reset(client: TestClient) -> None:
 
 def test_mask_url_keeps_plain_params() -> None:
     assert mask_url("https://x.test/a?q=1&api_key=k") == "https://x.test/a?q=1&api_key=%2A%2A%2A"
+    assert mask_url("https://x.test/a?keyword=dies&accessToken=t") == (
+        "https://x.test/a?keyword=dies&accessToken=%2A%2A%2A"
+    )

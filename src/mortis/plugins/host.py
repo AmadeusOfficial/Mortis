@@ -18,7 +18,7 @@ from mortis.plugin_api import SourceAuthError, SourceError, SourcePlugin
 from mortis.services import Services
 
 REFRESH_BEFORE_SECONDS = 24 * 3600
-_SENSITIVE = re.compile(r"token|key|secret|password|code", re.IGNORECASE)
+_SENSITIVE = re.compile(r"(token|key|secret|password|code)$", re.IGNORECASE)
 
 _pace_guard = threading.Lock()
 _next_slot: dict[str, float] = {}
