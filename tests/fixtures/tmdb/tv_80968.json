@@ -1,0 +1,989 @@
+{
+ "adult": false,
+ "backdrop_path": "/64jEzC7YeKEpnn1YwjCGRo9ZvOX.jpg",
+ "created_by": [
+  {
+   "id": 64506,
+   "credit_id": "5f1e7419511d090036757f00",
+   "name": "克里斯·布兰卡托",
+   "original_name": "Chris Brancato",
+   "gender": 2,
+   "profile_path": null
+  },
+  {
+   "id": 121479,
+   "credit_id": "5f1e743566a7c300370a5ac0",
+   "name": "卡洛·伯纳德",
+   "original_name": "Carlo Bernard",
+   "gender": 2,
+   "profile_path": null
+  },
+  {
+   "id": 81203,
+   "credit_id": "5f1e7424511d0900357795a7",
+   "name": "道格·米罗",
+   "original_name": "Doug Miro",
+   "gender": 2,
+   "profile_path": null
+  }
+ ],
+ "episode_run_time": [],
+ "first_air_date": "2018-11-16",
+ "genres": [
+  {
+   "id": 18,
+   "name": "剧情"
+  },
+  {
+   "id": 80,
+   "name": "犯罪"
+  }
+ ],
+ "homepage": "https://www.netflix.com/title/80997085",
+ "id": 80968,
+ "in_production": false,
+ "languages": [
+  "en",
+  "es"
+ ],
+ "last_air_date": "2021-11-05",
+ "last_episode_to_air": {
+  "id": 3302591,
+  "name": "战争时期的生活",
+  "overview": "　墨西哥和美国的相关部门全力搜寻阿曼多。矮子在狱中采取行动试图证明他才是老大。艾迪娜派拉蒙去执行一项任务。",
+  "vote_average": 7.286,
+  "vote_count": 14,
+  "air_date": "2021-11-05",
+  "episode_number": 10,
+  "episode_type": "finale",
+  "production_code": "610",
+  "runtime": 69,
+  "season_number": 3,
+  "show_id": 80968,
+  "still_path": "/bEBOSpPYrZoI91zmgzqgtQnVNZF.jpg"
+ },
+ "name": "毒枭：墨西哥",
+ "next_episode_to_air": null,
+ "networks": [
+  {
+   "id": 213,
+   "logo_path": "/wwemzKWzjKYJFfCeiB57q3r4Bcm.png",
+   "name": "Netflix",
+   "origin_country": ""
+  }
+ ],
+ "number_of_episodes": 30,
+ "number_of_seasons": 3,
+ "origin_country": [
+  "US"
+ ],
+ "original_language": "en",
+ "original_name": "Narcos: Mexico",
+ "overview": "本作将聚焦于反毒战争的起源 – 墨西哥的瓜达拉哈拉贩毒集团，时间也将移前至80年代，讲述冷静﹑大胆﹑头脑清晰﹑忠于 亲友的Felix Gallardo如何把散乱的贩毒者统一起来，成为被称为「Godfather」的大毒枭。而缉毒局探员Kiki Camarena带着妻儿从加州搬到瓜达拉哈拉，但他没意料到此反毒战的危险程度，并引发了惨剧。",
+ "popularity": 23.0054,
+ "poster_path": "/gRh5FHICZh99HnDFd6bdwzClYMV.jpg",
+ "production_companies": [
+  {
+   "id": 206133,
+   "logo_path": "/wS56yo8ya8fui8imnDRbkyjWE7H.png",
+   "name": "Gaumont",
+   "origin_country": "US"
+  },
+  {
+   "id": 36812,
+   "logo_path": "/t0cibwMPVH7RD7UsQNqmugDMnw7.png",
+   "name": "Gaumont International Television",
+   "origin_country": "US"
+  }
+ ],
+ "production_countries": [
+  {
+   "iso_3166_1": "US",
+   "name": "United States of America"
+  }
+ ],
+ "seasons": [
+  {
+   "air_date": "2018-11-16",
+   "episode_count": 10,
+   "id": 106584,
+   "name": "第 1 季",
+   "overview": "踏上《毒枭》的硬派新传奇，了解瓜达拉哈拉贩毒集团崛起的真实故事，见证始于 20 世纪 80 年代的墨西哥毒品战争。",
+   "poster_path": "/nd6btFNw6kly3BuxojYAhnIwGg.jpg",
+   "season_number": 1,
+   "vote_average": 7.9
+  },
+  {
+   "air_date": "2020-02-13",
+   "episode_count": 10,
+   "id": 124641,
+   "name": "第 2 季",
+   "overview": "费利斯努力维持对可卡因贩卖的控制，但缉毒局的复仇渴望和集团内部的宿怨对他的野性造成了威胁。",
+   "poster_path": "/BBGuA0GXeGeSJxjlcawljLEN66.jpg",
+   "season_number": 2,
+   "vote_average": 7.5
+  },
+  {
+   "air_date": "2021-11-05",
+   "episode_count": 10,
+   "id": 166998,
+   "name": "第 3 季",
+   "overview": "新一代贩毒集团头目争权夺利，记者们追逐真相，而政府探员则游走于正邪边缘。",
+   "poster_path": "/uYcZMiIIUv8NPebpqKbUGhf2M3y.jpg",
+   "season_number": 3,
+   "vote_average": 7.2
+  }
+ ],
+ "softcore": false,
+ "spoken_languages": [
+  {
+   "english_name": "English",
+   "iso_639_1": "en",
+   "name": "English"
+  },
+  {
+   "english_name": "Spanish",
+   "iso_639_1": "es",
+   "name": "Español"
+  }
+ ],
+ "status": "Ended",
+ "tagline": "",
+ "type": "Scripted",
+ "vote_average": 7.924,
+ "vote_count": 1569,
+ "aggregate_credits": {
+  "cast": [
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 72128,
+    "known_for_department": "Acting",
+    "name": "José María Yázpik",
+    "original_name": "José María Yázpik",
+    "popularity": 1.4186,
+    "profile_path": "/GEV4PnIhxAAPxIHvsyhdLUjnSv.jpg",
+    "total_episode_count": 30,
+    "roles": [
+     {
+      "credit_id": "5f1e735b511d0900357791bf",
+      "character": "Amado Carrillo Fuentes",
+      "episode_count": 30
+     }
+    ],
+    "order": 2
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 1809025,
+    "known_for_department": "Acting",
+    "name": "亚历杭德罗·埃达",
+    "original_name": "Alejandro Edda",
+    "popularity": 1.0316,
+    "profile_path": "/zqCvFCY9kWd3AkVv5Brwi7pZJ9W.jpg",
+    "total_episode_count": 30,
+    "roles": [
+     {
+      "credit_id": "5e492a2a1e92250018c20ca3",
+      "character": "Joaquín 'El Chapo' Guzmán",
+      "episode_count": 30
+     }
+    ],
+    "order": 4
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 59233,
+    "known_for_department": "Acting",
+    "name": "斯科特·麦克纳里",
+    "original_name": "Scoot McNairy",
+    "popularity": 2.3426,
+    "profile_path": "/oP2LJEqupxVZ2XdEW1lN5Q5LF3M.jpg",
+    "total_episode_count": 29,
+    "roles": [
+     {
+      "credit_id": "5e4927619b861600166189c3",
+      "character": "Walt Breslin",
+      "episode_count": 21
+     },
+     {
+      "credit_id": "64d8830d371097013944e39f",
+      "character": "Narrator (voice) (uncredited)",
+      "episode_count": 9
+     }
+    ],
+    "order": 89
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 2229075,
+    "known_for_department": "Acting",
+    "name": "Manuel Masalva",
+    "original_name": "Manuel Masalva",
+    "popularity": 0.4678,
+    "profile_path": "/mqf7pWyiZLovaSRlUJzoqsV2PG2.jpg",
+    "total_episode_count": 22,
+    "roles": [
+     {
+      "credit_id": "64d94bf7bf31f201cb6b1630",
+      "character": "Ramón Arellano Felix",
+      "episode_count": 22
+     }
+    ],
+    "order": 22
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 8688,
+    "known_for_department": "Acting",
+    "name": "迭戈·卢纳",
+    "original_name": "Diego Luna",
+    "popularity": 2.4503,
+    "profile_path": "/qwbjcyDN37OHiln4a6P4LP31o7F.jpg",
+    "total_episode_count": 21,
+    "roles": [
+     {
+      "credit_id": "5b5053269251413bd100a642",
+      "character": "Miguel Ángel Félix Gallardo",
+      "episode_count": 21
+     }
+    ],
+    "order": 0
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 28414,
+    "known_for_department": "Acting",
+    "name": "马特·莱切尔",
+    "original_name": "Matt Letscher",
+    "popularity": 0.7475,
+    "profile_path": "/4tFddqIAqUnPAl64sM335GhYPdM.jpg",
+    "total_episode_count": 21,
+    "roles": [
+     {
+      "credit_id": "5c17c6680e0a26037f3e56bb",
+      "character": "James 'Jaime' Kuykendall",
+      "episode_count": 21
+     }
+    ],
+    "order": 7
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 955954,
+    "known_for_department": "Acting",
+    "name": "费尔南达·乌雷霍拉",
+    "original_name": "Fernanda Urrejola",
+    "popularity": 0.6324,
+    "profile_path": "/afkhSEav2fAf0t1MSqozgl06kZr.jpg",
+    "total_episode_count": 20,
+    "roles": [
+     {
+      "credit_id": "5f176ac57a1bd60038e3fc28",
+      "character": "María Elvira",
+      "episode_count": 20
+     }
+    ],
+    "order": 5
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 82698,
+    "known_for_department": "Acting",
+    "name": "Gorka Lasaosa",
+    "original_name": "Gorka Lasaosa",
+    "popularity": 0.4099,
+    "profile_path": "/cPzOoOAN7y9EIGJK1995NDDkYmq.jpg",
+    "total_episode_count": 20,
+    "roles": [
+     {
+      "credit_id": "5f1e7abf0e597b00353c9c77",
+      "character": "Héctor Luis Palma Salazar",
+      "episode_count": 20
+     }
+    ],
+    "order": 8
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 1149129,
+    "known_for_department": "Acting",
+    "name": "Alfonso Dosal",
+    "original_name": "Alfonso Dosal",
+    "popularity": 0.8987,
+    "profile_path": "/rU5OxxV1lsJuhUM1n5TSWdZSb8S.jpg",
+    "total_episode_count": 20,
+    "roles": [
+     {
+      "credit_id": "5f1e775e511d090037747c9a",
+      "character": "Benjamín Arellano Felix",
+      "episode_count": 20
+     }
+    ],
+    "order": 10
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 1526350,
+    "known_for_department": "Acting",
+    "name": "Mayra Hermosillo",
+    "original_name": "Mayra Hermosillo",
+    "popularity": 0.9354,
+    "profile_path": "/3EFBG83M8YOPUynZv6QDsJZPjdu.jpg",
+    "total_episode_count": 20,
+    "roles": [
+     {
+      "credit_id": "5f1e78d207a8080036848d57",
+      "character": "Enedina Arellano Felix",
+      "episode_count": 20
+     }
+    ],
+    "order": 11
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 76857,
+    "known_for_department": "Acting",
+    "name": "华金·科西奥",
+    "original_name": "Joaquín Cosío",
+    "popularity": 0.8662,
+    "profile_path": "/ijMo3fMyY4VL1xyIj6ytiJrzaw9.jpg",
+    "total_episode_count": 16,
+    "roles": [
+     {
+      "credit_id": "64db106c59e8a900c59f516e",
+      "character": "Don Neto",
+      "episode_count": 5
+     },
+     {
+      "credit_id": "5c17c6200e0a2603783e5107",
+      "character": "Ernesto 'Don Neto' Fonseca Carrillo",
+      "episode_count": 11
+     }
+    ],
+    "order": 218
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 589722,
+    "known_for_department": "Acting",
+    "name": "特蕾莎·鲁伊斯",
+    "original_name": "Teresa Ruiz",
+    "popularity": 0.9306,
+    "profile_path": "/bu0bGNDzIpaVfrOBBb1PERirBB9.jpg",
+    "total_episode_count": 15,
+    "roles": [
+     {
+      "credit_id": "5e492891676ce20018ffaeb9",
+      "character": "Isabella Bautista",
+      "episode_count": 15
+     }
+    ],
+    "order": 30
+   }
+  ],
+  "crew": [
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 4379,
+    "known_for_department": "Art",
+    "name": "Salvador Parra",
+    "original_name": "Salvador Parra",
+    "popularity": 0.2074,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64d88855d100b600c5d1c3ff",
+      "job": "Production Design",
+      "episode_count": 10
+     }
+    ],
+    "department": "Art",
+    "total_episode_count": 10
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 1304715,
+    "known_for_department": "Camera",
+    "name": "Dariela Ludlow Deloya",
+    "original_name": "Dariela Ludlow Deloya",
+    "popularity": 0.1978,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64d88870f495ee02943054a3",
+      "job": "Director of Photography",
+      "episode_count": 6
+     }
+    ],
+    "department": "Camera",
+    "total_episode_count": 6
+   },
+   {
+    "adult": false,
+    "gender": 0,
+    "id": 3744107,
+    "known_for_department": "Camera",
+    "name": "Adrian Tejido",
+    "original_name": "Adrian Tejido",
+    "popularity": 0.1202,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64d9513637109700ac41cae3",
+      "job": "Director of Photography",
+      "episode_count": 3
+     }
+    ],
+    "department": "Camera",
+    "total_episode_count": 3
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 1354949,
+    "known_for_department": "Camera",
+    "name": "Adrian Teijido",
+    "original_name": "Adrian Teijido",
+    "popularity": 0.3304,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64db0dd87719d700e5c831e5",
+      "job": "Director of Photography",
+      "episode_count": 1
+     }
+    ],
+    "department": "Camera",
+    "total_episode_count": 1
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 1315562,
+    "known_for_department": "Costume & Make-Up",
+    "name": "Malena de la Riva",
+    "original_name": "Malena de la Riva",
+    "popularity": 0.2836,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64d8880637109700ffb6246a",
+      "job": "Costume Design",
+      "episode_count": 10
+     }
+    ],
+    "department": "Costume & Make-Up",
+    "total_episode_count": 10
+   },
+   {
+    "adult": false,
+    "gender": 0,
+    "id": 4123257,
+    "known_for_department": "Directing",
+    "name": "Nina Chávez Góngora",
+    "original_name": "Nina Chávez Góngora",
+    "popularity": 0.0509,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "6492ead943cd5400e7f33d82",
+      "job": "Security Coordinator",
+      "episode_count": 10
+     }
+    ],
+    "department": "Crew",
+    "total_episode_count": 10
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 52582,
+    "known_for_department": "Camera",
+    "name": "Lula Carvalho",
+    "original_name": "Lula Carvalho",
+    "popularity": 0.3008,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "5edb4812dd47e100202ee064",
+      "job": "Cinematography",
+      "episode_count": 1
+     }
+    ],
+    "department": "Crew",
+    "total_episode_count": 1
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 1472143,
+    "known_for_department": "Camera",
+    "name": "Leonardo D'Antoni",
+    "original_name": "Leonardo D'Antoni",
+    "popularity": 0.2994,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "64d89693371097011c500600",
+      "job": "Second Unit Director",
+      "episode_count": 10
+     }
+    ],
+    "department": "Directing",
+    "total_episode_count": 10
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 444720,
+    "known_for_department": "Directing",
+    "name": "安迪·拜兹",
+    "original_name": "Andrés Baiz",
+    "popularity": 0.6272,
+    "profile_path": "/nu8X6Byb4stuYBY1nBvYc3NzEnK.jpg",
+    "jobs": [
+     {
+      "credit_id": "5edb4421f36a32001d87c443",
+      "job": "Director",
+      "episode_count": 10
+     }
+    ],
+    "department": "Directing",
+    "total_episode_count": 10
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 56375,
+    "known_for_department": "Directing",
+    "name": "Amat Escalante",
+    "original_name": "Amat Escalante",
+    "popularity": 0.2935,
+    "profile_path": "/dfVRwzLuZY67sHQCNd19ML12g0F.jpg",
+    "jobs": [
+     {
+      "credit_id": "5f82abfad861af00388d3b50",
+      "job": "Director",
+      "episode_count": 8
+     }
+    ],
+    "department": "Directing",
+    "total_episode_count": 8
+   },
+   {
+    "adult": false,
+    "gender": 0,
+    "id": 1857571,
+    "known_for_department": "Directing",
+    "name": "Telma Silva",
+    "original_name": "Telma Silva",
+    "popularity": 0.0743,
+    "profile_path": null,
+    "jobs": [
+     {
+      "credit_id": "6ae38debeef4454fcd204d02",
+      "job": "Second Assistant Director",
+      "episode_count": 4
+     }
+    ],
+    "department": "Directing",
+    "total_episode_count": 4
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 52583,
+    "known_for_department": "Acting",
+    "name": "瓦格纳·马拉",
+    "original_name": "Wagner Moura",
+    "popularity": 3.527,
+    "profile_path": "/53IbAed4t1dOWxY3iygbRYZBBnm.jpg",
+    "jobs": [
+     {
+      "credit_id": "6185a548a313b8008f43c2e1",
+      "job": "Director",
+      "episode_count": 2
+     }
+    ],
+    "department": "Directing",
+    "total_episode_count": 2
+   }
+  ]
+ },
+ "images": {
+  "backdrops": [
+   {
+    "aspect_ratio": 1.778,
+    "height": 1152,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/64jEzC7YeKEpnn1YwjCGRo9ZvOX.jpg",
+    "vote_average": 7.19,
+    "vote_count": 7,
+    "width": 2048
+   },
+   {
+    "aspect_ratio": 1.778,
+    "height": 1152,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/AhG90SeoMJ0xCI4ye21ru7Cr9we.jpg",
+    "vote_average": 5.786,
+    "vote_count": 7,
+    "width": 2048
+   },
+   {
+    "aspect_ratio": 1.778,
+    "height": 1080,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/q5NfPMXV3ACt2Fjy1kznM3Vu4Mz.jpg",
+    "vote_average": 3.334,
+    "vote_count": 1,
+    "width": 1920
+   },
+   {
+    "aspect_ratio": 1.778,
+    "height": 1080,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/zU5CK1lQ63QanLJewV3cAPtpvRW.jpg",
+    "vote_average": 3.334,
+    "vote_count": 1,
+    "width": 1920
+   }
+  ],
+  "logos": [
+   {
+    "aspect_ratio": 2.336,
+    "height": 298,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/i96UYRTNO9kNqp2QafrLpCQZP0Y.png",
+    "vote_average": 0.0,
+    "vote_count": 0,
+    "width": 696
+   },
+   {
+    "aspect_ratio": 2.553,
+    "height": 492,
+    "iso_3166_1": "CN",
+    "iso_639_1": "zh",
+    "file_path": "/gzEujTAXRFrrTv9Pt3FB1tMHHJq.png",
+    "vote_average": 0.0,
+    "vote_count": 0,
+    "width": 1256
+   }
+  ],
+  "posters": [
+   {
+    "aspect_ratio": 0.667,
+    "height": 1800,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/aXwMx8OvRFMfI1RmkbJm6Bq1jVg.jpg",
+    "vote_average": 7.05,
+    "vote_count": 11,
+    "width": 1200
+   },
+   {
+    "aspect_ratio": 0.667,
+    "height": 3000,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/gQQGxVhdBvT2l7G1Zz6JYSCmL6q.jpg",
+    "vote_average": 7.05,
+    "vote_count": 10,
+    "width": 2000
+   },
+   {
+    "aspect_ratio": 0.667,
+    "height": 3000,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/uYcZMiIIUv8NPebpqKbUGhf2M3y.jpg",
+    "vote_average": 6.834,
+    "vote_count": 12,
+    "width": 2000
+   },
+   {
+    "aspect_ratio": 0.667,
+    "height": 1500,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/thO6creBXscLFWK4fPLPw8Tffn7.jpg",
+    "vote_average": 3.334,
+    "vote_count": 1,
+    "width": 1000
+   }
+  ]
+ },
+ "content_ratings": {
+  "results": [
+   {
+    "descriptors": [],
+    "iso_3166_1": "US",
+    "rating": "TV-MA"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "AU",
+    "rating": "MA 15+"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "DE",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "KR",
+    "rating": "19"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "GB",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "BR",
+    "rating": "16"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "NL",
+    "rating": "16"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "ES",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "SG",
+    "rating": "R21"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "MX",
+    "rating": "C"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "IT",
+    "rating": "VM18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "AT",
+    "rating": "16"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "IE",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "PL",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "CH",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "HU",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "CZ",
+    "rating": "18+"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "RO",
+    "rating": "18"
+   },
+   {
+    "descriptors": [],
+    "iso_3166_1": "RU",
+    "rating": "18+"
+   }
+  ]
+ },
+ "keywords": {
+  "results": [
+   {
+    "name": "corruption",
+    "id": 417
+   },
+   {
+    "name": "mexico",
+    "id": 534
+   },
+   {
+    "name": "cocaine",
+    "id": 2150
+   },
+   {
+    "name": "tiger",
+    "id": 4809
+   },
+   {
+    "name": "usa–mexico border",
+    "id": 5616
+   },
+   {
+    "name": "based on true story",
+    "id": 9672
+   },
+   {
+    "name": "drug cartel",
+    "id": 10175
+   },
+   {
+    "name": "marijuana",
+    "id": 10776
+   },
+   {
+    "name": "mariachi",
+    "id": 14575
+   },
+   {
+    "name": "drug lord",
+    "id": 18026
+   },
+   {
+    "name": "dea",
+    "id": 186281
+   },
+   {
+    "name": "1980s",
+    "id": 208289
+   },
+   {
+    "name": "dark",
+    "id": 259094
+   },
+   {
+    "name": "narcos",
+    "id": 267329
+   },
+   {
+    "name": "el chapo",
+    "id": 280966
+   },
+   {
+    "name": "gritty",
+    "id": 286125
+   },
+   {
+    "name": "thriller",
+    "id": 316362
+   },
+   {
+    "name": "exciting",
+    "id": 319837
+   },
+   {
+    "name": "action",
+    "id": 322496
+   },
+   {
+    "name": "audacious",
+    "id": 325773
+   },
+   {
+    "name": "distressing",
+    "id": 325801
+   },
+   {
+    "name": "familiar",
+    "id": 325814
+   }
+  ]
+ },
+ "videos": {
+  "results": [
+   {
+    "iso_639_1": "en",
+    "iso_3166_1": "US",
+    "name": "NARCOS Mexico | Opening Credits  / Intro | NETFLIX",
+    "key": "SwwfKlZc3gg",
+    "site": "YouTube",
+    "size": 720,
+    "type": "Opening Credits",
+    "official": false,
+    "id": "5d2726ae5f6c4902c35ce5e8",
+    "published_at": "2018-11-17T06:17:18.000Z"
+   },
+   {
+    "iso_639_1": "en",
+    "iso_3166_1": "US",
+    "name": "Mano a Mano",
+    "key": "4F7eu_n-ElQ",
+    "site": "YouTube",
+    "size": 1080,
+    "type": "Teaser",
+    "official": true,
+    "id": "5be5b5570e0a2614b6047308",
+    "published_at": "2018-11-08T03:48:27.000Z"
+   },
+   {
+    "iso_639_1": "en",
+    "iso_3166_1": "US",
+    "name": "Trailer",
+    "key": "1nannle9DaE",
+    "site": "YouTube",
+    "size": 1080,
+    "type": "Trailer",
+    "official": false,
+    "id": "6af5e39757f9df926932d281",
+    "published_at": "2018-10-18T17:27:23.000Z"
+   },
+   {
+    "iso_639_1": "en",
+    "iso_3166_1": "US",
+    "name": "Date Announcement",
+    "key": "ZsL4voedcJU",
+    "site": "YouTube",
+    "size": 1080,
+    "type": "Teaser",
+    "official": true,
+    "id": "5b9134f10e0a266594010ee8",
+    "published_at": "2018-09-06T14:00:08.000Z"
+   }
+  ]
+ },
+ "external_ids": {
+  "imdb_id": "tt8714904",
+  "freebase_mid": null,
+  "freebase_id": null,
+  "tvdb_id": 353232,
+  "tvrage_id": null,
+  "wikidata_id": "Q55657276",
+  "facebook_id": "narcosnetflix",
+  "instagram_id": "Narcos",
+  "twitter_id": "NarcosNetflix"
+ }
+}

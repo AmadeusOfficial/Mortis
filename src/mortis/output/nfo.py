@@ -25,7 +25,8 @@ from mortis.db.models import (
     Tag,
 )
 from mortis.sources.tmdb.client import TmdbClient
-from mortis.sources.tmdb.movie import SOURCE, movie_candidates
+from mortis.sources.tmdb.common import SOURCE
+from mortis.sources.tmdb.movie import movie_candidates
 
 NFO_PROFILE_SIZE = "h632"
 RATING_NAMES = {"tmdb": "themoviedb"}

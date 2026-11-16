@@ -27,8 +27,8 @@ from mortis.scrape.common import (
 )
 from mortis.scrape.images import ImageStore
 from mortis.sources.tmdb.client import open_tmdb
+from mortis.sources.tmdb.common import SOURCE
 from mortis.sources.tmdb.movie import (
-    SOURCE,
     collection_candidates,
     fetch_collection,
     fetch_movie,

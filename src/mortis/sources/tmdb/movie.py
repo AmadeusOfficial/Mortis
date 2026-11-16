@@ -1,28 +1,26 @@
-from collections.abc import Callable, Iterable
 from typing import Any
 
 from mortis.config.models import MovieScrapeConfig
 from mortis.sources.tmdb.client import TmdbClient
+from mortis.sources.tmdb.common import (
+    cast,
+    coded,
+    compact,
+    crew,
+    image_candidates,
+    image_languages,
+    names,
+    ratings,
+    trailer,
+)
 from mortis.sources.tmdb.names import country_name, language_name
 
-SOURCE = "tmdb"
 APPEND = "credits,images,release_dates,keywords,videos,external_ids"
-PROFILE_SIZE = "w185"
-LOGO_SIZE = "original"
 THEATRICAL = 3
-EMPTY: tuple[Any, ...] = (None, "", [], {})
-
-
-def _language(config: MovieScrapeConfig) -> str:
-    return config.language.split("-")[0]
-
-
-def _image_languages(config: MovieScrapeConfig) -> str:
-    return f"{_language(config)},en,null"
 
 
 def fetch_movie(tmdb: TmdbClient, tmdb_id: int, config: MovieScrapeConfig) -> dict[str, Any]:
-    languages = _image_languages(config)
+    languages = image_languages(config)
     return tmdb.get(
         f"/movie/{tmdb_id}",
         {
@@ -40,116 +38,9 @@ def fetch_collection(
     raw = tmdb.get(f"/collection/{collection_id}", {"language": config.language})
     raw["images"] = tmdb.get(
         f"/collection/{collection_id}/images",
-        {"include_image_language": _image_languages(config)},
+        {"include_image_language": image_languages(config)},
     )
     return raw
-
-
-def _ranker(order: list[str | None]) -> Callable[[str | None], int]:
-    positions = {language: index for index, language in enumerate(order)}
-    return lambda language: positions.get(language, len(order))
-
-
-def _images(
-    entries: Iterable[dict[str, Any]], size: str, rank: Callable[[str | None], int]
-) -> list[dict[str, Any]]:
-    ordered = sorted(
-        (entry for entry in entries if entry.get("file_path")),
-        key=lambda entry: (
-            rank(entry.get("iso_639_1")),
-            -(entry.get("vote_average") or 0),
-            -(entry.get("width") or 0),
-        ),
-    )
-    return [
-        {
-            "url": TmdbClient.image_url(entry["file_path"], size),
-            "language": entry.get("iso_639_1"),
-            "width": entry.get("width"),
-            "height": entry.get("height"),
-        }
-        for entry in ordered
-    ]
-
-
-def _image_candidates(images: dict[str, Any], config: MovieScrapeConfig) -> dict[str, Any]:
-    language = _language(config)
-    normal = _ranker([language, "en", None])
-    fanart = _ranker([None, language, "en"]) if config.prefer_textless_fanart else normal
-    posters = images.get("posters") or []
-    return {
-        "poster": _images(posters, config.poster_size, normal),
-        "fanart": _images(images.get("backdrops") or [], config.fanart_size, fanart),
-        "clearlogo": _images(images.get("logos") or [], LOGO_SIZE, normal),
-        "keyart": _images(
-            [entry for entry in posters if entry.get("iso_639_1") is None],
-            config.poster_size,
-            normal,
-        ),
-    }
-
-
-def _names(entries: Iterable[dict[str, Any]] | None, *keys: str) -> list[str]:
-    result: list[str] = []
-    for entry in entries or []:
-        name = next((entry.get(key) for key in keys if entry.get(key)), None)
-        if name and name not in result:
-            result.append(name)
-    return result
-
-
-def _coded(
-    entries: Iterable[dict[str, Any]] | None,
-    key: str,
-    convert: Callable[[str | None], str | None],
-) -> list[str]:
-    result: list[str] = []
-    for entry in entries or []:
-        name = convert(entry.get(key))
-        if name and name not in result:
-            result.append(name)
-    return result
-
-
-def _person(entry: dict[str, Any]) -> dict[str, Any]:
-    profile = entry.get("profile_path")
-    return {
-        "tmdb_id": int(entry["id"]),
-        "name": entry.get("name") or entry.get("original_name") or "",
-        "original_name": entry.get("original_name") or None,
-        "character": None,
-        "photo_url": TmdbClient.image_url(profile, PROFILE_SIZE) if profile else None,
-    }
-
-
-def _cast(credits: dict[str, Any]) -> list[dict[str, Any]]:
-    merged: dict[int, dict[str, Any]] = {}
-    for entry in sorted(credits.get("cast") or [], key=lambda e: e.get("order", 0)):
-        if entry.get("id") is None:
-            continue
-        character = (entry.get("character") or "").strip()
-        person = merged.get(entry["id"])
-        if person is None:
-            person = _person(entry)
-            person["character"] = character or None
-            merged[entry["id"]] = person
-        elif character:
-            known = (person["character"] or "").split(" / ")
-            if character not in known:
-                person["character"] = (
-                    f"{person['character']} / {character}" if person["character"] else character
-                )
-    return list(merged.values())
-
-
-def _crew(
-    credits: dict[str, Any], matches: Callable[[dict[str, Any]], bool]
-) -> list[dict[str, Any]]:
-    merged: dict[int, dict[str, Any]] = {}
-    for entry in credits.get("crew") or []:
-        if entry.get("id") is not None and matches(entry) and entry["id"] not in merged:
-            merged[entry["id"]] = _person(entry)
-    return list(merged.values())
 
 
 def _certification(raw: dict[str, Any], country: str) -> str | None:
@@ -165,41 +56,9 @@ def _certification(raw: dict[str, Any], country: str) -> str | None:
     return None
 
 
-def _trailer(raw: dict[str, Any], config: MovieScrapeConfig) -> str | None:
-    rank = _ranker([_language(config), "en"])
-    trailers = sorted(
-        (
-            video
-            for video in (raw.get("videos") or {}).get("results") or []
-            if video.get("site") == "YouTube"
-            and video.get("type") == "Trailer"
-            and video.get("key")
-        ),
-        key=lambda video: rank(video.get("iso_639_1")),
-    )
-    return f"https://www.youtube.com/watch?v={trailers[0]['key']}" if trailers else None
-
-
-def _ratings(raw: dict[str, Any]) -> list[dict[str, Any]]:
-    if not raw.get("vote_count"):
-        return []
-    return [
-        {
-            "source": SOURCE,
-            "rating": float(raw.get("vote_average") or 0),
-            "max_rating": 10.0,
-            "vote_count": int(raw["vote_count"]),
-        }
-    ]
-
-
-def _compact(values: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in values.items() if value not in EMPTY}
-
-
 def movie_candidates(raw: dict[str, Any], config: MovieScrapeConfig) -> dict[str, Any]:
     credits = raw.get("credits") or {}
-    return _compact(
+    return compact(
         {
             "title": raw.get("title"),
             "original_title": raw.get("original_title"),
@@ -208,30 +67,30 @@ def movie_candidates(raw: dict[str, Any], config: MovieScrapeConfig) -> dict[str
             "release_date": raw.get("release_date"),
             "runtime": raw.get("runtime") or None,
             "certification": _certification(raw, config.certification_country),
-            "ratings": _ratings(raw),
-            "genres": _names(raw.get("genres"), "name"),
-            "countries": _coded(raw.get("production_countries"), "iso_3166_1", country_name),
-            "studios": _names(raw.get("production_companies"), "name"),
-            "keywords": _names((raw.get("keywords") or {}).get("keywords"), "name"),
-            "spoken_languages": _coded(raw.get("spoken_languages"), "iso_639_1", language_name),
-            "trailer": _trailer(raw, config),
-            "directors": _crew(credits, lambda e: e.get("job") == "Director"),
-            "writers": _crew(credits, lambda e: e.get("department") == "Writing"),
-            "producers": _crew(
+            "ratings": ratings(raw),
+            "genres": names(raw.get("genres"), "name"),
+            "countries": coded(raw.get("production_countries"), "iso_3166_1", country_name),
+            "studios": names(raw.get("production_companies"), "name"),
+            "keywords": names((raw.get("keywords") or {}).get("keywords"), "name"),
+            "spoken_languages": coded(raw.get("spoken_languages"), "iso_639_1", language_name),
+            "trailer": trailer(raw, config),
+            "directors": crew(credits, lambda e: e.get("job") == "Director"),
+            "writers": crew(credits, lambda e: e.get("department") == "Writing"),
+            "producers": crew(
                 credits,
                 lambda e: (
                     e.get("department") == "Production" and "Producer" in (e.get("job") or "")
                 ),
             ),
-            "actors": _cast(credits),
-            **_image_candidates(raw.get("images") or {}, config),
+            "actors": cast(credits),
+            **image_candidates(raw.get("images") or {}, config),
         }
     )
 
 
 def collection_candidates(raw: dict[str, Any], config: MovieScrapeConfig) -> dict[str, Any]:
-    images = _image_candidates(raw.get("images") or {}, config)
-    return _compact(
+    images = image_candidates(raw.get("images") or {}, config)
+    return compact(
         {
             "title": raw.get("name"),
             "original_title": raw.get("original_name"),
