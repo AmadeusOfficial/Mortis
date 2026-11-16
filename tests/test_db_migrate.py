@@ -223,3 +223,68 @@ def test_utc_now_format() -> None:
     value = utc_now()
     assert value.endswith("+00:00")
     assert len(value) == len("2026-11-15T09:20:00+00:00")
+
+
+def _insert_game_rows(db_path: Path, *kinds: str) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("insert into data_types (id, name, structure) values ('game', '游戏', 'item')")
+        conn.execute(
+            "insert into libraries (data_type_id, name, created_at, updated_at) "
+            "values ('game', '游戏', 'x', 'x')"
+        )
+        for index, kind in enumerate(kinds):
+            conn.execute(
+                "insert into media_files (library_id, path, file_kind, created_at, updated_at) "
+                "values (1, :path, :kind, 'x', 'x')",
+                {"path": f"M:/game{index}", "kind": kind},
+            )
+
+
+def _media_files_constraints(db_path: Path) -> tuple[list[str], str]:
+    engine = create_db_engine(db_path)
+    try:
+        inspector = inspect(engine)
+        checks = inspector.get_check_constraints("media_files")
+        indexes = inspector.get_indexes("media_files")
+        uniques = inspector.get_unique_constraints("media_files")
+    finally:
+        engine.dispose()
+    sqltext = next(item["sqltext"] for item in checks if "file_kind" in item["sqltext"])
+    kept = [item["name"] for item in indexes if item["name"] == "ix_media_files_item"] + [
+        item["name"] for item in uniques if item["name"] == "uq_media_files_path"
+    ]
+    return kept, sqltext
+
+
+def test_upgrade_accepts_game_file_kind(tmp_path: Path) -> None:
+    db_path = tmp_path / "mortis.db"
+    upgrade_database(db_path)
+    _insert_game_rows(db_path, "game", "video")
+
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("select path from media_files order by id").fetchall() == [
+            ("M:/game0",),
+            ("M:/game1",),
+        ]
+    kept, sqltext = _media_files_constraints(db_path)
+    assert kept == ["ix_media_files_item", "uq_media_files_path"]
+    assert "'game'" in sqltext
+
+
+def test_downgrade_from_0003_drops_game_rows(tmp_path: Path) -> None:
+    db_path = tmp_path / "mortis.db"
+    upgrade_database(db_path)
+    _insert_game_rows(db_path, "game", "video")
+
+    command.downgrade(_alembic_config(db_path), "0002")
+
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("select path from media_files").fetchall() == [("M:/game1",)]
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "insert into media_files (library_id, path, file_kind, created_at, updated_at) "
+                "values (1, 'M:/again', 'game', 'x', 'x')"
+            )
+    kept, sqltext = _media_files_constraints(db_path)
+    assert kept == ["ix_media_files_item", "uq_media_files_path"]
+    assert "'game'" not in sqltext

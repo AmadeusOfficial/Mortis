@@ -255,7 +255,8 @@ class MediaFile(Base):
     __tablename__ = "media_files"
     __table_args__ = (
         CheckConstraint(
-            "file_kind in ('video', 'subtitle', 'trailer', 'nfo', 'image')", name="file_kind"
+            "file_kind in ('video', 'subtitle', 'trailer', 'nfo', 'image', 'game')",
+            name="file_kind",
         ),
         Index("ix_media_files_item", "item_id"),
     )

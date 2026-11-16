@@ -16,6 +16,7 @@ from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import output as output_routes
 from mortis.api.routes import plugins as plugin_routes
 from mortis.api.routes import settings as settings_routes
+from mortis.api.routes import sources as source_routes
 from mortis.api.routes import tasks as task_routes
 from mortis.api.routes import tmdb as tmdb_routes
 from mortis.catalog.install import ensure_builtin_types
@@ -124,6 +125,7 @@ def create_app(
     app.include_router(image_routes.router)
     app.include_router(tmdb_routes.router)
     app.include_router(plugin_routes.router)
+    app.include_router(source_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)

@@ -8,8 +8,6 @@ from sqlalchemy.orm import Session
 from mortis.db.models import Library, MediaFile, utc_now
 from mortis.organize.scan import FoundMovie
 
-SCANNED_KINDS = ("video", "subtitle")
-
 
 @dataclass
 class FoundGroup:
@@ -39,10 +37,12 @@ def sync_media_files(
     library: Library,
     movies: list[FoundMovie],
     owner: Callable[[int], int] | None = None,
+    main_kind: str = "video",
 ) -> SyncReport:
     """把扫到的文件写进 media_files。只 flush，调用方提交。
 
     owner 把已绑定的条目换成这一组该挂的条目（剧集的视频挂在集上，新文件要挂到剧上）。
+    main_kind 是 movie.videos 记成的种类：游戏目录是 game。
     """
     existing = {
         row.path: row
@@ -65,7 +65,7 @@ def sync_media_files(
         if bound is not None and owner is not None:
             bound = owner(bound)
         rows: list[MediaFile] = []
-        for kind, paths in (("video", movie.videos), ("subtitle", movie.subtitles)):
+        for kind, paths in ((main_kind, movie.videos), ("subtitle", movie.subtitles)):
             for path in paths:
                 if path in seen:
                     continue
@@ -97,7 +97,7 @@ def sync_media_files(
         groups.append(FoundGroup(movie, rows, bound))
     removed = 0
     for path, row in existing.items():
-        if path not in seen and row.file_kind in SCANNED_KINDS:
+        if path not in seen and row.file_kind in (main_kind, "subtitle"):
             session.delete(row)
             removed += 1
     session.flush()

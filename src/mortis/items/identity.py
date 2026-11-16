@@ -40,6 +40,62 @@ def work_of(session: Session, item_id: int) -> int:
     return item.id if item is not None else item_id
 
 
+@dataclass(frozen=True)
+class ExternalRef:
+    """插件类型的条目身份：来源插件的外部编号。"""
+
+    provider: str
+    external_id: str
+    title: str
+    original_title: str | None = None
+    release_date: str | None = None
+
+
+def find_by_external(
+    session: Session, library_id: int, provider: str, external_id: str
+) -> Item | None:
+    return session.scalar(
+        select(Item)
+        .join(ItemExternalId, ItemExternalId.item_id == Item.id)
+        .where(
+            Item.library_id == library_id,
+            Item.kind == "work",
+            ItemExternalId.provider == provider,
+            ItemExternalId.external_id == external_id,
+        )
+        .order_by(Item.id)
+        .limit(1)
+    )
+
+
+def find_or_create_work(session: Session, library: Library, ref: ExternalRef) -> tuple[Item, bool]:
+    """同一个库里按外部编号去重。只 flush，调用方提交。"""
+    existing = find_by_external(session, library.id, ref.provider, ref.external_id)
+    if existing is not None:
+        return existing, False
+    now = utc_now()
+    item = Item(
+        library_id=library.id,
+        data_type_id=library.data_type_id,
+        kind="work",
+        title=ref.title or f"{ref.provider} {ref.external_id}",
+        original_title=ref.original_title or None,
+        release_date=ref.release_date or None,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(item)
+    session.flush()
+    session.add(
+        ItemExternalId(
+            item_id=item.id, provider=ref.provider, external_id=ref.external_id, is_primary=1
+        )
+    )
+    refresh_subtitle(session, item)
+    session.flush()
+    return item, True
+
+
 def find_or_create_movie(session: Session, library: Library, ref: MovieRef) -> tuple[Item, bool]:
     """同一个库里按 TMDB 编号去重。只 flush，调用方提交。"""
     existing = find_by_tmdb(session, library.id, ref.tmdb_id)

@@ -107,6 +107,47 @@ def subtitle_belongs_to(subtitle_name: str, base: str) -> bool:
     return name.startswith(prefix) and name[len(prefix) : len(prefix) + 1] in {".", "-", "_", " "}
 
 
+_GAME_SEPARATORS = " -–—:：/\\_.,·・|"
+_GAME_VERSION_TERMS = (
+    "初回限定版",
+    "汉化硬盘版",
+    "简体中文",
+    "繁体中文",
+    "免安装",
+    "豪华版",
+    "通常版",
+    "完整版",
+    "硬盘版",
+    "汉化版",
+    "PKG版",
+    "DL版",
+)
+# 游戏目录名里的品牌、汉化组、版本标记几乎都在括号里，整组去掉，连在一起的空格一起收掉。
+_GAME_BRACKETS = re.compile(r"\s*(?:\[[^\]]*\]|【[^】]*】|\{[^}]*\}|\([^()]*\)|（[^（）]*）)\s*")
+_GAME_VERSION_NUMBER = re.compile(
+    r"\s*(?<![a-z0-9])(?:ver\.?|v)\s?[0-9]+(?:\.[0-9]+)*(?![a-z0-9])\s*", re.IGNORECASE
+)
+# 长词在前，免得「汉化硬盘版」只被当成「硬盘版」。
+_GAME_VERSION_WORDS = re.compile(
+    r"\s*(?<![a-z0-9])(?:"
+    + "|".join(sorted(map(re.escape, _GAME_VERSION_TERMS), key=len, reverse=True))
+    + r")(?![a-z0-9])\s*",
+    re.IGNORECASE,
+)
+
+
+def clean_game_name(name: str) -> str:
+    """游戏目录名去掉括号标记、版本号和版本词；全都去光时返回原名。"""
+    # 不做 NFKC：标题里的「～」等正文符号要保持原样。
+    text = _GAME_BRACKETS.sub(" ", name)
+    text = _GAME_VERSION_NUMBER.sub(" ", text)
+    text = _GAME_VERSION_WORDS.sub(" ", text)
+    text = re.sub(r"\s+", " ", text).lstrip(_GAME_SEPARATORS + " ")
+    # 只收掉和标题隔开的分隔符，标题自身的结尾「-」要留着。
+    text = re.sub(rf"\s+[{re.escape(_GAME_SEPARATORS)}]+$", "", text).rstrip()
+    return text or name.strip()
+
+
 def parse_folder_name(folder_name: str, file_stem: str) -> ParsedName:
     """一个目录一部电影时用目录名；目录名没有年份而文件名有，就用文件名。"""
     parsed = parse_name(folder_name)

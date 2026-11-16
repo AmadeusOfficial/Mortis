@@ -5,9 +5,20 @@ from sqlalchemy.orm import Session
 
 from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, ItemExternalId, ItemSourceRecord, Library
-from mortis.items.identity import MovieRef, find_or_create_movie, work_of
+from mortis.items.identity import (
+    ExternalRef,
+    MovieRef,
+    find_or_create_movie,
+    find_or_create_work,
+    work_of,
+)
 from mortis.organize.files import sync_media_files
-from mortis.organize.scan import scan_paths, scan_shows
+from mortis.organize.names import ParsedName
+from mortis.organize.scan import scan_folders, scan_paths, scan_shows
+from mortis.plugin_api import SourceError, SourcePlugin
+from mortis.plugins.host import open_host
+from mortis.plugins.matching import MATCH_THRESHOLD, SourceMatch, best_hit
+from mortis.scrape.apply import field_orders
 from mortis.sources.tmdb.client import TmdbAuthError, TmdbError, open_tmdb
 from mortis.sources.tmdb.search import find_best
 from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
@@ -40,6 +51,8 @@ def organize_library(
     if library is None:
         raise TaskError("媒体库不存在，可能已被删除")
     data_type = session.get(DataType, library.data_type_id)
+    if data_type is not None and data_type.plugin_id is not None:
+        return organize_plugin_library(session, library, data_type, ctx, scrape=scrape)
     is_series = data_type is not None and data_type.structure == "series"
     settings = type_config(config, library.data_type_id)
     roots = [row.path for row in library.paths]
@@ -128,6 +141,109 @@ def organize_library(
         "scrape_queued": len(followups),
     }
     return TaskResult(result=result, followups=followups)
+
+
+def _identify(
+    ctx: TaskContext, sources: list[SourcePlugin], parsed: ParsedName
+) -> SourceMatch | None:
+    """按整体来源顺序逐个搜，第一个过阈值的来源决定条目；都不过时返回最高分。"""
+    best: SourceMatch | None = None
+    for plugin in sources:
+        with open_host(ctx.services, plugin, ctx.log) as host:
+            if not plugin.enabled(host):
+                continue
+            try:
+                match = best_hit(host, plugin, list(parsed.search_titles), parsed.year)
+            except SourceError as error:
+                ctx.log(f"{plugin.name} 搜索「{parsed.title}」出错：{error.message}")
+                continue
+        if match is None:
+            continue
+        if match.score >= MATCH_THRESHOLD:
+            return match
+        if best is None or match.score > best.score:
+            best = match
+    return best
+
+
+def organize_plugin_library(
+    session: Session,
+    library: Library,
+    data_type: DataType,
+    ctx: TaskContext,
+    *,
+    scrape: bool | None,
+) -> TaskResult:
+    """插件类型按目录扫描，用来源插件识别。"""
+    services = ctx.services
+    if not data_type.is_enabled:
+        raise TaskError(f"{data_type.name} 插件没有启用，不能扫描")
+    roots = [row.path for row in library.paths]
+    ctx.log(f"扫描「{library.name}」的 {len(roots)} 个目录")
+    scanned = scan_folders(roots, skip_folders=())
+    for error in scanned.errors:
+        ctx.log(error)
+    ctx.check_cancelled()
+    report = sync_media_files(session, library, scanned.movies, main_kind="game")
+    session.commit()
+    ctx.log(f"找到 {len(scanned.movies)} 个，新增 {report.added} 个，移除 {report.removed} 个")
+
+    plugins = services.plugins.sources(data_type.id)
+    order = field_orders(session, data_type.id, [plugin.id for plugin in plugins])[""]
+    sources = sorted(plugins, key=lambda plugin: order.index(plugin.id))
+    pending = [group for group in report.groups if group.item_id is None]
+    matched = unmatched = 0
+    if not sources:
+        ctx.log(f"{data_type.name} 没有启用的来源插件，只扫描不识别")
+    for index, group in enumerate(pending if sources else [], start=1):
+        ctx.check_cancelled()
+        ctx.progress(index, len(pending), group.movie.name)
+        match = _identify(ctx, sources, group.movie.parsed)
+        if match is None or match.score < MATCH_THRESHOLD:
+            unmatched += 1
+            best = f"，最高匹配度 {match.score:.2f}（{match.hit.title}）" if match else ""
+            ctx.log(f"未识别：{group.movie.name}{best}")
+            continue
+        hit = match.hit
+        with services.locks.hold("catalog-write"):
+            item, _created = find_or_create_work(
+                session,
+                library,
+                ExternalRef(
+                    provider=match.source.provider,
+                    external_id=hit.external_id,
+                    title=hit.title,
+                    original_title=hit.original_title,
+                ),
+            )
+            for row in group.files:
+                row.item_id = item.id
+            session.commit()
+        matched += 1
+        ctx.log(
+            f"已识别：{group.movie.name} → {hit.title}（{match.source.name} {hit.external_id}），"
+            f"匹配度 {match.score:.2f}"
+        )
+
+    should_scrape = bool(library.is_auto_scrape) if scrape is None else scrape
+    followups: list[Followup] = []
+    if should_scrape:
+        ids = unscraped_work_ids(session, library.id)
+        followups = [Followup("scrape", {"item_id": item_id, "force": False}) for item_id in ids]
+        ctx.log(f"排了 {len(followups)} 个刮削任务")
+    return TaskResult(
+        result={
+            "found": len(scanned.movies),
+            "added": report.added,
+            "removed": report.removed,
+            "matched": matched,
+            "unmatched": unmatched,
+            "errors": 0,
+            "identified": bool(sources),
+            "scrape_queued": len(followups),
+        },
+        followups=followups,
+    )
 
 
 def handle_organize(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:

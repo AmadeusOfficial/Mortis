@@ -13,9 +13,17 @@ from mortis.db.models import (
     utc_now,
 )
 from mortis.items.edit import ItemError
-from mortis.items.identity import MovieRef, find_by_tmdb, find_or_create_movie
+from mortis.items.identity import (
+    ExternalRef,
+    MovieRef,
+    find_by_external,
+    find_by_tmdb,
+    find_or_create_movie,
+    find_or_create_work,
+)
 from mortis.organize.names import (
     ParsedName,
+    clean_game_name,
     parse_folder_name,
     parse_name,
     stack_key,
@@ -66,6 +74,38 @@ def rematch(session: Session, item: Item, tmdb_id: int) -> None:
     session.commit()
 
 
+def rematch_external(session: Session, item: Item, provider: str, external_id: str) -> None:
+    """插件类型认错了条目：清掉所有外部编号和快照，用选中的来源编号重新刮。"""
+    other = find_by_external(session, item.library_id, provider, external_id)
+    if other is not None and other.id != item.id:
+        raise ItemError(f"库里已经有《{other.title}》", status_code=409)
+    session.execute(delete(ItemExternalId).where(ItemExternalId.item_id == item.id))
+    session.execute(delete(ItemSourceRecord).where(ItemSourceRecord.item_id == item.id))
+    session.add(
+        ItemExternalId(item_id=item.id, provider=provider, external_id=external_id, is_primary=1)
+    )
+    item.updated_at = utc_now()
+    session.commit()
+
+
+def bind_folder(
+    session: Session, media_file: MediaFile, ref: ExternalRef, locks: KeyedLocks
+) -> Item:
+    if media_file.file_kind != "game":
+        raise ItemError("只能给游戏目录按来源匹配")
+    if media_file.item_id is not None:
+        raise ItemError("这个目录已经匹配过了", status_code=409)
+    library = session.get(Library, media_file.library_id)
+    if library is None:
+        raise ItemError("媒体库不存在，可能已被删除", status_code=404)
+    with locks.hold("catalog-write"):
+        item, _ = find_or_create_work(session, library, ref)
+        media_file.item_id = item.id
+        media_file.updated_at = utc_now()
+        session.commit()
+    return item
+
+
 def _same_path(left: str, right: str) -> bool:
     return os.path.normcase(os.path.normpath(left)) == os.path.normcase(os.path.normpath(right))
 
@@ -95,7 +135,10 @@ def _in_folder(path: str, folder: str) -> bool:
     return os.path.normcase(path).startswith(os.path.normcase(folder) + os.sep)
 
 
-def guess(library: Library, path: str, *, series: bool = False) -> ParsedName:
+def guess(library: Library, path: str, *, series: bool = False, folder: bool = False) -> ParsedName:
+    if folder:
+        title = clean_game_name(os.path.basename(path))
+        return ParsedName(title=title, year=None, search_titles=(title,))
     if series:
         folder = show_folder(library, path)
         return parse_name(os.path.basename(folder) if folder else _stem(path))

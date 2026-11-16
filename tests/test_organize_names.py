@@ -1,6 +1,7 @@
 import pytest
 
 from mortis.organize.names import (
+    clean_game_name,
     parse_folder_name,
     parse_name,
     stack_key,
@@ -100,3 +101,21 @@ def test_folder_name_falls_back_to_file_year() -> None:
     assert parse_folder_name("盗梦空间", "Inception.2010.cd1").title == "Inception"
     assert parse_folder_name("Heat (1995)", "heat").year == 1995
     assert parse_folder_name("热火", "heat").title == "热火"
+
+
+@pytest.mark.parametrize(
+    ("name", "title"),
+    [
+        ("[KOMMIT] 游戏名 v1.02 汉化硬盘版", "游戏名"),
+        ("Dies irae ～Amantes amentes～", "Dies irae ～Amantes amentes～"),
+        ("【汉化】サクラノ詩 -櫻の森の上を舞う- 完整版", "サクラノ詩 -櫻の森の上を舞う-"),
+        ("[180126][ゆずソフト] 千恋＊万花 Ver.1.10", "千恋＊万花"),
+        ("(18禁) 白 2 汉化版", "白 2"),
+        ("CLANNAD ver1.10 简体中文", "CLANNAD"),
+        ("Fate/stay night [Realta Nua] 免安装", "Fate/stay night"),
+        ("初回限定版 俺の彼女", "俺の彼女"),
+        ("[汉化组]", "[汉化组]"),
+    ],
+)
+def test_clean_game_name(name: str, title: str) -> None:
+    assert clean_game_name(name) == title

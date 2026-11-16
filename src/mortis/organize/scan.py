@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from mortis.organize.names import (
     ParsedName,
+    clean_game_name,
     parse_folder_name,
     parse_name,
     stack_key,
@@ -246,4 +247,25 @@ def scan_shows(
                 walk.result.movies.append(
                     FoundMovie(entry.path, entry.name, parse_name(entry.name), videos, subtitles)
                 )
+    return walk.result
+
+
+def scan_folders(roots: Iterable[str], *, skip_folders: Iterable[str]) -> ScanResult:
+    """库目录下每个子目录是一款游戏，不往下钻。"""
+    # 游戏目录不按扩展名找文件，只借用 _new_walk 的跳过目录集合。
+    walk = _new_walk((), (), skip_folders)
+    for root in roots:
+        listed = _list(root, walk) if os.path.isdir(root) else None
+        if listed is None:
+            if not os.path.isdir(root):
+                walk.result.errors.append(f"目录不存在或无法访问：{root}")
+            continue
+        dirs, _files = listed
+        for entry in dirs:
+            lowered = entry.name.casefold()
+            if lowered in walk.skip or entry.name.startswith((".", "$")):
+                continue
+            title = clean_game_name(entry.name)
+            parsed = ParsedName(title=title, year=None, search_titles=(title,))
+            walk.result.movies.append(FoundMovie(entry.path, entry.name, parsed, [entry.path], []))
     return walk.result
