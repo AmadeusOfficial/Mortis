@@ -25,6 +25,7 @@ from mortis.scrape.common import (
     missing_photos,
     save_external_ids,
     save_snapshot,
+    source_outcome,
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
@@ -84,11 +85,13 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         work_skip = image_skip(work_fields, set(), WORK_IMAGES, config.images)
 
     # 请求和下载不持锁；写库时再进锁，按当时的锁定集合选值。
+    sources: list[dict[str, Any]] = []
     with open_tmdb(services) as tmdb:
         fetched = raw is None
         if raw is None:
             ctx.log(f"请求 TMDB 电影 {tmdb_id}")
             raw = fetch_movie(tmdb, tmdb_id, config)
+        sources.append(source_outcome("tmdb", "TMDB 电影", "ok" if fetched else "cached"))
         ctx.check_cancelled()
         candidates = movie_candidates(raw, config)
         urls = image_urls(work_fields, {SOURCE: candidates}, work_skip)
@@ -112,6 +115,13 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
             urls += image_urls(collection_fields, {SOURCE: collection_values}, collection_skip)
             collection = _Collection(
                 collection_id, collection_raw, collection_fetched, collection_values
+            )
+            sources.append(
+                source_outcome(
+                    "tmdb_collection",
+                    "TMDB 系列",
+                    "ok" if collection_fetched else "cached",
+                )
             )
         files = download_images(store, tmdb.http, urls, ctx)
 
@@ -178,7 +188,13 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         title = item.title
 
     ctx.log(f"刮削完成：{title}，下载图片 {len(files)} 张")
-    return {"item_id": item_id, "title": title, "fetched": fetched, "images": len(files)}
+    return {
+        "item_id": item_id,
+        "title": title,
+        "fetched": fetched,
+        "images": len(files),
+        "sources": sources,
+    }
 
 
 def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:

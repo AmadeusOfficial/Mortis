@@ -71,6 +71,20 @@ def _scrape(app: FastAPI, item_id: int, force: bool = False) -> Task:
         return task
 
 
+def test_scrape_records_each_source(app: FastAPI, item_id: int) -> None:
+    first = _scrape(app, item_id)
+    assert first.status == "succeeded", first.error
+    assert json.loads(first.result or "{}")["sources"] == [
+        {"id": "tmdb", "name": "TMDB 电影", "outcome": "ok", "detail": None},
+        {"id": "tmdb_collection", "name": "TMDB 系列", "outcome": "ok", "detail": None},
+    ]
+    second = _scrape(app, item_id)
+    assert [(s["id"], s["outcome"]) for s in json.loads(second.result or "{}")["sources"]] == [
+        ("tmdb", "cached"),
+        ("tmdb_collection", "cached"),
+    ]
+
+
 def test_scrape_writes_movie_collection_and_images(app: FastAPI, item_id: int) -> None:
     task = _scrape(app, item_id)
     assert task.status == "succeeded", task.error

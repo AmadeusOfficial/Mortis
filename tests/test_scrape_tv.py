@@ -179,6 +179,23 @@ def test_scrape_builds_seasons_episodes_and_binds_files(
         ).all() == ["thumb"]
 
 
+def test_result_records_tmdb_and_seasons(app: FastAPI, show_id: int) -> None:
+    first = _scrape(app, show_id)
+    assert json.loads(first.result or "{}")["sources"] == [
+        {"id": "tmdb", "name": "TMDB 剧集", "outcome": "ok", "detail": None},
+        {"id": "tmdb_season_1", "name": "TMDB 第 1 季", "outcome": "ok", "detail": None},
+        {"id": "tmdb_season_2", "name": "TMDB 第 2 季", "outcome": "ok", "detail": None},
+        {"id": "tmdb_season_3", "name": "TMDB 第 3 季", "outcome": "ok", "detail": None},
+    ]
+    second = _scrape(app, show_id)
+    assert [(s["id"], s["outcome"]) for s in json.loads(second.result or "{}")["sources"]] == [
+        ("tmdb", "cached"),
+        ("tmdb_season_1", "cached"),
+        ("tmdb_season_2", "cached"),
+        ("tmdb_season_3", "cached"),
+    ]
+
+
 def test_snapshots_are_reused_and_rescan_keeps_bindings(
     app: FastAPI, show_id: int, fake: FakeTmdb
 ) -> None:

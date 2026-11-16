@@ -11,7 +11,13 @@ from mortis.plugin_api import SourceError, SourcePlugin
 from mortis.plugins.host import open_host
 from mortis.plugins.matching import MATCH_THRESHOLD, best_hit
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
-from mortis.scrape.common import download_images, missing_photos, save_external_ids, save_snapshot
+from mortis.scrape.common import (
+    download_images,
+    missing_photos,
+    save_external_ids,
+    save_snapshot,
+    source_outcome,
+)
 from mortis.scrape.images import ImageStore
 from mortis.tasks.base import TaskContext, TaskError
 
@@ -21,6 +27,10 @@ class _Gathered:
     candidates: dict[str, dict[str, Any]] = field(default_factory=dict)
     fetched: dict[str, dict[str, Any]] = field(default_factory=dict)
     found_ids: dict[str, str] = field(default_factory=dict)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+
+    def record(self, source_id: str, name: str, outcome: str, detail: str | None = None) -> None:
+        self.sources.append(source_outcome(source_id, name, outcome, detail))
 
 
 def _year(date: str | None) -> int | None:
@@ -52,10 +62,14 @@ def _gather(
         ctx.check_cancelled()
         with open_host(ctx.services, plugin, ctx.log) as host:
             if not plugin.enabled(host):
-                ctx.log(f"{plugin.name} 没有启用（缺少设置或密钥），跳过")
+                message = f"{plugin.name} 没有启用（缺少设置或密钥），跳过"
+                ctx.log(message)
+                detail = plugin.disabled_reason(host) or message
+                gathered.record(plugin.id, plugin.name, "skipped", detail)
                 continue
+            raw = snapshots.get(plugin.id)
+            used_snapshot = raw is not None
             try:
-                raw = snapshots.get(plugin.id)
                 if raw is None:
                     external_id = ids.get(plugin.provider)
                     if external_id is None:
@@ -66,7 +80,9 @@ def _gather(
                                 if match
                                 else ""
                             )
-                            ctx.log(f"{plugin.name} 上没找到「{titles[0]}」{best}")
+                            message = f"{plugin.name} 上没找到「{titles[0]}」{best}"
+                            ctx.log(message)
+                            gathered.record(plugin.id, plugin.name, "not_found", message)
                             continue
                         external_id = match.hit.external_id
                         gathered.found_ids[plugin.provider] = external_id
@@ -78,11 +94,16 @@ def _gather(
                     gathered.fetched[plugin.id] = raw
                 values = plugin.candidates(raw)
             except SourceError as error:
-                ctx.log(f"{plugin.name} 出错，跳过：{error.message}")
+                message = f"{plugin.name} 出错，跳过：{error.message}"
+                ctx.log(message)
+                gathered.record(plugin.id, plugin.name, "failed", message)
                 continue
             except Exception as error:  # 插件代码的缺陷不能拖垮整个刮削
-                ctx.log(f"{plugin.name} 插件出错，跳过：{type(error).__name__}: {error}")
+                message = f"{plugin.name} 插件出错，跳过：{type(error).__name__}: {error}"
+                ctx.log(message)
+                gathered.record(plugin.id, plugin.name, "failed", message)
                 continue
+            gathered.record(plugin.id, plugin.name, "cached" if used_snapshot else "ok")
         gathered.candidates[plugin.id] = _tag_people(values, people_keys, plugin.provider)
     return gathered
 
@@ -154,4 +175,5 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         "title": title,
         "fetched": sorted(gathered.fetched),
         "images": len(files),
+        "sources": gathered.sources,
     }

@@ -22,6 +22,7 @@ from mortis.scrape.common import (
     missing_photos,
     save_external_ids,
     save_snapshot,
+    source_outcome,
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
@@ -250,11 +251,13 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         season_fields = level_fields(session, data_type_id, "season")
         episode_fields = level_fields(session, data_type_id, "episode")
 
+    sources: list[dict[str, Any]] = []
     with open_tmdb(services) as tmdb:
         show_fetched = show_raw is None
         if show_raw is None:
             ctx.log(f"请求 TMDB 剧 {tmdb_id}")
             show_raw = fetch_show(tmdb, tmdb_id, config)
+        sources.append(source_outcome("tmdb", "TMDB 剧集", "ok" if show_fetched else "cached"))
         local = _resolve(parsed_local, show_raw)
         local_seasons = {season for season, _ in local.values()}
         local_episodes = {(season, n) for season, numbers in local.values() for n in numbers}
@@ -274,6 +277,13 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
             if raw is None:
                 ctx.log(f"请求 TMDB 第 {number} 季")
                 raw = fetch_season(tmdb, tmdb_id, number, config, show_raw.get("original_language"))
+            sources.append(
+                source_outcome(
+                    f"tmdb_season_{number}",
+                    f"TMDB 第 {number} 季",
+                    "ok" if fetched else "cached",
+                )
+            )
             season = _Season(number, raw, fetched, season_candidates(raw, config))
             originals = raw.get("original_names") or {}
             for episode in raw.get("episodes") or []:
@@ -370,6 +380,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         "seasons": len(seasons),
         "episodes": episode_count,
         "images": len(files),
+        "sources": sources,
     }
 
 

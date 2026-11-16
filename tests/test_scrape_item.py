@@ -24,6 +24,7 @@ from mortis.db.models import (
 from mortis.scrape.images import ImageStore
 from mortis.settings import Settings
 from mortis.tasks import repo
+from mortis.tasks.logs import task_log_path
 
 DATA_TYPE = """
 from mortis.plugin_api import DataTypePlugin, DataTypeSpec, FieldSpec
@@ -74,6 +75,43 @@ class Source(SourcePlugin):
 
     def candidates(self, raw):
         return raw["values"]
+
+
+PLUGIN = Source()
+"""
+
+DISABLED_SOURCE = """
+from pydantic import BaseModel
+
+from mortis.plugin_api import SourcePlugin
+
+
+class Secrets(BaseModel):
+    api_key: str = ""
+
+
+class Source(SourcePlugin):
+    id = "{id}"
+    name = "{name}"
+    data_type = "doujin"
+    provider = "{id}"
+    Secrets = Secrets
+    requests_per_second = 0
+
+    def enabled(self, host):
+        return bool(host.secrets.api_key)
+
+    def disabled_reason(self, host):
+        return None if self.enabled(host) else "没填 {name} 的 api_key"
+
+    def search(self, host, title):
+        raise AssertionError("没启用的来源不该搜索")
+
+    def fetch(self, host, external_id):
+        raise AssertionError("没启用的来源不该请求")
+
+    def candidates(self, raw):
+        return {{}}
 
 
 PLUGIN = Source()
@@ -310,3 +348,53 @@ def test_disabled_data_type_cannot_scrape(app: FastAPI, item_id: int) -> None:
         session.commit()
     task = _scrape(app, item_id)
     assert task.status == "failed" and "没有启用" in (task.error or "")
+
+
+def _add_disabled_source(app: FastAPI) -> None:
+    """再加一个没填密钥的来源，排在 alpha、beta 之后。"""
+    plugins = app.state.settings.plugins_dir
+    assert plugins is not None
+    _write(plugins, "gamma", "source", DISABLED_SOURCE.format(id="gamma", name="Gamma"))
+    app.state.services.plugins.load()
+    with app.state.session_factory() as session:
+        app.state.services.plugins.sync_catalog(session)
+        session.commit()
+
+
+def _sources(task: Task) -> list[dict]:
+    assert task.status == "succeeded", task.error
+    return json.loads(task.result or "{}")["sources"]
+
+
+def test_result_records_ok_cached_and_skipped(app: FastAPI, item_id: int) -> None:
+    _add_disabled_source(app)
+    assert _sources(_scrape(app, item_id)) == [
+        {"id": "alpha", "name": "Alpha", "outcome": "ok", "detail": None},
+        {"id": "beta", "name": "Beta", "outcome": "ok", "detail": None},
+        {"id": "gamma", "name": "Gamma", "outcome": "skipped", "detail": "没填 Gamma 的 api_key"},
+    ]
+    assert [(s["id"], s["outcome"]) for s in _sources(_scrape(app, item_id))] == [
+        ("alpha", "cached"),
+        ("beta", "cached"),
+        ("gamma", "skipped"),
+    ]
+
+
+def test_result_records_not_found_and_failed(app: FastAPI, item_id: int, sites: FakeSites) -> None:
+    with app.state.session_factory() as session:
+        session.query(ItemExternalId).filter_by(item_id=item_id, provider="beta").delete()
+        session.commit()
+    sites.hits["beta"] = [{"external_id": "b2", "title": "完全不同的游戏"}]
+    task = _scrape(app, item_id, force=True)
+    missed = _sources(task)[1]
+    assert (missed["id"], missed["outcome"]) == ("beta", "not_found")
+    assert "星之梦" in missed["detail"] and "完全不同的游戏" in missed["detail"]
+    assert "最高匹配度" in missed["detail"]
+    # detail 和日志是同一句话
+    log = task_log_path(app.state.settings.data_dir, task.id)
+    assert any(missed["detail"] in line for line in log.read_text(encoding="utf-8").splitlines())
+
+    sites.broken.add("beta")
+    failed = _sources(_scrape(app, item_id, force=True))[1]
+    assert (failed["id"], failed["outcome"]) == ("beta", "failed")
+    assert failed["detail"] == "Beta 出错，跳过：Beta 返回 HTTP 500"

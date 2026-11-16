@@ -21,6 +21,13 @@ from mortis.tasks.base import TaskContext
 SOURCE = "tmdb"
 
 
+def source_outcome(
+    source_id: str, name: str, outcome: str, detail: str | None = None
+) -> dict[str, Any]:
+    """刮削结果里的一条来源记录。outcome 是 ok、cached、not_found、failed 或 skipped。"""
+    return {"id": source_id, "name": name, "outcome": outcome, "detail": detail}
+
+
 def image_skip(
     fields: list[TypeField], locked: set[str], toggles: dict[str, str], images: Any
 ) -> set[str]:
