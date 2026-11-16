@@ -66,7 +66,7 @@ export function LibraryActions({ library }: { library: Library }) {
     void queryClient.invalidateQueries({ queryKey: ["wall", library.id] });
     void queryClient.invalidateQueries({ queryKey: ["unmatched"] });
     void queryClient.invalidateQueries({ queryKey: ["library-arrange-preview", library.id] });
-    const failed = task.child_status.failed ?? 0;
+    const failed = task.tree_status.failed ?? 0;
     notifications.show({
       color: task.status === "succeeded" && failed === 0 ? "green" : "red",
       title: `「${library.name}」${DONE_LABELS[task.task_type] ?? task.type_label}结束`,

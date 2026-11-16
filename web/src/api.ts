@@ -321,14 +321,27 @@ export interface TaskRow {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  // 直接子任务的个数和状态。
   child_count: number;
   child_status: Partial<Record<TaskStatus, number>>;
+  // 根任务是整棵子孙的统计，子任务等于自己的 child_status。
+  tree_status: Partial<Record<TaskStatus, number>>;
+  priority: number;
+  parent_task_id: number | null;
+  root_task_id: number | null;
   progress: TaskProgress | null;
+}
+
+export interface TaskItemRef {
+  id: number;
+  title: string;
 }
 
 export interface TaskDetail extends TaskRow {
   payload: Record<string, unknown>;
   result: Record<string, unknown> | null;
+  // 结果或参数指向的条目；条目已删除时为 null。
+  item: TaskItemRef | null;
 }
 
 export interface TaskPage {
@@ -337,6 +350,7 @@ export interface TaskPage {
 }
 
 export type TaskAction = "cancel" | "retry" | "delete";
+export type BulkAction = "cancel_active" | "retry_failed" | "clear_succeeded" | "clear_failed";
 
 export type WallSort = "title" | "release_date" | "created_at";
 export type SortOrder = "asc" | "desc";
@@ -500,8 +514,11 @@ export const fetchTaskLog = (id: number) =>
   request<{ lines: string[] }>("GET", `/api/tasks/${id}/log?limit=500`);
 export const batchTasks = (action: TaskAction, taskIds: number[]) =>
   request<{ affected: number }>("POST", "/api/tasks/batch", { action, task_ids: taskIds });
-export const clearFinishedTasks = () =>
-  request<{ affected: number }>("POST", "/api/tasks/clear-finished");
+export const fetchWorker = () => request<{ paused: boolean }>("GET", "/api/tasks/worker");
+export const setWorkerPaused = (paused: boolean) =>
+  request<{ paused: boolean }>("PUT", "/api/tasks/worker", { paused });
+export const bulkTasks = (action: BulkAction) =>
+  request<{ affected: number }>("POST", "/api/tasks/bulk", { action });
 
 export interface UnmatchedFile {
   id: number;
@@ -603,6 +620,6 @@ export const searchTmdbMovies = (query: string, year: number | null, kind: Searc
 };
 
 export function isTaskBusy(task: TaskRow): boolean {
-  const children = (task.child_status.queued ?? 0) + (task.child_status.running ?? 0);
+  const children = (task.tree_status.queued ?? 0) + (task.tree_status.running ?? 0);
   return task.status === "queued" || task.status === "running" || children > 0;
 }
