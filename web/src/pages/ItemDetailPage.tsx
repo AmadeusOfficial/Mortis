@@ -14,7 +14,6 @@ import {
   Table,
   Text,
   Title,
-  Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -183,44 +182,38 @@ export function ItemDetailPage() {
         {detail.kind === "work" && (
           <Group gap="md">
             <Group gap="xs">
-              <Tooltip label="从 TMDB 重新拿资料，锁定的字段不动；按设置刮完会自动整理">
-                <Button
-                  loading={busy && !arranging}
-                  disabled={busy}
-                  onClick={() => scrape.mutate()}
-                >
-                  刮削
-                </Button>
-              </Tooltip>
-              <Tooltip label="认错了电影时用，搜一部对的换上去再刮削">
-                <Button
-                  variant="default"
-                  disabled={busy}
-                  onClick={() => {
-                    rematch.reset();
-                    setRematching(true);
-                  }}
-                >
-                  换一部匹配
-                </Button>
-              </Tooltip>
+              <Button
+                loading={busy && !arranging}
+                disabled={busy}
+                onClick={() => scrape.mutate()}
+              >
+                刮削
+              </Button>
+              <Button
+                variant="default"
+                disabled={busy}
+                onClick={() => {
+                  rematch.reset();
+                  setRematching(true);
+                }}
+              >
+                重新匹配
+              </Button>
             </Group>
             {canArrange && (
               <>
                 <Divider orientation="vertical" />
-                <Tooltip label="按设置改名，并把 NFO 和图片写到视频旁边，让 Emby、Plex 直接读到">
-                  <Button
-                    variant="default"
-                    loading={arranging}
-                    disabled={busy}
-                    onClick={() => {
-                      arrange.reset();
-                      setPreviewing(true);
-                    }}
-                  >
-                    整理
-                  </Button>
-                </Tooltip>
+                <Button
+                  variant="default"
+                  loading={arranging}
+                  disabled={busy}
+                  onClick={() => {
+                    arrange.reset();
+                    setPreviewing(true);
+                  }}
+                >
+                  整理
+                </Button>
               </>
             )}
           </Group>
@@ -354,7 +347,7 @@ export function ItemDetailPage() {
       )}
       {rematching && (
         <TmdbSearchModal
-          title="换一部匹配"
+          title="重新匹配"
           initialQuery={detail.title}
           initialYear={detail.year}
           picking={rematch.isPending}

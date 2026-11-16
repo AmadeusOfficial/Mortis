@@ -1,4 +1,4 @@
-import { Button, Divider, Group, Tooltip } from "@mantine/core";
+import { Button, Divider, Group } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -111,42 +111,36 @@ export function LibraryActions({ library }: { library: Library }) {
   return (
     <>
       <Group gap="xs" wrap="wrap">
-        <Tooltip label="找出新加的视频文件，认出是哪部电影">
-          <Button
-            size="xs"
-            loading={running === "organize"}
-            disabled={running !== null}
-            onClick={() => start.mutate("organize")}
-          >
-            扫描
-          </Button>
-        </Tooltip>
-        <Tooltip label="给还没刮削过的电影从 TMDB 拿资料">
-          <Button
-            size="xs"
-            variant="light"
-            loading={running === "scrape"}
-            disabled={running !== null}
-            onClick={() => start.mutate("scrape")}
-          >
-            刮削未刮削的
-          </Button>
-        </Tooltip>
+        <Button
+          size="xs"
+          loading={running === "organize"}
+          disabled={running !== null}
+          onClick={() => start.mutate("organize")}
+        >
+          扫描
+        </Button>
+        <Button
+          size="xs"
+          variant="light"
+          loading={running === "scrape"}
+          disabled={running !== null}
+          onClick={() => start.mutate("scrape")}
+        >
+          刮削未刮削的
+        </Button>
         <Divider orientation="vertical" />
-        <Tooltip label="把刮削过的电影按设置改名，并写出 NFO 和图片">
-          <Button
-            size="xs"
-            variant="light"
-            loading={running === "arrange"}
-            disabled={running !== null}
-            onClick={() => {
-              start.reset();
-              setPreviewing(true);
-            }}
-          >
-            整理整库
-          </Button>
-        </Tooltip>
+        <Button
+          size="xs"
+          variant="light"
+          loading={running === "arrange"}
+          disabled={running !== null}
+          onClick={() => {
+            start.reset();
+            setPreviewing(true);
+          }}
+        >
+          整理整库
+        </Button>
       </Group>
       <ArrangePreviewModal
         opened={previewing}
