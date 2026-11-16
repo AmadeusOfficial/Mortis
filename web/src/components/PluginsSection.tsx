@@ -1,11 +1,16 @@
 import {
   Alert,
+  Anchor,
+  Avatar,
   Badge,
   Button,
+  CopyButton,
   Group,
+  Modal,
   NumberInput,
   Paper,
   PasswordInput,
+  Radio,
   Stack,
   Switch,
   Text,
@@ -21,6 +26,7 @@ import {
   type JsonSchemaProperty,
   type PluginInfo,
   fetchDataTypes,
+  fetchPluginAccount,
   fetchPlugins,
   logoutPlugin,
   pluginLoginUrl,
@@ -74,12 +80,18 @@ function initialValue(property: JsonSchemaProperty, saved: unknown): unknown {
   return property.type === "integer" || property.type === "number" ? 0 : "";
 }
 
+export interface LoginResult {
+  pluginId: string;
+  ok: boolean;
+  reason: string | null;
+}
+
 export function PluginsSection({
-  loginPluginId,
+  loginResult,
   onLoginHandled,
 }: {
-  // 后端登录成功后跳回 /settings?plugin=<id>&login=ok，这里只负责提示一次。
-  loginPluginId: string | null;
+  // 授权页跳回设置页后的结果，这里只负责提示一次。
+  loginResult: LoginResult | null;
   onLoginHandled: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -120,16 +132,22 @@ export function PluginsSection({
   });
 
   useEffect(() => {
-    if (loginPluginId === null || loginHandled.current || plugins.data === undefined) {
+    if (loginResult === null || loginHandled.current || plugins.data === undefined) {
       return;
     }
     loginHandled.current = true;
-    const plugin = plugins.data.find((item) => item.id === loginPluginId);
+    const name =
+      plugins.data.find((item) => item.id === loginResult.pluginId)?.name ?? loginResult.pluginId;
     anchor.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    notifications.show({ color: "green", message: `${plugin?.name ?? loginPluginId} 登录成功` });
+    notifications.show(
+      loginResult.ok
+        ? { color: "green", message: `${name} 登录成功` }
+        : { color: "red", title: `${name} 没有登录`, message: loginResult.reason ?? "授权没有完成" },
+    );
     void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+    void queryClient.invalidateQueries({ queryKey: ["plugin-account", loginResult.pluginId] });
     onLoginHandled();
-  }, [loginPluginId, plugins.data, queryClient, onLoginHandled]);
+  }, [loginResult, plugins.data, queryClient, onLoginHandled]);
 
   const typeName = (id: string | null): string => {
     if (id === null) {
@@ -227,8 +245,11 @@ function PluginCard({
         {plugin.kind === "source" && (
           <>
             <PluginSettingsForm plugin={plugin} onChanged={onChanged} />
-            <PluginSecretsForm plugin={plugin} onChanged={onChanged} />
-            {plugin.oauth && <PluginOAuth plugin={plugin} onChanged={onChanged} />}
+            {plugin.oauth ? (
+              <PluginLogin plugin={plugin} onChanged={onChanged} />
+            ) : (
+              <PluginSecretsForm plugin={plugin} onChanged={onChanged} />
+            )}
           </>
         )}
       </Stack>
@@ -385,54 +406,247 @@ function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChange
   );
 }
 
-function PluginOAuth({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
+type LoginMode = "oauth" | "token";
+
+// 需要登录的来源：顶部是账号状态，登录时选 OAuth 快捷登录或手填访问令牌。
+function PluginLogin({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
+  const queryClient = useQueryClient();
+  const [choosing, setChoosing] = useState(false);
+  const account = useQuery({
+    queryKey: ["plugin-account", plugin.id],
+    queryFn: () => fetchPluginAccount(plugin.id),
+    enabled: plugin.logged_in,
+    retry: false,
+  });
   const logout = useMutation({
     mutationFn: () => logoutPlugin(plugin.id),
     onSuccess: (saved) => {
+      queryClient.removeQueries({ queryKey: ["plugin-account", plugin.id] });
       onChanged();
       notifications.show({ color: "green", message: `已退出 ${saved.name}` });
     },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
   });
-  const canLogin = plugin.secrets?.app_id === true && plugin.secrets?.app_secret === true;
-  const redirect = `${window.location.origin}/api/plugins/${plugin.id}/oauth/callback`;
-  const status = plugin.logged_in ? "已登录" : "未登录";
-  const expiry =
-    plugin.expires_at !== null ? `，到期时间 ${formatExpiry(plugin.expires_at)}` : "";
+  const who = account.data?.account ?? null;
+  const detail = !plugin.logged_in
+    ? `还没登录 ${plugin.name} 账号`
+    : plugin.expires_at !== null
+      ? `令牌到期 ${formatExpiry(plugin.expires_at)}，到期前自动续期`
+      : "使用手填的访问令牌";
 
   return (
-    <Stack gap={6}>
-      <Text size="sm" fw={500}>
-        登录
-      </Text>
-      <Text size="sm">
-        {status}
-        {expiry}
-      </Text>
-      <Group>
-        {canLogin ? (
-          // 登录要整页跳到授权页，不能用 fetch。
-          <Button component="a" href={pluginLoginUrl(plugin.id)}>
+    <Paper withBorder p="sm" bg="gray.0">
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap="sm" wrap="nowrap">
+          <Avatar src={who?.avatar_url ?? null} radius="xl" size="lg" alt={who?.name ?? ""} />
+          <Stack gap={2}>
+            <Text size="sm" fw={500}>
+              账号状态
+            </Text>
+            {who !== null &&
+              (who.url !== null ? (
+                <Anchor href={who.url} target="_blank" rel="noreferrer" size="sm">
+                  {who.name}
+                </Anchor>
+              ) : (
+                <Text size="sm">{who.name}</Text>
+              ))}
+            {plugin.logged_in && account.isFetching && who === null && (
+              <Text size="sm" c="dimmed">
+                正在读取账号…
+              </Text>
+            )}
+            {account.data?.error != null && (
+              <Text size="sm" c="red">
+                {account.data.error}
+              </Text>
+            )}
+            <Text size="xs" c="dimmed">
+              {detail}
+            </Text>
+          </Stack>
+        </Group>
+        <Group gap="xs" wrap="nowrap">
+          <Button
+            variant={plugin.logged_in ? "default" : "filled"}
+            onClick={() => setChoosing(true)}
+          >
+            {plugin.logged_in ? "重新登录" : "登录"}
+          </Button>
+          {plugin.logged_in && (
+            <Button
+              variant="subtle"
+              color="red"
+              loading={logout.isPending}
+              onClick={() => logout.mutate()}
+            >
+              退出登录
+            </Button>
+          )}
+        </Group>
+      </Group>
+      {choosing && (
+        <LoginModal plugin={plugin} onChanged={onChanged} onClose={() => setChoosing(false)} />
+      )}
+    </Paper>
+  );
+}
+
+function LoginModal({
+  plugin,
+  onChanged,
+  onClose,
+}: {
+  plugin: PluginInfo;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [idKey, secretKey] = plugin.oauth_client_keys;
+  const hasApp = plugin.secrets?.[idKey] === true && plugin.secrets?.[secretKey] === true;
+  const canPaste = plugin.oauth_token_page_url !== "";
+  const [mode, setMode] = useState<LoginMode>("oauth");
+  const [editingApp, setEditingApp] = useState(!hasApp);
+  const [appId, setAppId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+  const [token, setToken] = useState("");
+  const callback = `${window.location.origin}/api/plugins/${plugin.id}/oauth/callback`;
+
+  const oauth = useMutation({
+    mutationFn: async () => {
+      if (editingApp) {
+        await updatePlugin(plugin.id, {
+          secrets: { [idKey]: appId.trim(), [secretKey]: appSecret.trim() },
+        });
+      }
+    },
+    // 授权要整页跳到来源的授权页，登录完由后端跳回设置页。
+    onSuccess: () => window.location.assign(pluginLoginUrl(plugin.id)),
+  });
+  const paste = useMutation({
+    mutationFn: async () => {
+      await updatePlugin(plugin.id, { secrets: { access_token: token.trim() } });
+      const result = await fetchPluginAccount(plugin.id);
+      if (result.error !== null) {
+        await logoutPlugin(plugin.id);
+        throw new Error(result.error);
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(["plugin-account", plugin.id], result);
+      onChanged();
+      onClose();
+      notifications.show({
+        color: "green",
+        message: `${plugin.name} 登录成功${result.account !== null ? `：${result.account.name}` : ""}`,
+      });
+    },
+    onError: () => onChanged(),
+  });
+  const appReady = !editingApp || (appId.trim() !== "" && appSecret.trim() !== "");
+  const busy = oauth.isPending || paste.isPending;
+
+  return (
+    <Modal opened onClose={onClose} title="选择登录方式">
+      <Stack>
+        <Radio.Group value={mode} onChange={(value) => setMode(value as LoginMode)}>
+          <Stack gap="xs">
+            <Radio value="oauth" label="OAuth 快捷登录" />
+            {canPaste && <Radio value="token" label="AccessToken 登录" />}
+          </Stack>
+        </Radio.Group>
+        {mode === "oauth" && !editingApp && (
+          <Stack gap={4}>
+            <Text size="sm">
+              将跳到 {plugin.name} 的授权页，登录并同意授权后自动回到这里。
+            </Text>
+            <Group gap={4}>
+              <Text size="xs" c="dimmed">
+                已保存 OAuth 应用。
+              </Text>
+              <Anchor component="button" type="button" size="xs" onClick={() => setEditingApp(true)}>
+                更换应用
+              </Anchor>
+            </Group>
+          </Stack>
+        )}
+        {mode === "oauth" && editingApp && (
+          <Stack gap="xs">
+            <Text size="sm">
+              第一次使用要建一个自己的 OAuth 应用（只需一次）：
+              {plugin.oauth_register_url !== "" ? (
+                <Anchor href={plugin.oauth_register_url} target="_blank" rel="noreferrer">
+                  {" "}
+                  打开应用管理页
+                </Anchor>
+              ) : null}
+              ，新建应用，回调地址填下面这个，然后把 App ID 和 App Secret 填进来。
+            </Text>
+            <Group gap="xs" wrap="nowrap">
+              <TextInput value={callback} readOnly style={{ flex: 1 }} aria-label="回调地址" />
+              <CopyButton value={callback}>
+                {({ copied, copy }) => (
+                  <Button variant="default" onClick={copy}>
+                    {copied ? "已复制" : "复制"}
+                  </Button>
+                )}
+              </CopyButton>
+            </Group>
+            <TextInput
+              label="App ID"
+              value={appId}
+              onChange={(event) => setAppId(event.currentTarget.value)}
+            />
+            <PasswordInput
+              label="App Secret"
+              autoComplete="new-password"
+              value={appSecret}
+              onChange={(event) => setAppSecret(event.currentTarget.value)}
+            />
+            {hasApp && (
+              <Anchor component="button" type="button" size="xs" onClick={() => setEditingApp(false)}>
+                不换了，用已保存的应用
+              </Anchor>
+            )}
+          </Stack>
+        )}
+        {mode === "token" && (
+          <Stack gap="xs">
+            <Text size="sm">
+              在
+              <Anchor href={plugin.oauth_token_page_url} target="_blank" rel="noreferrer">
+                {" "}
+                令牌页{" "}
+              </Anchor>
+              生成一个访问令牌，粘贴到这里。手填的令牌不会自动续期，过期后要重新填。
+            </Text>
+            <PasswordInput
+              label="访问令牌"
+              autoComplete="new-password"
+              value={token}
+              onChange={(event) => setToken(event.currentTarget.value)}
+            />
+          </Stack>
+        )}
+        {(oauth.isError || paste.isError) && (
+          <Alert color="red" title="没有登录">
+            {(oauth.error ?? paste.error)?.message}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button
+            loading={busy}
+            disabled={mode === "oauth" ? !appReady : token.trim() === ""}
+            onClick={() => (mode === "oauth" ? oauth.mutate() : paste.mutate())}
+          >
             登录
           </Button>
-        ) : (
-          <Button disabled>登录</Button>
-        )}
-        {plugin.logged_in && (
-          <Button variant="default" loading={logout.isPending} onClick={() => logout.mutate()}>
-            退出登录
-          </Button>
-        )}
-      </Group>
-      {!canLogin && (
-        <Text size="xs" c="dimmed">
-          先填 App ID 和 App Secret；回调地址填 {redirect}
-        </Text>
-      )}
-      {logout.isError && (
-        <Text size="sm" c="red">
-          {logout.error.message}
-        </Text>
-      )}
-    </Stack>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

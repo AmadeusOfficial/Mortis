@@ -217,10 +217,19 @@ export interface PluginInfo {
   // 每个密钥是否已填，不含原文。
   secrets: Record<string, boolean> | null;
   oauth: boolean;
+  // OAuth 应用的 App ID、App Secret 所在的密钥键。
+  oauth_client_keys: string[];
+  oauth_register_url: string;
+  oauth_token_page_url: string;
   logged_in: boolean;
   // Unix 秒
   expires_at: number | null;
   notice: string | null;
+}
+
+export interface PluginAccount {
+  account: { name: string; avatar_url: string | null; url: string | null } | null;
+  error: string | null;
 }
 
 export interface PluginUpdate {
@@ -534,6 +543,8 @@ export const fetchPlugins = () => request<PluginInfo[]>("GET", "/api/plugins");
 export const reloadPlugins = () => request<PluginInfo[]>("POST", "/api/plugins/reload");
 export const updatePlugin = (id: string, body: PluginUpdate) =>
   request<PluginInfo>("PUT", `/api/plugins/${id}`, body);
+export const fetchPluginAccount = (id: string) =>
+  request<PluginAccount>("GET", `/api/plugins/${id}/account`);
 export const logoutPlugin = (id: string) => request<PluginInfo>("DELETE", `/api/plugins/${id}/oauth`);
 // 浏览器整页跳过去，登录完由后端跳回设置页。
 export const pluginLoginUrl = (id: string) => `/api/plugins/${id}/oauth/login`;

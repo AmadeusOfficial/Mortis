@@ -19,7 +19,7 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { PluginsSection } from "../components/PluginsSection";
+import { type LoginResult, PluginsSection } from "../components/PluginsSection";
 import { SourceOrdersSection } from "../components/SourceOrdersSection";
 import {
   type AppConfig,
@@ -44,16 +44,19 @@ import {
 export function SettingsPage() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [searchParams, setSearchParams] = useSearchParams();
-  // 后端 OAuth 登录成功后跳回 /settings?plugin=<id>&login=ok。
-  const loginPluginId =
-    searchParams.get("login") === "ok" ? searchParams.get("plugin") : null;
-  const [tab, setTab] = useState<string | null>(
-    loginPluginId === null ? "general" : "plugins",
-  );
+  // 后端 OAuth 登录后跳回 /settings?plugin=<id>&login=ok，失败时是 login=failed&reason=…。
+  const loginStatus = searchParams.get("login");
+  const loginPlugin = searchParams.get("plugin");
+  const loginResult: LoginResult | null =
+    loginPlugin !== null && (loginStatus === "ok" || loginStatus === "failed")
+      ? { pluginId: loginPlugin, ok: loginStatus === "ok", reason: searchParams.get("reason") }
+      : null;
+  const [tab, setTab] = useState<string | null>(loginResult === null ? "general" : "plugins");
   const clearLoginParam = useCallback(() => {
     setSearchParams(
       (params) => {
         params.delete("login");
+        params.delete("reason");
         return params;
       },
       { replace: true },
@@ -93,7 +96,7 @@ export function SettingsPage() {
           </Stack>
         </Tabs.Panel>
         <Tabs.Panel value="plugins" pt="md">
-          <PluginsSection loginPluginId={loginPluginId} onLoginHandled={clearLoginParam} />
+          <PluginsSection loginResult={loginResult} onLoginHandled={clearLoginParam} />
         </Tabs.Panel>
         <Tabs.Panel value="orders" pt="md">
           <Stack>

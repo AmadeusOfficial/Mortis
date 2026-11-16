@@ -271,3 +271,21 @@ def test_候选去掉空值(plugin):
     }
     result = plugin.candidates(raw)
     assert result == {"title": "原名", "original_title": "原名"}
+
+
+def test_账号信息(plugin):
+    anonymous = FakeHost()
+    assert plugin.account(anonymous) is None and anonymous.calls == []
+    signed = FakeHost(token="tok")
+    signed.route(
+        "https://api.bgm.tv/v0/me",
+        {"id": 7, "username": "sai", "nickname": "阿卡林", "avatar": {"medium": "https://a/m.jpg"}},
+    )
+    account = plugin.account(signed)
+    assert account is not None
+    assert (account.name, account.avatar_url, account.url) == (
+        "阿卡林",
+        "https://a/m.jpg",
+        "https://bgm.tv/user/sai",
+    )
+    assert signed.calls[0]["headers"] == {"Authorization": "Bearer tok"}

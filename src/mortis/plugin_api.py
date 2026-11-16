@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from mortis.catalog.spec import DataTypeSpec, FieldSpec
 
 __all__ = [
+    "Account",
     "DataTypePlugin",
     "DataTypeSpec",
     "FieldSpec",
@@ -65,6 +66,14 @@ class Hit(BaseModel):
     poster_url: str | None = None
 
 
+class Account(BaseModel):
+    """登录来源后的账号，设置页显示。"""
+
+    name: str
+    avatar_url: str | None = None
+    url: str | None = None
+
+
 @dataclass(frozen=True)
 class OAuth:
     """需要用户登录的来源。client_id、client_secret 从插件密钥的这两个键里取。"""
@@ -74,6 +83,10 @@ class OAuth:
     scope: str = ""
     client_id_key: str = "app_id"
     client_secret_key: str = "app_secret"
+    register_url: str = ""
+    """用户自己建 OAuth 应用的页面，设置页给出链接。"""
+    token_page_url: str = ""
+    """能直接生成访问令牌的页面；为空时设置页不提供手填令牌。"""
 
 
 class Host(Protocol):
@@ -142,6 +155,10 @@ class SourcePlugin(ABC):
 
     def disabled_reason(self, host: Host) -> str | None:
         """设置页上显示的提示，比如「没登录时搜不到 18 禁条目」。"""
+        return None
+
+    def account(self, host: Host) -> Account | None:
+        """需要登录的来源返回当前令牌对应的账号；令牌失效时抛 SourceAuthError。"""
         return None
 
     @abstractmethod

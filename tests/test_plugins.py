@@ -39,7 +39,7 @@ PLUGIN = DataTypePlugin(
 SOURCE = """
 from pydantic import BaseModel
 
-from mortis.plugin_api import Hit, OAuth, SourcePlugin
+from mortis.plugin_api import Account, Hit, OAuth, SourcePlugin
 
 
 class Secrets(BaseModel):
@@ -67,6 +67,13 @@ class Alpha(SourcePlugin):
 
     def disabled_reason(self, host):
         return None if host.access_token() else "没登录"
+
+    def account(self, host):
+        token = host.access_token()
+        if not token:
+            return None
+        host.get_json(f"https://alpha.test/me/{token}")
+        return Account(name=f"{token} 的主人")
 
     def search(self, host, title):
         return [Hit(external_id="1", title=title)]
@@ -110,7 +117,7 @@ class FakeSite:
         self.requests.append(request)
         if request.url.path == "/oauth/token":
             return httpx.Response(200, json=self.token_responses.pop(0))
-        if request.url.path == "/item/401":
+        if request.url.path in ("/item/401", "/me/bad"):
             return httpx.Response(401, json={})
         return httpx.Response(200, json={"name": "条目"})
 
@@ -254,7 +261,7 @@ def test_oauth_login_and_callback(client: TestClient, site: FakeSite) -> None:
         params={"code": "c", "state": "forged"},
         follow_redirects=False,
     )
-    assert bad.status_code == 422
+    assert "login=failed" in bad.headers["location"]
 
     site.token_responses.append(
         {"access_token": "tok-1", "refresh_token": "ref-1", "expires_in": 604800}
@@ -264,7 +271,8 @@ def test_oauth_login_and_callback(client: TestClient, site: FakeSite) -> None:
         params={"code": "the-code", "state": query["state"][0]},
         follow_redirects=False,
     )
-    assert done.status_code == 307 and done.headers["location"].startswith("/settings")
+    assert done.status_code == 307
+    assert done.headers["location"] == "/settings?plugin=alpha&login=ok"
     token_request = site.requests[-1]
     form = parse_qs(token_request.content.decode())
     assert form["grant_type"] == ["authorization_code"] and form["code"] == ["the-code"]
@@ -280,9 +288,51 @@ def test_oauth_login_and_callback(client: TestClient, site: FakeSite) -> None:
         params={"code": "again", "state": query["state"][0]},
         follow_redirects=False,
     )
-    assert reused.status_code == 422
+    assert "login=failed" in reused.headers["location"]
 
+    assert client.get("/api/plugins/alpha/account").json() == {
+        "account": {"name": "tok-1 的主人", "avatar_url": None, "url": None},
+        "error": None,
+    }
     assert client.delete("/api/plugins/alpha/oauth").json()["logged_in"] is False
+    assert client.get("/api/plugins/alpha/account").json() == {"account": None, "error": None}
+
+
+def test_oauth_denied_returns_to_settings(client: TestClient) -> None:
+    client.put("/api/plugins/alpha", json={"secrets": {"app_id": "id-1", "app_secret": "s3cret"}})
+    login = client.get("/api/plugins/alpha/oauth/login", follow_redirects=False)
+    state = parse_qs(urlsplit(login.headers["location"]).query)["state"][0]
+    denied = client.get(
+        "/api/plugins/alpha/oauth/callback",
+        params={"error": "access_denied", "state": state},
+        follow_redirects=False,
+    )
+    target = urlsplit(denied.headers["location"])
+    assert target.path == "/settings"
+    assert parse_qs(target.query) == {
+        "plugin": ["alpha"],
+        "login": ["failed"],
+        "reason": ["在授权页取消了授权"],
+    }
+
+
+def test_pasted_token_drops_refresh(client: TestClient) -> None:
+    store = client.app.state.config_store
+    store.update_plugin_secrets(
+        "alpha", {"access_token": "old", "refresh_token": "ref-1", "expires_at": 99}
+    )
+    alpha = client.put("/api/plugins/alpha", json={"secrets": {"access_token": " mine "}}).json()
+    assert alpha["logged_in"] is True and alpha["expires_at"] is None
+    saved = store.load_secrets().plugins["alpha"]
+    assert saved["access_token"] == "mine" and not saved.get("refresh_token")
+
+
+def test_account_reports_rejected_token(client: TestClient) -> None:
+    client.app.state.config_store.update_plugin_secrets("alpha", {"access_token": "bad"})
+    assert client.get("/api/plugins/alpha/account").json() == {
+        "account": None,
+        "error": "令牌已失效，请重新登录",
+    }
 
 
 def test_token_refreshed_before_expiry(client: TestClient, site: FakeSite) -> None:

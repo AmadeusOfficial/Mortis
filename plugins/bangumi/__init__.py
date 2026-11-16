@@ -5,9 +5,10 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from mortis.plugin_api import Hit, Host, OAuth, SourceError, SourcePlugin
+from mortis.plugin_api import Account, Hit, Host, OAuth, SourceError, SourcePlugin
 
 SEARCH_URL = "https://api.bgm.tv/v0/search/subjects"
+ME_URL = "https://api.bgm.tv/v0/me"
 SUBJECT_URL = "https://api.bgm.tv/v0/subjects"
 
 # infobox 的键里含这些词的算品牌；含「日期」的键是发售日，不是品牌。
@@ -183,6 +184,8 @@ class BangumiSource(SourcePlugin):
     oauth: ClassVar[OAuth | None] = OAuth(
         authorize_url="https://bgm.tv/oauth/authorize",
         token_url="https://bgm.tv/oauth/access_token",
+        register_url="https://bgm.tv/dev/app",
+        token_page_url="https://next.bgm.tv/demo/access-token",
     )
     requests_per_second: ClassVar[float] = 2
 
@@ -195,6 +198,21 @@ class BangumiSource(SourcePlugin):
         if host.access_token():
             return None
         return "没登录 Bangumi 时搜不到 18 禁条目"
+
+    def account(self, host: Host) -> Account | None:
+        headers = self._headers(host)
+        if not headers:
+            return None
+        me = host.get_json(ME_URL, headers=headers)
+        if not isinstance(me, dict):
+            raise SourceError("Bangumi 账号信息返回的不是对象")
+        username = _text(me.get("username")) or str(me.get("id") or "")
+        avatar = me.get("avatar")
+        return Account(
+            name=_text(me.get("nickname")) or username,
+            avatar_url=_text(avatar.get("medium")) if isinstance(avatar, dict) else None,
+            url=f"https://bgm.tv/user/{username}" if username else None,
+        )
 
     def search(self, host: Host, title: str) -> list[Hit]:
         body = host.post_json(
