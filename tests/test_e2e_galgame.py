@@ -1,0 +1,122 @@
+import json
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import httpx2 as httpx
+import pytest
+from playwright.sync_api import Page, expect, sync_playwright
+
+from mortis.api.app import create_app
+from mortis.config.store import ConfigStore
+from mortis.settings import Settings
+from tests.e2e_server import WEB_DIST, serve
+
+pytestmark = pytest.mark.e2e
+SLOW = 20_000
+FIXTURES = Path(__file__).parent / "fixtures" / "vndb"
+PNG = b"\x89PNG\r\n\x1a\nfake"
+MATCHED = "Dies irae ~Acta est Fabula~"
+UNMATCHED = "神座万象シリーズ 未分类"
+
+
+def _fixture(name: str) -> dict[str, Any]:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+class FakeVndb:
+    def __init__(self) -> None:
+        self.search = _fixture("search.json")
+        self.vn = _fixture("vn.json")
+        self.release = _fixture("release.json")
+
+    def _detail(self, vn_id: str) -> dict[str, Any]:
+        if vn_id == "v548":
+            return self.vn
+        hit = next(row for row in self.search["results"] if row["id"] == vn_id)
+        return {"results": [{"id": vn_id, "title": hit["title"], "released": hit["released"]}]}
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "t.vndb.org":
+            return httpx.Response(200, content=PNG, headers={"content-type": "image/png"})
+        if request.url.host != "api.vndb.org":
+            return httpx.Response(404)
+        body = json.loads(request.content)
+        if request.url.path.endswith("/release"):
+            return httpx.Response(200, json=self.release)
+        name, _, value = body["filters"]
+        if name == "search":
+            return httpx.Response(200, json=self.search)
+        return httpx.Response(200, json=self._detail(value))
+
+
+@pytest.fixture
+def root(tmp_path: Path) -> Path:
+    root = tmp_path / "Galgame"
+    for name in (MATCHED, UNMATCHED):
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "malie.exe").write_bytes(b"x")
+    return root
+
+
+@pytest.fixture
+def base_url(tmp_path: Path) -> Iterator[str]:
+    data_dir = tmp_path / "data"
+    store = ConfigStore(data_dir)
+    for plugin_id in ("bangumi", "ymgal", "cngal"):
+        store.save_plugin(plugin_id, disabled=True)
+    fake = FakeVndb()
+    app = create_app(
+        Settings(data_dir=data_dir, web_dist=WEB_DIST),
+        http_transport=httpx.MockTransport(fake.handler),
+    )
+    with serve(app) as url:
+        yield url
+
+
+@pytest.fixture
+def page() -> Iterator[Page]:
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(channel="msedge", headless=True)
+        try:
+            yield browser.new_page()
+        finally:
+            browser.close()
+
+
+def test_galgame_folders_scrape_from_vndb(page: Page, base_url: str, root: Path) -> None:
+    page.goto(base_url + "/libraries")
+    page.get_by_role("button", name="新建媒体库").click()
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_label("数据类型").click()
+    page.get_by_role("option", name="Galgame").click()
+    expect(dialog.get_by_label("库名")).to_have_value("Galgame")
+    dialog.get_by_label("目录").fill(str(root))
+    dialog.get_by_role("button", name="保存").click()
+
+    page.get_by_role("button", name="扫描").click()
+    expect(page.get_by_text("「Galgame」扫描结束")).to_be_visible(timeout=SLOW)
+    expect(page.get_by_text("1 款游戏 · 2 个文件夹")).to_be_visible()
+    expect(page.get_by_role("button", name="整理整库")).to_have_count(0)
+
+    page.get_by_role("link", name="未识别").click()
+    page.get_by_role("button", name=f"匹配{UNMATCHED}").click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog.get_by_label("来源")).to_have_value("VNDB")
+    dialog.get_by_label("名称").fill("Paradise Lost")
+    dialog.get_by_role("button", name="搜索").click()
+    dialog.get_by_role("button", name="选Paradise Lost", exact=True).click()
+    expect(page.get_by_text("已匹配为《Paradise Lost》")).to_be_visible(timeout=SLOW)
+    expect(page.get_by_text("没有未识别的文件。")).to_be_visible()
+
+    page.goto(base_url + "/libraries")
+    expect(page.get_by_text("2 款游戏 · 2 个文件夹")).to_be_visible(timeout=SLOW)
+    page.get_by_role("link", name="打开").click()
+    page.get_by_role("link", name=MATCHED).first.click()
+    expect(page.get_by_role("heading", name=MATCHED)).to_be_visible()
+    expect(page.get_by_text("VNDB v548")).to_be_visible()
+    expect(page.get_by_text("上次刮削")).to_be_visible(timeout=SLOW)
+    expect(page.get_by_text("Greenwood Co., Ltd.").first).to_be_visible()
+    expect(page.get_by_text("游戏文件夹")).to_be_visible()
+    expect(page.get_by_role("button", name="整理", exact=True)).to_have_count(0)

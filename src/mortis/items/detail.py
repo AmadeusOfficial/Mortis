@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import (
@@ -266,7 +266,11 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         if item.kind == "work" and data_type is not None and data_type.structure == "series"
         else []
     )
-    record = session.get(ItemSourceRecord, ((show or item).id, "tmdb"))
+    scraped_at = session.scalar(
+        select(func.max(ItemSourceRecord.fetched_at)).where(
+            ItemSourceRecord.item_id == (show or item).id
+        )
+    )
     cover = (
         _first_images(session, [item.id], "thumb").get(item.id)
         if item.kind == "episode"
@@ -316,6 +320,6 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         "files": [
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],
-        "scraped_at": record.fetched_at if record else None,
+        "scraped_at": scraped_at,
         "sections": [{"name": name, "fields": rows} for name, rows in sections.items()],
     }

@@ -81,7 +81,7 @@ def list_libraries(session: Session) -> list[Library]:
 
 
 def library_counts(session: Session, library_ids: list[int]) -> dict[int, tuple[int, int]]:
-    """每个库的（作品数，视频文件数）。系列电影那一层不算。"""
+    """每个库的（作品数，主文件数）。系列电影那一层不算；主文件是视频或游戏文件夹。"""
     items = {
         library_id: count
         for library_id, count in session.execute(
@@ -94,7 +94,10 @@ def library_counts(session: Session, library_ids: list[int]) -> dict[int, tuple[
         library_id: count
         for library_id, count in session.execute(
             select(MediaFile.library_id, func.count())
-            .where(MediaFile.library_id.in_(library_ids), MediaFile.file_kind == "video")
+            .where(
+                MediaFile.library_id.in_(library_ids),
+                MediaFile.file_kind.in_(("video", "game")),
+            )
             .group_by(MediaFile.library_id)
         )
     }

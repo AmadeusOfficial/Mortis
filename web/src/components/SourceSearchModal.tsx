@@ -123,6 +123,7 @@ export function SourceSearchModal({
             <Button
               size="xs"
               variant="light"
+              aria-label={`选${hit.title}`}
               loading={picking && picked === hit.external_id}
               disabled={picking && picked !== hit.external_id}
               onClick={() => {
