@@ -17,7 +17,7 @@ from mortis.sources.tmdb.client import (
     open_tmdb,
 )
 from mortis.sources.tmdb.search import MovieHit, find_best, score, similarity
-from tests.fakes import FakeTmdb, hit
+from tests.fakes import FakeTmdb, hit, tv_hit
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -110,3 +110,32 @@ def test_find_best_tries_variants_and_falls_back_without_year() -> None:
     assert match is not None and match.hit.tmdb_id == 949
     assert any(r.url.params.get("year") == "1996" for r in fake.requests)
     assert fake.requests[-1].url.params.get("year") is None
+
+
+def _kaiji(fake: FakeTmdb) -> TmdbClient:
+    fake.add_search("赌博默示录", [tv_hit(42951, "赌博默示录", "2007-10-02", "逆境無頼カイジ")])
+    return TmdbClient(
+        httpx.Client(transport=fake.transport), "k", language="zh-CN", include_adult=True
+    )
+
+
+def test_tv_shortens_title_before_season_marker() -> None:
+    fake = FakeTmdb()
+    tmdb = _kaiji(fake)
+    match = find_best(tmdb, parse_name("赌博默示录：破戒录篇 (2011)"), kind="tv")
+    assert match is not None and match.hit.tmdb_id == 42951
+    assert match.score >= 0.75
+
+
+def test_movie_does_not_search_shortened_title() -> None:
+    fake = FakeTmdb()
+    tmdb = _kaiji(fake)
+    match = find_best(tmdb, parse_name("赌博默示录：破戒录篇 (2011)"), kind="movie")
+    assert match is None
+
+
+def test_tv_folder_year_before_show_year_is_penalized() -> None:
+    fake = FakeTmdb()
+    tmdb = _kaiji(fake)
+    match = find_best(tmdb, parse_name("赌博默示录：破戒录篇 (2001)"), kind="tv")
+    assert match is not None and match.score < 0.75

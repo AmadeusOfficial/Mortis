@@ -32,6 +32,22 @@ def test_parse_name(name: str, title: str, year: int | None) -> None:
     assert (parsed.title, parsed.year) == (title, year)
 
 
+@pytest.mark.parametrize(
+    ("name", "title", "year"),
+    [
+        ("[DBD-Raws][赌博默示录：破戒录篇][1080P][BDRip]", "赌博默示录:破戒录篇", None),
+        ("[Nekomoe kissaten] Frieren [1080p]", "Frieren", None),
+        ("[Group][Ascendance of a Bookworm][BDRip]", "Ascendance of a Bookworm", None),
+        ("The.Matrix.1999.1080p.BluRay.x264-GROUP", "The Matrix", 1999),
+    ],
+)
+def test_parse_name_drops_fansub_and_release_brackets(
+    name: str, title: str, year: int | None
+) -> None:
+    parsed = parse_name(name)
+    assert (parsed.title, parsed.year) == (title, year)
+
+
 def test_mixed_cjk_and_latin_give_extra_search_titles() -> None:
     parsed = parse_name("黑客帝国.The.Matrix.1999")
     assert parsed.search_titles == ("黑客帝国 The Matrix", "黑客帝国", "The Matrix")

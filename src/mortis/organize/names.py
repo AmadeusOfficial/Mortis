@@ -3,6 +3,12 @@ import unicodedata
 from dataclasses import dataclass
 
 _BRACKETS = re.compile(r"\[[^\]]*\]|【[^】]*】|\{[^}]*\}")
+# 方括号里的规格词：分辨率、编码、片源、字幕语言。字幕组名一般不带这些。
+_SPEC = re.compile(
+    r"(?i)(?<![a-z0-9])(?:[0-9]{3,4}[pi]|2160|1080|720|480|4k|uhd|hdr|x26[45]|h\.?26[45]|"
+    r"hevc|avc|10bit|8bit|bdrip|brrip|blu-?ray|bd|remux|web-?dl|webrip|hdtv|dvdrip|flac|"
+    r"aac|ac3|eac3|dts|truehd|atmos|mkv|mp4|chs|cht|gb|big5|jp|jpn|eng|sc|tc)(?![a-z0-9])"
+)
 _YEAR = re.compile(r"(?<![0-9])(19[0-9]{2}|20[0-9]{2})(?![0-9])")
 # 只收不会出现在片名里的发布标记；web、bd、complete 这类常见词不收。
 _JUNK = re.compile(
@@ -40,6 +46,21 @@ def _clean(text: str) -> str:
     return text
 
 
+def _brackets(text: str) -> str:
+    """去掉字幕组和规格的方括号；整个名字都是方括号时，取第一个像片名的那个。"""
+    groups = list(_BRACKETS.finditer(text))
+    if not groups:
+        return text
+    kept = [
+        match
+        for index, match in enumerate(groups)
+        if index > 0 and not _SPEC.search(match.group(0))
+    ]
+    if kept and not _BRACKETS.sub(" ", text).strip():
+        return kept[0].group(0).strip("[]【】{}")
+    return _BRACKETS.sub(" ", text)
+
+
 def _variants(title: str) -> tuple[str, ...]:
     tokens = title.split(" ")
     cjk = " ".join(token for token in tokens if _CJK.search(token))
@@ -52,7 +73,7 @@ def _variants(title: str) -> tuple[str, ...]:
 
 def parse_name(name: str) -> ParsedName:
     text = unicodedata.normalize("NFKC", name)
-    text = _BRACKETS.sub(" ", text)
+    text = _brackets(text)
     text = _PAREN.sub(lambda m: " " if _JUNK.search(m.group(1)) else m.group(0), text)
     text = re.sub(r"[._]+", " ", text)
     year: int | None = None

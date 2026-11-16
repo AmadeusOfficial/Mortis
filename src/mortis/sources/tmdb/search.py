@@ -8,6 +8,8 @@ from mortis.organize.names import ParsedName
 from mortis.sources.tmdb.client import TmdbClient
 
 _ARTICLE = re.compile(r"^(the|a|an)\s+")
+# 剧的目录名常带季名或章节，TMDB 上却是总条目：`赌博默示录:破戒录篇` 要能搜到《赌博默示录》。
+_SEASON_MARK = re.compile(r":|\s-\s|\s?[～~]")
 EARLY_STOP = 0.95
 RESULTS_PER_QUERY = 10
 
@@ -109,18 +111,43 @@ def search_tv(tmdb: TmdbClient, query: str, year: int | None = None) -> list[Mov
     ]
 
 
+def _short_titles(title: str) -> list[str]:
+    """冒号、「 - 」、「～/~」之前的部分；电影不改，只在剧里用作补充搜索。"""
+    match = _SEASON_MARK.search(title)
+    if match is None:
+        return []
+    short = title[: match.start()].strip(" -\u2013\u2014:([{_.")
+    return [short] if len(short) >= 2 else []
+
+
+def _value(candidate: MovieHit, parsed: ParsedName, shorts: tuple[str, ...]) -> float:
+    """缩短的标题是续作目录：年份晚于首播不扣分，早于首播扣得更重。"""
+    value = max(score(candidate, title, parsed.year) for title in parsed.search_titles)
+    for title in shorts:
+        base = max(similarity(title, candidate.title), similarity(title, candidate.original_title))
+        if parsed.year is not None and candidate.year is not None and parsed.year < candidate.year:
+            base -= 0.3
+        value = max(value, base)
+    return value
+
+
 def find_best(
     tmdb: TmdbClient, parsed: ParsedName, *, kind: Literal["movie", "tv"] = "movie"
 ) -> Match | None:
     """按解析出的几种标题依次搜，有年份先带年份搜，搜不到再不带年份搜。返回最高分，不管阈值。"""
     search = search_tv if kind == "tv" else search_movies
+    shorts = tuple(
+        short
+        for short in (_short_titles(parsed.title) if kind == "tv" else [])
+        if short not in parsed.search_titles
+    )
     best: Match | None = None
-    for query in parsed.search_titles:
+    for query in parsed.search_titles + shorts:
         hits = search(tmdb, query, parsed.year)
         if not hits and parsed.year is not None:
             hits = search(tmdb, query, None)
         for candidate in hits[:RESULTS_PER_QUERY]:
-            value = max(score(candidate, title, parsed.year) for title in parsed.search_titles)
+            value = _value(candidate, parsed, shorts)
             if best is None or value > best.score:
                 best = Match(candidate, value)
         if best is not None and best.score >= EARLY_STOP:
