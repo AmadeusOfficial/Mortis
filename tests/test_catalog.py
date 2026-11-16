@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from mortis.catalog.install import InvalidDataType, ensure_builtin_types, install_data_type
 from mortis.catalog.movie import MOVIE
 from mortis.catalog.spec import DataTypeSpec, FieldSpec, validate_data_type
+from mortis.catalog.tv import TV
 from mortis.db.models import DataType, TypeField
 
 
@@ -44,6 +45,22 @@ def _field(**overrides: object) -> FieldSpec:
 
 def test_movie_catalog_is_valid() -> None:
     assert validate_data_type(MOVIE) == []
+
+
+def test_movie_field_count_is_unchanged() -> None:
+    assert len(MOVIE.fields) == 38
+
+
+def test_tv_catalog_is_valid() -> None:
+    assert validate_data_type(TV) == []
+
+
+def test_tv_catalog_has_title_on_every_level() -> None:
+    for level in ("work", "season", "episode"):
+        assert any(
+            f.applies_to == level and f.field_key == "title" and f.stored_in == "items_column"
+            for f in TV.fields
+        ), level
 
 
 def test_movie_catalog_covers_tmm_movie_fields() -> None:
@@ -152,7 +169,7 @@ def test_install_movie_writes_rows(session: Session) -> None:
         1,
     )
     count = session.scalar(select(func.count()).select_from(TypeField))
-    assert count == len(MOVIE.fields)
+    assert count == len(MOVIE.fields) + len(TV.fields)
 
     runtime = session.get(TypeField, ("movie", "work", "runtime"))
     assert runtime is not None
@@ -164,7 +181,11 @@ def test_install_movie_writes_rows(session: Session) -> None:
     genres = session.get(TypeField, ("movie", "work", "genres"))
     assert genres is not None
     assert (genres.stored_in, genres.tag_kind, genres.is_filterable) == ("tags", "genre", 1)
-    positions = session.scalars(select(TypeField.position).order_by(TypeField.position)).all()
+    positions = session.scalars(
+        select(TypeField.position)
+        .where(TypeField.data_type_id == "movie")
+        .order_by(TypeField.position)
+    ).all()
     assert positions == list(range(1, len(MOVIE.fields) + 1))
 
 
@@ -173,8 +194,27 @@ def test_install_twice_is_idempotent(session: Session) -> None:
     session.commit()
     ensure_builtin_types(session)
     session.commit()
-    assert session.scalar(select(func.count()).select_from(TypeField)) == len(MOVIE.fields)
-    assert session.scalar(select(func.count()).select_from(DataType)) == 1
+    assert session.scalar(select(func.count()).select_from(TypeField)) == (
+        len(MOVIE.fields) + len(TV.fields)
+    )
+    assert session.scalar(select(func.count()).select_from(DataType)) == 2
+
+
+def test_install_writes_tv_row(session: Session) -> None:
+    ensure_builtin_types(session)
+    session.commit()
+
+    row = session.get(DataType, "tv")
+    assert row is not None
+    assert (row.name, row.structure, row.subtitle_field, row.plugin_id, row.is_enabled) == (
+        "电视剧",
+        "series",
+        "original_title",
+        None,
+        1,
+    )
+    keys = set(session.scalars(select(TypeField.field_key).where(TypeField.data_type_id == "tv")))
+    assert keys == {f.field_key for f in TV.fields}
 
 
 def test_reinstall_drops_removed_fields_and_keeps_is_enabled(session: Session) -> None:

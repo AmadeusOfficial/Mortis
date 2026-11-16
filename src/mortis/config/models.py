@@ -121,6 +121,7 @@ _EXTENSION = re.compile(r"\.[a-z0-9][a-z0-9-]*")
 
 PosterSize = Literal["w342", "w500", "w780", "original"]
 FanartSize = Literal["w780", "w1280", "original"]
+StillSize = Literal["w185", "w300", "original"]
 
 
 def _clean_extensions(values: list[str]) -> list[str]:
@@ -170,6 +171,36 @@ class MovieImages(BaseModel):
 
 # Windows 文件名里不允许的字符，模板和替换字符共用。
 _FORBIDDEN_NAME_CHARS = frozenset('/\\:*?"<>|')
+
+
+def _clean_name_template(value: str, tokens: dict[str, str]) -> str:
+    """模板不能为空，不能带路径分隔符，并且必须能按给定名字渲染出来。"""
+    template = value.strip()
+    if not template:
+        raise PydanticCustomError("template", "模板不能为空")
+    if "/" in template or "\\" in template:
+        raise PydanticCustomError("template", "模板里不能有路径分隔符")
+    try:
+        render(template, tokens, space="", colon="-")
+    except ValueError as error:
+        raise PydanticCustomError("template", str(error)) from None
+    return template
+
+
+def _clean_replacement(value: str) -> str:
+    if len(value) > 3 or any(char in _FORBIDDEN_NAME_CHARS for char in value):
+        raise PydanticCustomError("replacement", "替换字符不能是文件名里不允许的字符")
+    return value
+
+
+def _clean_skip_folders(value: list[str]) -> list[str]:
+    """去掉首尾空白和空名，并按大小写不敏感去重，保留第一次出现的写法。"""
+    cleaned: list[str] = []
+    for raw in value:
+        name = raw.strip()
+        if name and name.casefold() not in {item.casefold() for item in cleaned}:
+            cleaned.append(name)
+    return cleaned
 
 
 class MovieOutputConfig(BaseModel):
@@ -235,23 +266,12 @@ class MovieOutputConfig(BaseModel):
     @field_validator("folder_template", "file_template")
     @classmethod
     def _check_template(cls, value: str) -> str:
-        template = value.strip()
-        if not template:
-            raise PydanticCustomError("template", "模板不能为空")
-        if "/" in template or "\\" in template:
-            raise PydanticCustomError("template", "模板里不能有路径分隔符")
-        try:
-            render(template, {"title": "片名", "year": "2000"}, space="", colon="-")
-        except ValueError as error:
-            raise PydanticCustomError("template", str(error)) from None
-        return template
+        return _clean_name_template(value, {"title": "片名", "year": "2000"})
 
     @field_validator("folder_space", "file_space", "colon_replacement", "first_char_number")
     @classmethod
     def _check_replacement(cls, value: str) -> str:
-        if len(value) > 3 or any(char in _FORBIDDEN_NAME_CHARS for char in value):
-            raise PydanticCustomError("replacement", "替换字符不能是文件名里不允许的字符")
-        return value
+        return _clean_replacement(value)
 
 
 class MovieScrapeConfig(BaseModel):
@@ -271,12 +291,85 @@ class MovieScrapeConfig(BaseModel):
     @field_validator("skip_folders")
     @classmethod
     def _clean_skip_folders(cls, value: list[str]) -> list[str]:
-        cleaned: list[str] = []
-        for raw in value:
-            name = raw.strip()
-            if name and name.casefold() not in {item.casefold() for item in cleaned}:
-                cleaned.append(name)
-        return cleaned
+        return _clean_skip_folders(value)
+
+
+class TvImages(BaseModel):
+    """刮削电视剧时抓哪些图。默认照本机 TMM：图片全抓，演员头像不写。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    poster: bool = True
+    fanart: bool = True
+    clearlogo: bool = True
+    keyart: bool = True
+    season_poster: bool = True
+    episode_thumb: bool = True
+    actor_images: bool = False
+
+
+class TvOutputConfig(BaseModel):
+    """整理：按模板改名，并把 NFO 和图片写到视频旁边。默认照本机 TMM 的电视剧设置。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    organize_after_scrape: bool = True
+    organize_rename: bool = True
+    organize_write_files: bool = True
+    show_template: str = "${showTitle} (${showYear})"
+    season_template: str = "Season ${seasonNr}"
+    file_template: str = "${showTitle}.S${seasonNr2}E${episodeNr2}.${title}"
+    show_space: str = ""
+    season_space: str = ""
+    file_space: str = "."
+    colon_replacement: str = " "
+    first_char_number: str = "#"
+    nfo_write_lockdata: bool = False
+    nfo_single_studio: bool = False
+
+    @field_validator("show_template", "season_template", "file_template")
+    @classmethod
+    def _check_template(cls, value: str) -> str:
+        return _clean_name_template(
+            value,
+            {
+                "showTitle": "剧名",
+                "showYear": "2000",
+                "seasonNr": "1",
+                "seasonNr2": "01",
+                "episodeNr": "1",
+                "episodeNr2": "01",
+                "title": "集名",
+            },
+        )
+
+    @field_validator("show_space", "season_space", "file_space", "colon_replacement")
+    @classmethod
+    def _check_replacement(cls, value: str) -> str:
+        return _clean_replacement(value)
+
+
+class TvScrapeConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    language: str = Field(default="zh-CN", pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    certification_country: str = Field(default="US", pattern=r"^[A-Z]{2}$")
+    include_adult: bool = True
+    match_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    skip_folders: list[str] = Field(default_factory=lambda: ["MAKEMKV"])
+    poster_size: PosterSize = "w780"
+    fanart_size: FanartSize = "original"
+    still_size: StillSize = "w300"
+    prefer_textless_fanart: bool = True
+    show_missing_episodes: bool = True
+    show_missing_specials: bool = True
+    images: TvImages = Field(default_factory=TvImages)
+    output: TvOutputConfig = Field(default_factory=TvOutputConfig)
+
+    @field_validator("skip_folders")
+    @classmethod
+    def _clean_skip_folders(cls, value: list[str]) -> list[str]:
+        return _clean_skip_folders(value)
 
 
 class TasksConfig(BaseModel):
@@ -292,6 +385,7 @@ class AppConfig(BaseModel):
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     files: FilesConfig = Field(default_factory=FilesConfig)
     movie: MovieScrapeConfig = Field(default_factory=MovieScrapeConfig)
+    tv: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
 
 
@@ -299,6 +393,7 @@ CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
     "network": NetworkConfig,
     "files": FilesConfig,
     "movie": MovieScrapeConfig,
+    "tv": TvScrapeConfig,
     "tasks": TasksConfig,
 }
 

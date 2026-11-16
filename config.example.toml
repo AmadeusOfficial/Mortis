@@ -79,6 +79,66 @@ nfo_write_lockdata = false
 # NFO 只写一个制片公司
 nfo_single_studio = false
 
+[tv]
+# 刮削语言，TMDB 的语言代码
+language = "zh-CN"
+# 分级取哪个国家的
+certification_country = "US"
+include_adult = true
+# 自动识别时，相似度低于这个值就放进未识别
+match_threshold = 0.75
+# 扫描时跳过的文件夹名
+skip_folders = ["MAKEMKV"]
+poster_size = "w780"
+fanart_size = "original"
+# 剧集缩略图的尺寸
+still_size = "w300"
+# 同人画优先选没有文字的
+prefer_textless_fanart = true
+# 显示缺少的集
+show_missing_episodes = true
+# 显示缺少的特别篇
+show_missing_specials = true
+
+[tv.images]
+# 刮削时抓哪些图
+poster = true
+fanart = true
+clearlogo = true
+keyart = true
+season_poster = true
+episode_thumb = true
+# 演员头像不写
+actor_images = false
+
+[tv.output]
+# 刮削后自动整理
+organize_after_scrape = true
+# 整理时按模板重命名目录和文件
+organize_rename = true
+# 整理时把 NFO 和图片写到视频旁边
+organize_write_files = true
+# 剧目录名模板
+show_template = "${showTitle} (${showYear})"
+# 季目录名模板
+season_template = "Season ${seasonNr}"
+# 文件名模板
+file_template = "${showTitle}.S${seasonNr2}E${episodeNr2}.${title}"
+# 剧目录名里的空格换成什么，留空不换
+show_space = ""
+# 季目录名里的空格换成什么，留空不换
+season_space = ""
+# 文件名里的空格换成什么
+file_space = "."
+# 冒号换成什么
+colon_replacement = " "
+# 名字开头的数字换成什么
+first_char_number = "#"
+# NFO 里写入锁定标记
+nfo_write_lockdata = false
+# NFO 只写一个制片公司
+nfo_single_studio = false
+
 [tasks]
 # 任务并发数，改了重启后生效
 concurrency = 3

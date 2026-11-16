@@ -127,7 +127,8 @@ def test_broken_config_file_reports_path(data_dir: Path) -> None:
 
 def test_data_types_lists_movie(client: TestClient) -> None:
     assert client.get("/api/data-types").json() == [
-        {"id": "movie", "name": "电影", "structure": "item_group"}
+        {"id": "movie", "name": "电影", "structure": "item_group"},
+        {"id": "tv", "name": "电视剧", "structure": "series"},
     ]
 
 

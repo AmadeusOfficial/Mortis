@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 
 from mortis.catalog.movie import MOVIE
 from mortis.catalog.spec import DataTypeSpec, validate_data_type
+from mortis.catalog.tv import TV
 from mortis.db.models import DataType, TypeField
 
-BUILTIN_TYPES: tuple[DataTypeSpec, ...] = (MOVIE,)
+BUILTIN_TYPES: tuple[DataTypeSpec, ...] = (MOVIE, TV)
 
 
 class InvalidDataType(ValueError):

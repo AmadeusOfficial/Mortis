@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mortis.config.models import MovieOutputConfig, MovieScrapeConfig
+from mortis.config.models import (
+    MovieOutputConfig,
+    MovieScrapeConfig,
+    TvImages,
+    TvOutputConfig,
+    TvScrapeConfig,
+)
 from mortis.config.store import ConfigStore
 
 
@@ -116,3 +122,68 @@ def test_output_roundtrip_through_store(tmp_path: Path) -> None:
     assert loaded.organize_rename is True
     assert loaded.nfo_names == ["filename"]
     assert loaded.image_style == "plain"
+
+
+def test_tv_defaults() -> None:
+    tv = TvScrapeConfig()
+    assert tv.language == "zh-CN"
+    assert tv.certification_country == "US"
+    assert tv.include_adult is True
+    assert tv.match_threshold == 0.75
+    assert tv.skip_folders == ["MAKEMKV"]
+    assert tv.poster_size == "w780"
+    assert tv.fanart_size == "original"
+    assert tv.still_size == "w300"
+    assert tv.prefer_textless_fanart is True
+    assert tv.show_missing_episodes is True
+    assert tv.show_missing_specials is True
+    assert tv.images == TvImages(
+        poster=True,
+        fanart=True,
+        clearlogo=True,
+        keyart=True,
+        season_poster=True,
+        episode_thumb=True,
+        actor_images=False,
+    )
+    assert tv.output == TvOutputConfig(
+        organize_after_scrape=True,
+        organize_rename=True,
+        organize_write_files=True,
+        show_template="${showTitle} (${showYear})",
+        season_template="Season ${seasonNr}",
+        file_template="${showTitle}.S${seasonNr2}E${episodeNr2}.${title}",
+        show_space="",
+        season_space="",
+        file_space=".",
+        colon_replacement=" ",
+        first_char_number="#",
+        nfo_write_lockdata=False,
+        nfo_single_studio=False,
+    )
+
+
+@pytest.mark.parametrize("field", ["show_template", "season_template", "file_template"])
+def test_tv_templates_must_not_be_empty(field: str) -> None:
+    with pytest.raises(ValidationError, match="模板不能为空"):
+        TvOutputConfig(**{field: "  "})
+
+
+@pytest.mark.parametrize("field", ["show_template", "season_template", "file_template"])
+@pytest.mark.parametrize("bad", ["sub/dir", "sub\\dir"])
+def test_tv_template_rejects_path_separators(field: str, bad: str) -> None:
+    with pytest.raises(ValidationError, match="模板里不能有路径分隔符"):
+        TvOutputConfig(**{field: bad})
+
+
+def test_tv_roundtrip_through_store(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path / "data")
+    tv = TvScrapeConfig(
+        language="ja-JP",
+        match_threshold=0.6,
+        still_size="original",
+        images=TvImages(actor_images=True, episode_thumb=False),
+        output=TvOutputConfig(organize_rename=False, season_template="第 ${seasonNr} 季"),
+    )
+    store.save_section("tv", tv)
+    assert store.load_config().tv == tv
