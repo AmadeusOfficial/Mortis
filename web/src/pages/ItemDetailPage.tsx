@@ -23,6 +23,7 @@ import {
   type FieldOut,
   type ItemDetail,
   type MovieHit,
+  addItemSource,
   arrangeItem,
   fetchItem,
   fetchItemArrangePreview,
@@ -82,6 +83,7 @@ export function ItemDetailPage() {
   const dataTypes = useDataTypes();
   const [editing, setEditing] = useState<FieldOut | null>(null);
   const [rematching, setRematching] = useState(false);
+  const [supplementing, setSupplementing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
   const setDetail = (detail: ItemDetail) => {
@@ -131,6 +133,15 @@ export function ItemDetailPage() {
       notifications.show({ message: "已换成新的条目，正在刮削" });
     },
   });
+  const supplement = useMutation({
+    mutationFn: ({ source, externalId }: { source: string; externalId: string }) =>
+      addItemSource(id, source, externalId),
+    onSuccess: ({ task_id }) => {
+      setSupplementing(false);
+      watcher.watch(task_id);
+      notifications.show({ message: "已补充来源，正在刮削" });
+    },
+  });
   const dataTypeId = item.data?.data_type_id ?? "";
   const pluginType = isPluginType(dataTypes.data, dataTypeId);
   const sources = useQuery({
@@ -166,6 +177,8 @@ export function ItemDetailPage() {
   const detail = item.data;
   const fields = detail.sections.flatMap((section) => section.fields);
   const lockedKeys = fields.filter((field) => field.locked).map((field) => field.key);
+  const originalValue = fields.find((field) => field.key === "original_title")?.value;
+  const originalTitle = typeof originalValue === "string" && originalValue !== "" ? originalValue : null;
   const toggleLock = (field: FieldOut) =>
     locks.mutate(
       field.locked ? lockedKeys.filter((key) => key !== field.key) : [...lockedKeys, field.key],
@@ -247,6 +260,18 @@ export function ItemDetailPage() {
               >
                 重新匹配
               </Button>
+              {pluginType && (
+                <Button
+                  variant="default"
+                  disabled={busy}
+                  onClick={() => {
+                    supplement.reset();
+                    setSupplementing(true);
+                  }}
+                >
+                  补充来源
+                </Button>
+              )}
             </Group>
             {canArrange && (
               <>
@@ -412,6 +437,18 @@ export function ItemDetailPage() {
           error={rematch.isError ? rematch.error.message : null}
           onPick={(source, hit) => rematch.mutate({ source, externalId: hit.external_id })}
           onClose={() => setRematching(false)}
+        />
+      )}
+      {supplementing && (
+        <SourceSearchModal
+          title="补充来源"
+          dataType={detail.data_type_id}
+          initialQuery={originalTitle ?? detail.title}
+          exclude={Object.keys(detail.external_ids).slice(0, 1)}
+          picking={supplement.isPending}
+          error={supplement.isError ? supplement.error.message : null}
+          onPick={(source, hit) => supplement.mutate({ source, externalId: hit.external_id })}
+          onClose={() => setSupplementing(false)}
         />
       )}
       {rematching && !pluginType && (

@@ -12,6 +12,7 @@ from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
 from mortis.items.identity import ExternalRef, MovieRef
 from mortis.items.matching import (
+    add_source,
     bind_file,
     bind_folder,
     guess,
@@ -141,6 +142,13 @@ class RematchRequest(BaseModel):
     external_id: str | None = None
 
 
+class SourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str
+    external_id: str
+
+
 class BindRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -266,6 +274,22 @@ def rematch_item(
         rematch(session, item, body.tmdb_id)
     else:
         raise ItemError("要给出 TMDB 编号或来源编号")
+    return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=False))
+
+
+@router.post("/items/{item_id}/sources", response_model=Enqueued, status_code=202)
+def add_item_source(
+    item_id: int,
+    body: SourceRequest,
+    session: SessionDep,
+    runner: RunnerDep,
+    services: ServicesDep,
+) -> Enqueued:
+    item = get_item(session, item_id)
+    if item.kind != "work":
+        raise ItemError("只有作品能补充来源")
+    plugin = _source_of(services, item.data_type_id, body.source)
+    add_source(session, item, plugin.id, plugin.provider, _external_id(body.external_id))
     return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=False))
 
 

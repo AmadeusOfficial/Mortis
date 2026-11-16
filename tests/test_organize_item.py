@@ -169,6 +169,40 @@ def test_unmatched_bind_and_rematch_by_source(
         assert session.get(Item, item_id).title == "改过的"
 
 
+def test_add_source_keeps_primary_and_is_not_used_for_dedupe(
+    app: FastAPI, client: TestClient, games: Path, sites: FakeSites
+) -> None:
+    library_id = _library(client, games)
+    _organize(app, library_id)
+    with app.state.session_factory() as session:
+        item_id = session.scalars(select(Item.id).where(Item.kind == "work")).one()
+    client.post(f"/api/items/{item_id}/scrape", json={"force": False})
+    app.state.task_runner.run_until_idle()
+    assert client.get(f"/api/items/{item_id}").json()["title"] == "星之梦（Beta）"
+
+    primary = client.post(
+        f"/api/items/{item_id}/sources", json={"source": "beta", "external_id": "b3"}
+    )
+    assert primary.status_code == 422
+    added = client.post(
+        f"/api/items/{item_id}/sources", json={"source": "alpha", "external_id": "a1"}
+    )
+    assert added.status_code == 202, added.text
+    app.state.task_runner.run_until_idle()
+    detail = client.get(f"/api/items/{item_id}").json()
+    assert detail["title"] == "星之梦（Alpha）"
+    assert list(detail["external_ids"].items()) == [("beta", "b9"), ("alpha", "a1")]
+    beta_fetches = sites.count("https://beta.test/item/b9")
+    assert beta_fetches == 1
+
+    unmatched = client.get("/api/media-files/unmatched").json()[0]
+    bound = client.post(
+        f"/api/media-files/{unmatched['id']}/bind",
+        json={"source": "alpha", "external_id": "a1", "title": "另一作"},
+    )
+    assert bound.json()["item_id"] != item_id
+
+
 def test_search_unknown_source_is_404(client: TestClient) -> None:
     assert client.get("/api/sources/nope/search", params={"query": "x"}).status_code == 404
 

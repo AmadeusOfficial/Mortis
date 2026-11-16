@@ -571,6 +571,9 @@ export const rematchItem = (id: number, tmdbId: number) =>
   request<Enqueued>("POST", `/api/items/${id}/rematch`, { tmdb_id: tmdbId });
 export const rematchItemToSource = (id: number, source: string, externalId: string) =>
   request<Enqueued>("POST", `/api/items/${id}/rematch`, { source, external_id: externalId });
+// 给插件类型的条目补一个来源，主编号不变。
+export const addItemSource = (id: number, source: string, externalId: string) =>
+  request<Enqueued>("POST", `/api/items/${id}/sources`, { source, external_id: externalId });
 export const fetchItemArrangePreview = (id: number) =>
   request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
 export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);

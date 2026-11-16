@@ -54,6 +54,7 @@ class ExternalRef:
 def find_by_external(
     session: Session, library_id: int, provider: str, external_id: str
 ) -> Item | None:
+    """只认主编号。补充来源的编号可能是同系列的另一作（同一 VNDB 条目下的不同版本），不拿来去重。"""
     return session.scalar(
         select(Item)
         .join(ItemExternalId, ItemExternalId.item_id == Item.id)
@@ -62,6 +63,7 @@ def find_by_external(
             Item.kind == "work",
             ItemExternalId.provider == provider,
             ItemExternalId.external_id == external_id,
+            ItemExternalId.is_primary == 1,
         )
         .order_by(Item.id)
         .limit(1)

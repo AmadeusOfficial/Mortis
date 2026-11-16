@@ -19,6 +19,7 @@ export function SourceSearchModal({
   title,
   dataType,
   initialQuery,
+  exclude = [],
   picking,
   error,
   onPick,
@@ -27,17 +28,20 @@ export function SourceSearchModal({
   title: string;
   dataType: string;
   initialQuery: string;
+  // 不列出的来源 id，比如补充来源时的主来源。
+  exclude?: string[];
   picking: boolean;
   error: string | null;
   onPick: (source: string, hit: SourceHit) => void;
   onClose: () => void;
 }) {
-  const sources = useQuery({
+  const sourcesQuery = useQuery({
     queryKey: ["sources", dataType],
     queryFn: () => fetchSources(dataType),
   });
+  const choices = (sourcesQuery.data ?? []).filter((entry) => !exclude.includes(entry.id));
   const [chosen, setChosen] = useState<string | null>(null);
-  const source = chosen ?? sources.data?.[0]?.id ?? null;
+  const source = chosen ?? choices[0]?.id ?? null;
   const [text, setText] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
   const [picked, setPicked] = useState<string | null>(null);
@@ -46,7 +50,7 @@ export function SourceSearchModal({
     queryFn: () => searchSource(source ?? "", query),
     enabled: source !== null && query.trim() !== "",
   });
-  const sourceName = sources.data?.find((entry) => entry.id === source)?.name ?? "";
+  const sourceName = choices.find((entry) => entry.id === source)?.name ?? "";
   return (
     <Modal opened onClose={onClose} title={title} size="lg">
       <form
@@ -61,7 +65,7 @@ export function SourceSearchModal({
             w={150}
             value={source}
             allowDeselect={false}
-            data={(sources.data ?? []).map((entry) => ({ value: entry.id, label: entry.name }))}
+            data={choices.map((entry) => ({ value: entry.id, label: entry.name }))}
             onChange={(value) => {
               setChosen(value);
               setPicked(null);
@@ -78,7 +82,7 @@ export function SourceSearchModal({
         </Group>
       </form>
       <Stack mt="md" gap="sm">
-        {sources.isSuccess && sources.data.length === 0 && (
+        {sourcesQuery.isSuccess && choices.length === 0 && (
           <Alert color="yellow" title="没有可用的来源">
             到设置页的「插件」里启用至少一个来源。
           </Alert>

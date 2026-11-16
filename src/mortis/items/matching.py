@@ -88,6 +88,28 @@ def rematch_external(session: Session, item: Item, provider: str, external_id: s
     session.commit()
 
 
+def add_source(session: Session, item: Item, source: str, provider: str, external_id: str) -> None:
+    """插件类型补一个来源：只换这个来源的编号并丢掉它的快照，主编号和其他来源不动。"""
+    current = session.get(ItemExternalId, (item.id, provider))
+    if current is not None and current.is_primary:
+        raise ItemError("这是条目的主来源，要换请用「重新匹配」")
+    if current is None:
+        session.add(
+            ItemExternalId(
+                item_id=item.id, provider=provider, external_id=external_id, is_primary=0
+            )
+        )
+    else:
+        current.external_id = external_id
+    session.execute(
+        delete(ItemSourceRecord).where(
+            ItemSourceRecord.item_id == item.id, ItemSourceRecord.source == source
+        )
+    )
+    item.updated_at = utc_now()
+    session.commit()
+
+
 def bind_folder(
     session: Session, media_file: MediaFile, ref: ExternalRef, locks: KeyedLocks
 ) -> Item:
