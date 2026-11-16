@@ -1,0 +1,191 @@
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pathTag {
+  font-size: 11.5px;
+  color: var(--mo-dim);
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  padding: 1px 7px;
+  border-radius: 5px;
+  word-break: break-all;
+}
+
+.btnCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--mo-accent-soft);
+  color: var(--mo-accent-hi);
+}
+
+.toolbar {
+  padding: 8px 10px;
+  margin-bottom: 20px;
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 420px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  width: 272px;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  background: var(--mo-bg);
+  border-color: var(--mo-line);
+  color: var(--mo-text);
+  font-size: 12.5px;
+}
+
+.searchInput:focus {
+  border-color: var(--mo-accent-bd);
+}
+
+.kbd {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--mo-surface-2);
+  border: 1px solid var(--mo-line);
+  color: var(--mo-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.clearBtn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mo-muted);
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  color: var(--mo-text);
+  background: var(--mo-surface-2);
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sortInput {
+  background: var(--mo-bg);
+  border-color: var(--mo-line);
+  color: var(--mo-text);
+  font-size: 12.5px;
+}
+
+.viewToggle {
+  display: inline-flex;
+  background: var(--mo-bg);
+  border: 1px solid var(--mo-line);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.viewBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--mo-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.viewBtn:hover {
+  color: var(--mo-text);
+}
+
+.viewBtn[data-active="true"] {
+  background: var(--mo-surface-2);
+  color: var(--mo-text);
+}
+
+/* CSS columns 瀑布流：按列宽自适应约 5~7 列，窄屏少列 */
+.wallColumns {
+  column-width: 172px;
+  column-gap: 16px;
+}
+
+.wallItem {
+  display: inline-block;
+  width: 100%;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 16px;
+}
+
+.emptyBox {
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: 12px;
+  padding: 40px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 48em) {
+  .searchWrap {
+    width: 100%;
+  }
+
+  .wallColumns {
+    column-width: 148px;
+    column-gap: 12px;
+  }
+
+  .wallItem {
+    margin-bottom: 12px;
+  }
+}

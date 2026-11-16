@@ -1,0 +1,214 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: 11px;
+  padding: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.card[data-state="unscraped"] {
+  border-color: var(--mo-warn-bd);
+}
+
+.card[data-state="issue"] {
+  border-color: var(--mo-bad-bd);
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--mo-accent);
+  background: var(--mo-surface-2);
+  box-shadow: var(--mo-shadow);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.poster {
+  position: relative;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--mo-bg);
+  border: 1px solid var(--mo-line);
+}
+
+.posterImg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.card[data-state="unscraped"] .posterImg,
+.card[data-state="issue"] .posterImg {
+  filter: saturate(0.6) brightness(0.8);
+}
+
+.posterBlank {
+  aspect-ratio: 2 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  text-align: center;
+  color: var(--mo-dim);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--mo-surface-2) 0 12px,
+    var(--mo-surface-3) 12px 24px
+  );
+}
+
+.blankIcon {
+  color: var(--mo-muted);
+}
+
+.blankTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mo-bg) 16%, transparent) 0%,
+    transparent 36%,
+    color-mix(in srgb, var(--mo-bg) 48%, transparent) 100%
+  );
+}
+
+.badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 2px 7px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+}
+
+.badgeWarn {
+  background: color-mix(in srgb, var(--mo-surface) 82%, var(--mo-warn));
+  color: var(--mo-warn);
+  border: 1px solid var(--mo-warn-bd);
+}
+
+.badgeBad {
+  background: color-mix(in srgb, var(--mo-surface) 82%, var(--mo-bad));
+  color: var(--mo-bad);
+  border: 1px solid var(--mo-bad-bd);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 8px;
+  background: linear-gradient(
+    180deg,
+    transparent 48%,
+    color-mix(in srgb, var(--mo-bg) 88%, transparent) 100%
+  );
+  opacity: 0;
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+
+.card:hover .overlay,
+.card:focus-visible .overlay {
+  opacity: 1;
+}
+
+.detailBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--mo-accent);
+  color: var(--mantine-color-white);
+  box-shadow: var(--mo-shadow);
+}
+
+.title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--mo-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--mo-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 3px 7px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.noteText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noteWarn {
+  background: var(--mo-warn-soft);
+  color: var(--mo-warn);
+}
+
+.noteBad {
+  background: var(--mo-bad-soft);
+  color: var(--mo-bad);
+}

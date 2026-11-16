@@ -1,35 +1,79 @@
-import { AspectRatio, Badge, Card, Center, Image, Text } from "@mantine/core";
 import { Link } from "react-router";
 import type { WallItem } from "../api";
+import { IconImage, IconScrape, IconSearch, IconWarning } from "../icons";
+import styles from "./PosterCard.module.css";
 
-export function PosterCard({ item }: { item: WallItem }) {
-  const caption = [item.subtitle, item.year].filter((part) => part !== null).join(" · ");
+export interface PosterCardProps {
+  item: WallItem;
+  className?: string;
+}
+
+export function PosterCard({ item, className }: PosterCardProps) {
+  const hasIssue = typeof item.issue === "string" && item.issue !== "";
+  const state = hasIssue ? "issue" : !item.is_scraped ? "unscraped" : "normal";
+  const caption = [item.year, item.subtitle]
+    .filter((part) => part !== null && part !== "")
+    .join(" · ");
+
   return (
-    <Card component={Link} to={`/items/${item.id}`} padding="xs" withBorder>
-      <Card.Section>
-        <AspectRatio ratio={2 / 3}>
-          {item.poster_url !== null ? (
-            <Image src={item.poster_url} alt={item.title} fit="cover" />
-          ) : (
-            <Center bg="gray.1" p="sm">
-              <Text size="sm" c="dimmed" ta="center">
-                {item.title}
-              </Text>
-            </Center>
-          )}
-        </AspectRatio>
-      </Card.Section>
-      <Text size="sm" fw={500} mt="xs" lineClamp={1} title={item.title}>
+    <Link
+      to={`/items/${item.id}`}
+      className={[styles.card, className].filter(Boolean).join(" ")}
+      data-state={state}
+    >
+      <div className={styles.poster}>
+        {item.poster_url !== null ? (
+          <img
+            className={styles.posterImg}
+            src={item.poster_url}
+            alt={item.title}
+            loading="lazy"
+          />
+        ) : (
+          <div className={styles.posterBlank}>
+            <IconImage size={24} className={styles.blankIcon} />
+            <span className={styles.blankTitle}>{item.title}</span>
+          </div>
+        )}
+        <div className={styles.scrim} />
+        {hasIssue ? (
+          <span className={`${styles.badge} ${styles.badgeBad}`}>
+            <IconWarning size={11} />
+            异常
+          </span>
+        ) : (
+          !item.is_scraped && (
+            <span className={`${styles.badge} ${styles.badgeWarn}`}>
+              <IconScrape size={11} />
+              未刮削
+            </span>
+          )
+        )}
+        <div className={styles.overlay} aria-hidden="true">
+          <span className={styles.detailBtn}>
+            <IconSearch size={12} />
+            详情
+          </span>
+        </div>
+      </div>
+
+      <h3 className={styles.title} title={item.title}>
         {item.title}
-      </Text>
-      <Text size="xs" c="dimmed" lineClamp={1}>
+      </h3>
+      <p className={styles.subtitle} title={caption || undefined}>
         {caption || "\u00a0"}
-      </Text>
-      {!item.is_scraped && (
-        <Badge size="xs" variant="light" color="gray" mt={4}>
-          未刮削
-        </Badge>
+      </p>
+
+      {hasIssue && (
+        <div className={`${styles.note} ${styles.noteBad}`} title={item.issue ?? undefined}>
+          <span className={styles.noteText}>{item.issue}</span>
+        </div>
       )}
-    </Card>
+      {!hasIssue && !item.is_scraped && (
+        <div className={`${styles.note} ${styles.noteWarn}`} title="待刮削元数据">
+          <span className={styles.noteText}>待刮削元数据</span>
+        </div>
+      )}
+    </Link>
   );
 }
