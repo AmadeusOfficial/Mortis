@@ -1,16 +1,12 @@
 import {
   Accordion,
   Alert,
-  Badge,
   Button,
   Group,
   Modal,
-  Paper,
   Stack,
   Switch,
-  Table,
   Text,
-  Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,13 +14,17 @@ import { useEffect, useState } from "react";
 import {
   type DataType,
   type OrderEntry,
-  type SourceRef,
   type SourceOrders,
+  type SourceRef,
   fetchDataTypes,
   fetchSourceOrders,
   resetSourceOrders,
   saveSourceOrders,
 } from "../api";
+import styles from "../pages/SettingsPage.module.css";
+import { IconDrag } from "../icons";
+import { SettingCard } from "./settings/SettingLayout";
+import { Pill } from "./ui";
 
 // 一份可编辑的顺序：整体顺序和字段自己的顺序用的是同一种结构。
 type FieldDraft = {
@@ -70,14 +70,13 @@ export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
 
   if (dataTypes.isError) {
     return (
-      <Paper withBorder p="md">
-        <Stack>
-          <Title order={4}>来源顺序</Title>
+      <SettingCard title="来源顺序">
+        <div className={styles.cardBody}>
           <Alert color="red" title="读不到数据类型">
             {dataTypes.error.message}
           </Alert>
-        </Stack>
-      </Paper>
+        </div>
+      </SettingCard>
     );
   }
   if (!dataTypes.isSuccess) {
@@ -89,21 +88,20 @@ export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
       return null;
     }
     return (
-      <Paper withBorder p="md">
-        <Stack>
-          <Title order={4}>来源顺序</Title>
-          <Text size="sm" c="dimmed">
-            还没有插件数据类型。启用数据类型插件后，这里会按类型列出各自的来源顺序。
+      <SettingCard
+        title="来源顺序"
+        description="还没有插件数据类型。启用数据类型插件后，这里会按类型列出各自的来源顺序。"
+      >
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            暂无可配置的插件数据类型。
           </Text>
-        </Stack>
-      </Paper>
+        </div>
+      </SettingCard>
     );
   }
   return (
     <>
-      <Text size="sm" c="dimmed">
-        每个字段按来源顺序取第一个有值的来源；整体顺序用于所有没单独设置的字段。
-      </Text>
       {pluginTypes.map((type) => (
         <SourceOrderBlock key={type.id} dataType={type} />
       ))}
@@ -158,23 +156,28 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
     },
   });
 
+  const description = "每个字段按来源顺序取第一个有值的来源；整体顺序用于所有没单独设置的字段。";
+
   if (orders.isError) {
     return (
-      <Paper withBorder p="md">
-        <Stack>
-          <Title order={4}>{dataType.name} 来源顺序</Title>
+      <SettingCard title={`${dataType.name} 来源顺序`} description={description}>
+        <div className={styles.cardBody}>
           <Alert color="red" title="读不到来源顺序">
             {orders.error.message}
           </Alert>
-        </Stack>
-      </Paper>
+        </div>
+      </SettingCard>
     );
   }
   if (draft === null || orders.data === undefined) {
     return (
-      <Paper withBorder p="md">
-        <Text c="dimmed">正在读取{dataType.name}的来源顺序…</Text>
-      </Paper>
+      <SettingCard title={`${dataType.name} 来源顺序`} description={description}>
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            正在读取{dataType.name}的来源顺序…
+          </Text>
+        </div>
+      </SettingCard>
     );
   }
 
@@ -187,50 +190,65 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
     });
 
   return (
-    <Paper withBorder p="md">
-      <Stack>
-        <Title order={4}>{dataType.name} 来源顺序</Title>
-        <Text size="sm" fw={500}>
-          整体顺序
-        </Text>
-        <OrderList
-          entries={draft.whole}
-          sources={sources}
-          onChange={(index, delta) => setWhole(moveEntry(draft.whole, index, delta))}
-        />
-        {draft.fields.length > 0 && (
+    <SettingCard title={`${dataType.name} 来源顺序`} description={description}>
+      <div className={styles.orderSectionLabel}>整体顺序</div>
+      <OrderList
+        entries={draft.whole}
+        sources={sources}
+        onChange={(index, delta) => setWhole(moveEntry(draft.whole, index, delta))}
+      />
+      {draft.fields.length > 0 && (
+        <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
           <Accordion multiple variant="separated" chevronPosition="left">
             {draft.fields.map((field) => (
-              <Accordion.Item key={field.key} value={field.key}>
+              <Accordion.Item
+                key={field.key}
+                value={field.key}
+                style={{
+                  background: "var(--mo-surface-2)",
+                  borderColor: "var(--mo-line)",
+                }}
+              >
                 <Accordion.Control>
                   <Group gap="xs">
-                    <Text size="sm">{field.label}</Text>
-                    <Badge size="xs" variant="light" color={field.custom ? "blue" : "gray"}>
+                    <Text size="sm" fw={500}>
+                      {field.label}
+                    </Text>
+                    <Pill tone={field.custom ? "accent" : "neutral"}>
                       {field.custom ? "单独设置" : "跟随整体顺序"}
-                    </Badge>
+                    </Pill>
                   </Group>
                 </Accordion.Control>
                 <Accordion.Panel>
                   <Stack gap="sm">
                     {field.custom ? (
                       <>
-                        <OrderList
-                          entries={field.order}
-                          sources={sources}
-                          showExcluded
-                          onChange={(index, delta) =>
-                            setField(field.key, {
-                              order: moveEntry(field.order, index, delta),
-                            })
-                          }
-                          onToggleExcluded={(index) =>
-                            setField(field.key, {
-                              order: field.order.map((entry, at) =>
-                                at === index ? { ...entry, excluded: !entry.excluded } : entry,
-                              ),
-                            })
-                          }
-                        />
+                        <div
+                          style={{
+                            border: "1px solid var(--mo-line)",
+                            borderRadius: 8,
+                            overflow: "hidden",
+                            background: "var(--mo-surface)",
+                          }}
+                        >
+                          <OrderList
+                            entries={field.order}
+                            sources={sources}
+                            showExcluded
+                            onChange={(index, delta) =>
+                              setField(field.key, {
+                                order: moveEntry(field.order, index, delta),
+                              })
+                            }
+                            onToggleExcluded={(index) =>
+                              setField(field.key, {
+                                order: field.order.map((entry, at) =>
+                                  at === index ? { ...entry, excluded: !entry.excluded } : entry,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
                         <Group>
                           <Button
                             size="compact-sm"
@@ -242,13 +260,13 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
                         </Group>
                       </>
                     ) : (
-                      <Group>
-                        <Text size="sm" c="dimmed">
+                      <Group justify="space-between" wrap="wrap" gap="sm">
+                        <Text size="sm" c="var(--mo-dim)">
                           这个字段跟着上面的整体顺序取来源。
                         </Text>
                         <Button
                           size="compact-sm"
-                          variant="light"
+                          variant="default"
                           onClick={() =>
                             setField(field.key, {
                               custom: true,
@@ -269,21 +287,25 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
               </Accordion.Item>
             ))}
           </Accordion>
-        )}
-        {save.isError && (
-          <Alert color="red" title="保存失败">
-            {save.error.message}
-          </Alert>
-        )}
-        <Group>
-          <Button loading={save.isPending} onClick={() => save.mutate(draft)}>
-            保存
-          </Button>
-          <Button variant="default" onClick={() => setConfirmReset(true)}>
-            恢复默认
-          </Button>
-        </Group>
-      </Stack>
+        </div>
+      )}
+      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
+        <Stack gap="sm">
+          {save.isError && (
+            <Alert color="red" title="保存失败">
+              {save.error.message}
+            </Alert>
+          )}
+          <Group>
+            <Button variant="filled" loading={save.isPending} onClick={() => save.mutate(draft)}>
+              保存
+            </Button>
+            <Button variant="default" onClick={() => setConfirmReset(true)}>
+              恢复默认
+            </Button>
+          </Group>
+        </Stack>
+      </div>
       {confirmReset && (
         <Modal opened onClose={() => setConfirmReset(false)} title="恢复默认来源顺序">
           <Stack>
@@ -300,6 +322,7 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
                 取消
               </Button>
               <Button
+                variant="filled"
                 loading={reset.isPending}
                 onClick={() => reset.mutate(undefined, { onSuccess: () => setConfirmReset(false) })}
               >
@@ -309,7 +332,7 @@ function SourceOrderBlock({ dataType }: { dataType: DataType }) {
           </Stack>
         </Modal>
       )}
-    </Paper>
+    </SettingCard>
   );
 }
 
@@ -331,61 +354,62 @@ function OrderList({
 
   if (entries.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
-        还没有启用的来源。
-      </Text>
+      <div className={styles.cardBody}>
+        <Text size="sm" c="var(--mo-dim)">
+          还没有启用的来源。
+        </Text>
+      </div>
     );
   }
 
   return (
-    <Table verticalSpacing={4}>
-      <Table.Tbody>
-        {entries.map((entry, index) => (
-          <Table.Tr key={entry.source} c={entry.excluded ? "dimmed" : undefined}>
-            <Table.Td w={40}>{index + 1}</Table.Td>
-            <Table.Td>
-              <Group gap="xs">
-                <Text size="sm">{nameOf(entry.source)}</Text>
-                {!installed(entry.source) && (
-                  <Badge size="xs" variant="light" color="gray">
-                    未安装
-                  </Badge>
-                )}
-              </Group>
-            </Table.Td>
-            <Table.Td w={320}>
-              <Group gap={4} wrap="nowrap" justify="flex-end">
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  aria-label={`上移${nameOf(entry.source)}`}
-                  disabled={index === 0}
-                  onClick={() => onChange(index, -1)}
-                >
-                  上移
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  aria-label={`下移${nameOf(entry.source)}`}
-                  disabled={index === entries.length - 1}
-                  onClick={() => onChange(index, 1)}
-                >
-                  下移
-                </Button>
-                {showExcluded && onToggleExcluded !== undefined && (
-                  <Switch
-                    size="xs"
-                    label="排除"
-                    checked={entry.excluded}
-                    onChange={() => onToggleExcluded(index)}
-                  />
-                )}
-              </Group>
-            </Table.Td>
-          </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
+    <div>
+      {entries.map((entry, index) => (
+        <div
+          key={entry.source}
+          className={styles.orderRow}
+          data-excluded={entry.excluded ? "true" : "false"}
+        >
+          <span className={styles.orderGrip} aria-hidden="true">
+            <IconDrag size={14} />
+          </span>
+          <span className={styles.orderRank}>{index + 1}</span>
+          <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
+            <Text size="sm" fw={500}>
+              {nameOf(entry.source)}
+            </Text>
+            {!installed(entry.source) && <Pill tone="neutral">未安装</Pill>}
+          </Group>
+          <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              aria-label={`上移${nameOf(entry.source)}`}
+              disabled={index === 0}
+              onClick={() => onChange(index, -1)}
+            >
+              上移
+            </Button>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              aria-label={`下移${nameOf(entry.source)}`}
+              disabled={index === entries.length - 1}
+              onClick={() => onChange(index, 1)}
+            >
+              下移
+            </Button>
+            {showExcluded && onToggleExcluded !== undefined && (
+              <Switch
+                size="xs"
+                label="排除"
+                checked={entry.excluded}
+                onChange={() => onToggleExcluded(index)}
+              />
+            )}
+          </Group>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -1,15 +1,11 @@
 ﻿import {
   Alert,
   Anchor,
-  Badge,
   Button,
   Group,
-  NavLink,
-  Paper,
   Select,
   Stack,
   Text,
-  Title,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -25,13 +21,16 @@ import {
   SecretField,
   TasksSection,
 } from "../components/settings/GeneralSections";
+import { SettingCard } from "../components/settings/SettingLayout";
 import { TypeSettings } from "../components/settings/TypeSettings";
+import { PageHeader, Pill } from "../components/ui";
 import { useDataTypes } from "../dataTypes";
+import styles from "./SettingsPage.module.css";
 
 export const DEFAULT_SECTION = "general.network";
 
-type Entry = { key: string; label: string };
-type Group = { group: string; entries: Entry[] };
+type Entry = { key: string; label: string; available?: boolean };
+type GroupDef = { group: string; entries: Entry[] };
 
 const BUILTIN_ORDER = ["movie", "tv", "anime"];
 
@@ -47,6 +46,7 @@ function byBuiltinFirst(a: DataType, b: DataType): number {
 export function SettingsPage() {
   const dataTypes = useDataTypes();
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
+  const secrets = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
   const [searchParams, setSearchParams] = useSearchParams();
   const narrow = useMediaQuery("(max-width: 62em)");
 
@@ -84,7 +84,7 @@ export function SettingsPage() {
     );
   }, [loginPlugin, hasSection, setSearchParams]);
 
-  const groups: Group[] = [
+  const groups: GroupDef[] = [
     {
       group: "通用",
       entries: [
@@ -104,10 +104,18 @@ export function SettingsPage() {
     {
       group: "来源",
       entries: [
-        { key: "source.tmdb", label: "TMDB" },
+        {
+          key: "source.tmdb",
+          label: "TMDB",
+          available: secrets.data?.tmdb_api_key === true,
+        },
         ...(plugins.data ?? [])
           .filter((plugin) => plugin.kind === "source")
-          .map((plugin) => ({ key: `source.${plugin.id}`, label: plugin.name })),
+          .map((plugin) => ({
+            key: `source.${plugin.id}`,
+            label: plugin.name,
+            available: plugin.enabled && plugin.error === null && plugin.notice === null,
+          })),
       ],
     },
     { group: "插件", entries: [{ key: "plugins", label: "插件管理" }] },
@@ -140,9 +148,12 @@ export function SettingsPage() {
   };
 
   return (
-    <Stack>
-      <Title order={2}>设置</Title>
-      <Group align="flex-start" gap="lg" wrap={narrow ? "wrap" : "nowrap"}>
+    <div>
+      <PageHeader
+        title="设置"
+        description="设置和密钥分两个文件保存在数据目录"
+      />
+      <div className={styles.layout}>
         {narrow ? (
           <Select
             w="100%"
@@ -156,30 +167,32 @@ export function SettingsPage() {
             }))}
           />
         ) : (
-          <Paper withBorder p="xs" w={220} style={{ position: "sticky", top: 12, flexShrink: 0 }}>
-            <Stack gap={4}>
-              {groups.map((group) => (
-                <Stack key={group.group} gap={2}>
-                  <Text size="xs" c="dimmed" px="sm" pt={6}>
-                    {group.group}
-                  </Text>
-                  {group.entries.map((entry) => (
-                    <NavLink
-                      key={entry.key}
-                      component={Link}
-                      to={`/settings?section=${entry.key}`}
-                      label={entry.label}
-                      active={current === entry.key}
-                      variant="filled"
-                      style={{ borderRadius: "var(--mantine-radius-md)" }}
-                    />
-                  ))}
-                </Stack>
-              ))}
-            </Stack>
-          </Paper>
+          <nav className={styles.sideNav} aria-label="设置分区">
+            {groups.map((group) => (
+              <div key={group.group} className={styles.navGroup}>
+                <div className={styles.navGroupTitle}>{group.group}</div>
+                {group.entries.map((entry) => (
+                  <Link
+                    key={entry.key}
+                    to={`/settings?section=${entry.key}`}
+                    className={styles.navLink}
+                    data-active={current === entry.key ? "true" : "false"}
+                  >
+                    <span className={styles.navLabel}>{entry.label}</span>
+                    {entry.available !== undefined && (
+                      <span
+                        className={styles.navDot}
+                        data-ok={entry.available ? "true" : "false"}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </nav>
         )}
-        <Stack style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.content}>
           {/* 换分区时整块重挂载：上一个分区的草稿跟着丢掉，不会串到新分区。 */}
           <Section
             key={current}
@@ -187,9 +200,9 @@ export function SettingsPage() {
             loginResult={loginResult}
             onLoginHandled={clearLoginParam}
           />
-        </Stack>
-      </Group>
-    </Stack>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -232,7 +245,7 @@ function Section({
   if (current.startsWith("type.")) {
     return <TypeSettings dataTypeId={current.slice("type.".length)} />;
   }
-  return <Text c="dimmed">没有这个设置分区。</Text>;
+  return <Text c="var(--mo-dim)">没有这个设置分区。</Text>;
 }
 
 // TMDB 是内置类型的来源，密钥和插件密钥一起存在密钥文件里。
@@ -242,40 +255,48 @@ function TmdbSection() {
   const filled = status.data?.tmdb_api_key ?? false;
 
   return (
-    <Paper withBorder p="md">
-      <Stack>
-        <Group justify="space-between">
-          <Title order={4}>TMDB</Title>
-          <Badge variant="light" color={filled ? "green" : "yellow"}>
-            {status.data === undefined ? "正在读取…" : filled ? "Key 已填" : "Key 未填"}
-          </Badge>
-        </Group>
-        <Text size="sm" c="dimmed">
-          用于：电影、电视剧、动漫
-        </Text>
-        <Text size="sm" c="dimmed">
-          元数据和图片来自 TMDB。可以填 API Key（v3）或读访问令牌（v4）。测试连接使用已保存的网络设置。
-        </Text>
-        <SecretField secretKey="tmdb_api_key" label="TMDB API Key" onChanged={() => check.reset()} />
-        <Group>
-          <Button variant="default" loading={check.isPending} onClick={() => check.mutate()}>
-            测试连接
-          </Button>
-        </Group>
-        {check.isError && (
-          <Alert color="red" title="测试失败">
-            {check.error.message}
-          </Alert>
-        )}
-        {check.data !== undefined && (
-          <Alert color={check.data.ok ? "green" : "red"} title={check.data.ok ? "连接成功" : "连接失败"}>
-            {check.data.message}
-          </Alert>
-        )}
-        <Anchor component={Link} to="/settings?section=type.movie" size="sm">
-          打开电影设置
-        </Anchor>
-      </Stack>
-    </Paper>
+    <SettingCard
+      title="TMDB"
+      description="用于：电影、电视剧、动漫"
+      actions={
+        <Pill tone={status.data === undefined ? "neutral" : filled ? "ok" : "warn"}>
+          {status.data === undefined ? "正在读取…" : filled ? "Key 已填" : "Key 未填"}
+        </Pill>
+      }
+    >
+      <div className={styles.fieldList}>
+        <SecretField
+          secretKey="tmdb_api_key"
+          label="TMDB API Key"
+          hintExtra="元数据和图片来自 TMDB。可以填 API Key（v3）或读访问令牌（v4）。测试连接使用已保存的网络设置。"
+          onChanged={() => check.reset()}
+        />
+      </div>
+      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
+        <Stack gap="sm">
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <Button variant="default" loading={check.isPending} onClick={() => check.mutate()}>
+              测试连接
+            </Button>
+            <Anchor component={Link} to="/settings?section=type.movie" size="sm" fw={600}>
+              打开电影设置
+            </Anchor>
+          </Group>
+          {check.isError && (
+            <Alert color="red" title="测试失败">
+              {check.error.message}
+            </Alert>
+          )}
+          {check.data !== undefined && (
+            <Alert
+              color={check.data.ok ? "green" : "red"}
+              title={check.data.ok ? "连接成功" : "连接失败"}
+            >
+              {check.data.message}
+            </Alert>
+          )}
+        </Stack>
+      </div>
+    </SettingCard>
   );
 }

@@ -1,13 +1,5 @@
-import {
-  Checkbox,
-  Group,
-  Select,
-  Stack,
-  Switch,
-  Text,
-  Textarea,
-  TextInput,
-} from "@mantine/core";
+import { Checkbox, Group, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { useId } from "react";
 import type {
   MovieImages,
   MovieOutputConfig,
@@ -16,6 +8,8 @@ import type {
   TvOutputConfig,
   TvScrapeConfig,
 } from "../../api";
+import styles from "../../pages/SettingsPage.module.css";
+import { SettingRow } from "./SettingLayout";
 
 const LANGUAGES = [
   { value: "zh-CN", label: "简体中文" },
@@ -103,30 +97,50 @@ export function ScanFields({
   skipText: string;
   onSkipText: (value: string) => void;
 }) {
+  const thresholdId = useId();
+  const thresholdHintId = useId();
+  const skipId = useId();
+  const skipHintId = useId();
+
   return (
-    <Stack gap="md">
-      <Text size="xs" c="dimmed">
-        目录名和来源结果的相似度达到阈值才自动认定；跳过的目录在扫描时整个不看。
-      </Text>
-      <TextInput
+    <div className={styles.fieldList}>
+      <SettingRow
         label="匹配阈值"
-        description="0 到 1 之间，越接近 1 越严格"
-        inputMode="decimal"
-        value={thresholdText}
-        onChange={(event) => onThresholdText(event.currentTarget.value)}
-        error={
-          thresholdInvalid(thresholdText) ? "填 0 到 1 之间的数，例如 0.75" : undefined
-        }
-      />
-      <Textarea
+        hint="0 到 1 之间，越接近 1 越严格"
+        htmlFor={thresholdId}
+        hintId={thresholdHintId}
+      >
+        <TextInput
+          id={thresholdId}
+          aria-describedby={thresholdHintId}
+          className={styles.monoInput}
+          maw={140}
+          inputMode="decimal"
+          value={thresholdText}
+          onChange={(event) => onThresholdText(event.currentTarget.value)}
+          error={
+            thresholdInvalid(thresholdText) ? "填 0 到 1 之间的数，例如 0.75" : undefined
+          }
+        />
+      </SettingRow>
+      <SettingRow
         label="跳过的目录"
-        description="一行一个目录名，扫描时整个目录不看"
-        autosize
-        minRows={2}
-        value={skipText}
-        onChange={(event) => onSkipText(event.currentTarget.value)}
-      />
-    </Stack>
+        hint="一行一个目录名，扫描时整个目录不看"
+        htmlFor={skipId}
+        hintId={skipHintId}
+        align="start"
+      >
+        <Textarea
+          id={skipId}
+          aria-describedby={skipHintId}
+          className={styles.monoInput}
+          autosize
+          minRows={2}
+          value={skipText}
+          onChange={(event) => onSkipText(event.currentTarget.value)}
+        />
+      </SettingRow>
+    </div>
   );
 }
 
@@ -137,19 +151,37 @@ export function MovieScrapeFields({
   movie: MovieScrapeConfig;
   onChange: (patch: Partial<MovieScrapeConfig>) => void;
 }) {
+  const langId = useId();
+  const countryId = useId();
+  const countryHintId = useId();
+  const adultId = useId();
+  const posterId = useId();
+  const fanartId = useId();
+  const textlessId = useId();
+
   return (
-    <Stack gap="md">
-      <Group grow align="flex-start">
+    <div className={styles.fieldList}>
+      <SettingRow label="刮削语言" hint="片名、简介、标语优先使用的语言" htmlFor={langId}>
         <Select
-          label="刮削语言"
+          id={langId}
+          maw={260}
           data={LANGUAGES}
           allowDeselect={false}
           value={movie.language}
           onChange={(value) => value !== null && onChange({ language: value })}
         />
+      </SettingRow>
+      <SettingRow
+        label="分级国家"
+        hint="TMDB 的国家代码，例如 US、CN"
+        htmlFor={countryId}
+        hintId={countryHintId}
+      >
         <TextInput
-          label="分级国家"
-          description="TMDB 的国家代码，例如 US、CN"
+          id={countryId}
+          aria-describedby={countryHintId}
+          className={styles.monoInput}
+          maw={140}
           maxLength={2}
           value={movie.certification_country}
           error={countryInvalid(movie.certification_country) ? "填两位字母" : undefined}
@@ -157,38 +189,43 @@ export function MovieScrapeFields({
             onChange({ certification_country: event.currentTarget.value.toUpperCase() })
           }
         />
-      </Group>
-      <Switch
-        label="包含成人内容"
-        checked={movie.include_adult}
-        onChange={(event) => onChange({ include_adult: event.currentTarget.checked })}
-      />
-      <Group grow align="flex-start">
+      </SettingRow>
+      <SettingRow label="包含成人内容" hint="搜索与匹配结果是否包含成人条目" htmlFor={adultId}>
+        <Switch
+          id={adultId}
+          checked={movie.include_adult}
+          onChange={(event) => onChange({ include_adult: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="海报尺寸" htmlFor={posterId}>
         <Select
-          label="海报尺寸"
+          id={posterId}
+          maw={220}
           data={POSTER_SIZES}
           allowDeselect={false}
           value={movie.poster_size}
           onChange={(value) => value !== null && onChange({ poster_size: value })}
         />
+      </SettingRow>
+      <SettingRow label="同人画尺寸" htmlFor={fanartId}>
         <Select
-          label="同人画尺寸"
+          id={fanartId}
+          maw={220}
           data={FANART_SIZES}
           allowDeselect={false}
           value={movie.fanart_size}
           onChange={(value) => value !== null && onChange({ fanart_size: value })}
         />
-      </Group>
-      <Switch
-        label="优先无文字的同人画"
-        checked={movie.prefer_textless_fanart}
-        onChange={(event) => onChange({ prefer_textless_fanart: event.currentTarget.checked })}
-      />
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          要抓的图片
-        </Text>
-        <Group gap="md">
+      </SettingRow>
+      <SettingRow label="优先无文字的同人画" htmlFor={textlessId}>
+        <Switch
+          id={textlessId}
+          checked={movie.prefer_textless_fanart}
+          onChange={(event) => onChange({ prefer_textless_fanart: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="要抓的图片" hint="刮削时一并下载的图片资产" align="start">
+        <Group gap="md" wrap="wrap">
           {MOVIE_IMAGE_LABELS.map(([key, label]) => (
             <Checkbox
               key={key}
@@ -200,8 +237,8 @@ export function MovieScrapeFields({
             />
           ))}
         </Group>
-      </Stack>
-    </Stack>
+      </SettingRow>
+    </div>
   );
 }
 
@@ -212,103 +249,183 @@ export function MovieOrganizeFields({
   output: MovieOutputConfig;
   onChange: (patch: Partial<MovieOutputConfig>) => void;
 }) {
+  const autoId = useId();
+  const renameId = useId();
+  const renameHintId = useId();
+  const writeId = useId();
+  const writeHintId = useId();
+  const imageStyleId = useId();
+  const collectionId = useId();
+  const actorFolderId = useId();
+  const actorFolderHintId = useId();
+  const folderTplId = useId();
+  const folderTplHintId = useId();
+  const fileTplId = useId();
+  const fileTplHintId = useId();
+  const folderSpaceId = useId();
+  const fileSpaceId = useId();
+  const colonId = useId();
+  const lockId = useId();
+  const studioId = useId();
+
   return (
-    <Stack gap="md">
-      <Text size="xs" c="dimmed">
-        刮削只改莫提斯里的资料；整理才动磁盘，让 Emby、Plex、Kodi 能直接读到。
-      </Text>
-      <Switch
-        label="刮削后自动整理"
-        checked={output.organize_after_scrape}
-        onChange={(event) => onChange({ organize_after_scrape: event.currentTarget.checked })}
-      />
-      <Switch
+    <div className={styles.fieldList}>
+      <SettingRow label="刮削后自动整理" htmlFor={autoId}>
+        <Switch
+          id={autoId}
+          checked={output.organize_after_scrape}
+          onChange={(event) => onChange({ organize_after_scrape: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
         label="整理时重命名"
-        description="按下面的模板改目录和文件名"
-        checked={output.organize_rename}
-        onChange={(event) => onChange({ organize_rename: event.currentTarget.checked })}
-      />
-      <Switch
-        label="整理时写 NFO 和图片"
-        description="写到视频旁边；已经写过的条目改名后总会重写"
-        checked={output.organize_write_files}
-        onChange={(event) => onChange({ organize_write_files: event.currentTarget.checked })}
-      />
-      <Checkbox.Group
-        label="NFO 文件名"
-        value={output.nfo_names}
-        onChange={(value) => onChange({ nfo_names: value as ("movie" | "filename")[] })}
+        hint="按下面的模板改目录和文件名"
+        htmlFor={renameId}
+        hintId={renameHintId}
       >
-        <Group gap="md" mt={4}>
-          <Checkbox value="movie" label="movie.nfo" />
-          <Checkbox value="filename" label="视频名.nfo" />
-        </Group>
-      </Checkbox.Group>
-      <Select
-        label="图片文件名"
-        data={[
-          { value: "filename", label: "视频名-poster.jpg" },
-          { value: "plain", label: "poster.jpg" },
-        ]}
-        allowDeselect={false}
-        value={output.image_style}
-        onChange={(value) => value !== null && onChange({ image_style: value as "filename" | "plain" })}
-      />
-      <Switch
-        label="系列图写成 movieset-poster.jpg"
-        checked={output.collection_image_names}
-        onChange={(event) => onChange({ collection_image_names: event.currentTarget.checked })}
-      />
-      <TextInput
+        <Switch
+          id={renameId}
+          aria-describedby={renameHintId}
+          checked={output.organize_rename}
+          onChange={(event) => onChange({ organize_rename: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
+        label="整理时写 NFO 和图片"
+        hint="写到视频旁边；已经写过的条目改名后总会重写"
+        htmlFor={writeId}
+        hintId={writeHintId}
+      >
+        <Switch
+          id={writeId}
+          aria-describedby={writeHintId}
+          checked={output.organize_write_files}
+          onChange={(event) => onChange({ organize_write_files: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="NFO 文件名">
+        <Checkbox.Group
+          aria-label="NFO 文件名"
+          value={output.nfo_names}
+          onChange={(value) => onChange({ nfo_names: value as ("movie" | "filename")[] })}
+        >
+          <Group gap="md">
+            <Checkbox value="movie" label="movie.nfo" />
+            <Checkbox value="filename" label="视频名.nfo" />
+          </Group>
+        </Checkbox.Group>
+      </SettingRow>
+      <SettingRow label="图片文件名" htmlFor={imageStyleId}>
+        <Select
+          id={imageStyleId}
+          maw={260}
+          data={[
+            { value: "filename", label: "视频名-poster.jpg" },
+            { value: "plain", label: "poster.jpg" },
+          ]}
+          allowDeselect={false}
+          value={output.image_style}
+          onChange={(value) => value !== null && onChange({ image_style: value as "filename" | "plain" })}
+        />
+      </SettingRow>
+      <SettingRow label="系列图写成 movieset-poster.jpg" htmlFor={collectionId}>
+        <Switch
+          id={collectionId}
+          checked={output.collection_image_names}
+          onChange={(event) => onChange({ collection_image_names: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
         label="演员头像目录"
-        description="只填一层目录名，放在视频旁边"
-        value={output.actor_images_folder}
-        onChange={(event) => onChange({ actor_images_folder: event.currentTarget.value })}
-      />
-      <TextInput
-        label="目录模板"
-        description={TEMPLATE_HINT}
-        value={output.folder_template}
-        onChange={(event) => onChange({ folder_template: event.currentTarget.value })}
-      />
-      <TextInput
-        label="文件模板"
-        description={TEMPLATE_HINT}
-        value={output.file_template}
-        onChange={(event) => onChange({ file_template: event.currentTarget.value })}
-      />
-      <Group grow align="flex-start">
+        hint="只填一层目录名，放在视频旁边"
+        htmlFor={actorFolderId}
+        hintId={actorFolderHintId}
+      >
         <TextInput
-          label="目录名空格换成"
+          id={actorFolderId}
+          aria-describedby={actorFolderHintId}
+          className={styles.monoInput}
+          maw={260}
+          value={output.actor_images_folder}
+          onChange={(event) => onChange({ actor_images_folder: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow
+        label="目录模板"
+        hint={TEMPLATE_HINT}
+        htmlFor={folderTplId}
+        hintId={folderTplHintId}
+        align="start"
+      >
+        <TextInput
+          id={folderTplId}
+          aria-describedby={folderTplHintId}
+          className={styles.monoInput}
+          value={output.folder_template}
+          onChange={(event) => onChange({ folder_template: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow
+        label="文件模板"
+        hint={TEMPLATE_HINT}
+        htmlFor={fileTplId}
+        hintId={fileTplHintId}
+        align="start"
+      >
+        <TextInput
+          id={fileTplId}
+          aria-describedby={fileTplHintId}
+          className={styles.monoInput}
+          value={output.file_template}
+          onChange={(event) => onChange({ file_template: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow label="目录名空格换成" htmlFor={folderSpaceId}>
+        <TextInput
+          id={folderSpaceId}
+          className={styles.monoInput}
+          maw={120}
           placeholder="不换"
           maxLength={3}
           value={output.folder_space}
           onChange={(event) => onChange({ folder_space: event.currentTarget.value })}
         />
+      </SettingRow>
+      <SettingRow label="文件名空格换成" htmlFor={fileSpaceId}>
         <TextInput
-          label="文件名空格换成"
+          id={fileSpaceId}
+          className={styles.monoInput}
+          maw={120}
           maxLength={3}
           value={output.file_space}
           onChange={(event) => onChange({ file_space: event.currentTarget.value })}
         />
+      </SettingRow>
+      <SettingRow label="冒号换成" htmlFor={colonId}>
         <TextInput
-          label="冒号换成"
+          id={colonId}
+          className={styles.monoInput}
+          maw={120}
           maxLength={3}
           value={output.colon_replacement}
           onChange={(event) => onChange({ colon_replacement: event.currentTarget.value })}
         />
-      </Group>
-      <Switch
-        label="NFO 写入锁定标记"
-        checked={output.nfo_write_lockdata}
-        onChange={(event) => onChange({ nfo_write_lockdata: event.currentTarget.checked })}
-      />
-      <Switch
-        label="NFO 只写一个制片公司"
-        checked={output.nfo_single_studio}
-        onChange={(event) => onChange({ nfo_single_studio: event.currentTarget.checked })}
-      />
-    </Stack>
+      </SettingRow>
+      <SettingRow label="NFO 写入锁定标记" htmlFor={lockId}>
+        <Switch
+          id={lockId}
+          checked={output.nfo_write_lockdata}
+          onChange={(event) => onChange({ nfo_write_lockdata: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="NFO 只写一个制片公司" htmlFor={studioId}>
+        <Switch
+          id={studioId}
+          checked={output.nfo_single_studio}
+          onChange={(event) => onChange({ nfo_single_studio: event.currentTarget.checked })}
+        />
+      </SettingRow>
+    </div>
   );
 }
 
@@ -319,19 +436,41 @@ export function SeriesScrapeFields({
   series: TvScrapeConfig;
   onChange: (patch: Partial<TvScrapeConfig>) => void;
 }) {
+  const langId = useId();
+  const countryId = useId();
+  const countryHintId = useId();
+  const adultId = useId();
+  const posterId = useId();
+  const fanartId = useId();
+  const stillId = useId();
+  const textlessId = useId();
+  const missingEpId = useId();
+  const missingEpHintId = useId();
+  const missingSpecId = useId();
+
   return (
-    <Stack gap="md">
-      <Group grow align="flex-start">
+    <div className={styles.fieldList}>
+      <SettingRow label="刮削语言" hint="剧名、简介、标语优先使用的语言" htmlFor={langId}>
         <Select
-          label="刮削语言"
+          id={langId}
+          maw={260}
           data={LANGUAGES}
           allowDeselect={false}
           value={series.language}
           onChange={(value) => value !== null && onChange({ language: value })}
         />
+      </SettingRow>
+      <SettingRow
+        label="分级国家"
+        hint="TMDB 的国家代码，例如 US、CN"
+        htmlFor={countryId}
+        hintId={countryHintId}
+      >
         <TextInput
-          label="分级国家"
-          description="TMDB 的国家代码，例如 US、CN"
+          id={countryId}
+          aria-describedby={countryHintId}
+          className={styles.monoInput}
+          maw={140}
           maxLength={2}
           value={series.certification_country}
           error={countryInvalid(series.certification_country) ? "填两位字母" : undefined}
@@ -339,45 +478,53 @@ export function SeriesScrapeFields({
             onChange({ certification_country: event.currentTarget.value.toUpperCase() })
           }
         />
-      </Group>
-      <Switch
-        label="包含成人内容"
-        checked={series.include_adult}
-        onChange={(event) => onChange({ include_adult: event.currentTarget.checked })}
-      />
-      <Group grow align="flex-start">
+      </SettingRow>
+      <SettingRow label="包含成人内容" hint="搜索与匹配结果是否包含成人条目" htmlFor={adultId}>
+        <Switch
+          id={adultId}
+          checked={series.include_adult}
+          onChange={(event) => onChange({ include_adult: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="海报尺寸" htmlFor={posterId}>
         <Select
-          label="海报尺寸"
+          id={posterId}
+          maw={220}
           data={POSTER_SIZES}
           allowDeselect={false}
           value={series.poster_size}
           onChange={(value) => value !== null && onChange({ poster_size: value })}
         />
+      </SettingRow>
+      <SettingRow label="同人画尺寸" htmlFor={fanartId}>
         <Select
-          label="同人画尺寸"
+          id={fanartId}
+          maw={220}
           data={FANART_SIZES}
           allowDeselect={false}
           value={series.fanart_size}
           onChange={(value) => value !== null && onChange({ fanart_size: value })}
         />
+      </SettingRow>
+      <SettingRow label="集缩略图尺寸" htmlFor={stillId}>
         <Select
-          label="集缩略图尺寸"
+          id={stillId}
+          maw={220}
           data={STILL_SIZES}
           allowDeselect={false}
           value={series.still_size}
           onChange={(value) => value !== null && onChange({ still_size: value })}
         />
-      </Group>
-      <Switch
-        label="优先无文字的同人画"
-        checked={series.prefer_textless_fanart}
-        onChange={(event) => onChange({ prefer_textless_fanart: event.currentTarget.checked })}
-      />
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          要抓的图片
-        </Text>
-        <Group gap="md">
+      </SettingRow>
+      <SettingRow label="优先无文字的同人画" htmlFor={textlessId}>
+        <Switch
+          id={textlessId}
+          checked={series.prefer_textless_fanart}
+          onChange={(event) => onChange({ prefer_textless_fanart: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="要抓的图片" hint="刮削时一并下载的图片资产" align="start">
+        <Group gap="md" wrap="wrap">
           {TV_IMAGE_LABELS.map(([key, label]) => (
             <Checkbox
               key={key}
@@ -389,19 +536,28 @@ export function SeriesScrapeFields({
             />
           ))}
         </Group>
-      </Stack>
-      <Switch
+      </SettingRow>
+      <SettingRow
         label="显示缺少的集"
-        description="已播出但本地没有文件的集也列出来，灰色标「缺」"
-        checked={series.show_missing_episodes}
-        onChange={(event) => onChange({ show_missing_episodes: event.currentTarget.checked })}
-      />
-      <Switch
-        label="显示缺少的特别篇"
-        checked={series.show_missing_specials}
-        onChange={(event) => onChange({ show_missing_specials: event.currentTarget.checked })}
-      />
-    </Stack>
+        hint="已播出但本地没有文件的集也列出来，灰色标「缺」"
+        htmlFor={missingEpId}
+        hintId={missingEpHintId}
+      >
+        <Switch
+          id={missingEpId}
+          aria-describedby={missingEpHintId}
+          checked={series.show_missing_episodes}
+          onChange={(event) => onChange({ show_missing_episodes: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="显示缺少的特别篇" htmlFor={missingSpecId}>
+        <Switch
+          id={missingSpecId}
+          checked={series.show_missing_specials}
+          onChange={(event) => onChange({ show_missing_specials: event.currentTarget.checked })}
+        />
+      </SettingRow>
+    </div>
   );
 }
 
@@ -412,84 +568,159 @@ export function SeriesOrganizeFields({
   output: TvOutputConfig;
   onChange: (patch: Partial<TvOutputConfig>) => void;
 }) {
+  const autoId = useId();
+  const renameId = useId();
+  const renameHintId = useId();
+  const writeId = useId();
+  const writeHintId = useId();
+  const showTplId = useId();
+  const showTplHintId = useId();
+  const seasonTplId = useId();
+  const fileTplId = useId();
+  const fileTplHintId = useId();
+  const showSpaceId = useId();
+  const seasonSpaceId = useId();
+  const fileSpaceId = useId();
+  const colonId = useId();
+  const colonHintId = useId();
+  const lockId = useId();
+  const studioId = useId();
+
   return (
-    <Stack gap="md">
-      <Text size="xs" c="dimmed">
-        刮削只改莫提斯里的资料；整理才动磁盘，让 Emby、Plex、Kodi 能直接读到。
-      </Text>
-      <Switch
-        label="刮削后自动整理"
-        checked={output.organize_after_scrape}
-        onChange={(event) => onChange({ organize_after_scrape: event.currentTarget.checked })}
-      />
-      <Switch
+    <div className={styles.fieldList}>
+      <SettingRow label="刮削后自动整理" htmlFor={autoId}>
+        <Switch
+          id={autoId}
+          checked={output.organize_after_scrape}
+          onChange={(event) => onChange({ organize_after_scrape: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
         label="整理时重命名"
-        description="按下面的模板改剧目录、季目录和文件名"
-        checked={output.organize_rename}
-        onChange={(event) => onChange({ organize_rename: event.currentTarget.checked })}
-      />
-      <Switch
+        hint="按下面的模板改剧目录、季目录和文件名"
+        htmlFor={renameId}
+        hintId={renameHintId}
+      >
+        <Switch
+          id={renameId}
+          aria-describedby={renameHintId}
+          checked={output.organize_rename}
+          onChange={(event) => onChange({ organize_rename: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
         label="整理时写 NFO 和图片"
-        description="tvshow.nfo 和剧图写进剧目录，season.nfo 写进季目录，集 NFO 和缩略图写在视频旁边"
-        checked={output.organize_write_files}
-        onChange={(event) => onChange({ organize_write_files: event.currentTarget.checked })}
-      />
-      <TextInput
+        hint="tvshow.nfo 和剧图写进剧目录，season.nfo 写进季目录，集 NFO 和缩略图写在视频旁边"
+        htmlFor={writeId}
+        hintId={writeHintId}
+      >
+        <Switch
+          id={writeId}
+          aria-describedby={writeHintId}
+          checked={output.organize_write_files}
+          onChange={(event) => onChange({ organize_write_files: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow
         label="剧目录模板"
-        description={TV_TEMPLATE_HINT}
-        value={output.show_template}
-        onChange={(event) => onChange({ show_template: event.currentTarget.value })}
-      />
-      <TextInput
-        label="季目录模板"
-        value={output.season_template}
-        onChange={(event) => onChange({ season_template: event.currentTarget.value })}
-      />
-      <TextInput
-        label="文件模板"
-        description="一个文件里有多集时，${episodeNr2} 写成 01E02"
-        value={output.file_template}
-        onChange={(event) => onChange({ file_template: event.currentTarget.value })}
-      />
-      <Group grow align="flex-start">
+        hint={TV_TEMPLATE_HINT}
+        htmlFor={showTplId}
+        hintId={showTplHintId}
+        align="start"
+      >
         <TextInput
-          label="剧目录名空格换成"
+          id={showTplId}
+          aria-describedby={showTplHintId}
+          className={styles.monoInput}
+          value={output.show_template}
+          onChange={(event) => onChange({ show_template: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow label="季目录模板" htmlFor={seasonTplId}>
+        <TextInput
+          id={seasonTplId}
+          className={styles.monoInput}
+          value={output.season_template}
+          onChange={(event) => onChange({ season_template: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow
+        label="文件模板"
+        hint="一个文件里有多集时，${episodeNr2} 写成 01E02"
+        htmlFor={fileTplId}
+        hintId={fileTplHintId}
+        align="start"
+      >
+        <TextInput
+          id={fileTplId}
+          aria-describedby={fileTplHintId}
+          className={styles.monoInput}
+          value={output.file_template}
+          onChange={(event) => onChange({ file_template: event.currentTarget.value })}
+        />
+      </SettingRow>
+      <SettingRow label="剧目录名空格换成" htmlFor={showSpaceId}>
+        <TextInput
+          id={showSpaceId}
+          className={styles.monoInput}
+          maw={120}
           placeholder="不换"
           maxLength={3}
           value={output.show_space}
           onChange={(event) => onChange({ show_space: event.currentTarget.value })}
         />
+      </SettingRow>
+      <SettingRow label="季目录名空格换成" htmlFor={seasonSpaceId}>
         <TextInput
-          label="季目录名空格换成"
+          id={seasonSpaceId}
+          className={styles.monoInput}
+          maw={120}
           placeholder="不换"
           maxLength={3}
           value={output.season_space}
           onChange={(event) => onChange({ season_space: event.currentTarget.value })}
         />
+      </SettingRow>
+      <SettingRow label="文件名空格换成" htmlFor={fileSpaceId}>
         <TextInput
-          label="文件名空格换成"
+          id={fileSpaceId}
+          className={styles.monoInput}
+          maw={120}
           maxLength={3}
           value={output.file_space}
           onChange={(event) => onChange({ file_space: event.currentTarget.value })}
         />
+      </SettingRow>
+      <SettingRow
+        label="冒号换成"
+        hint="只换半角冒号，全角「：」保留"
+        htmlFor={colonId}
+        hintId={colonHintId}
+      >
         <TextInput
-          label="冒号换成"
-          description="只换半角冒号，全角「：」保留"
+          id={colonId}
+          aria-describedby={colonHintId}
+          className={styles.monoInput}
+          maw={120}
           maxLength={3}
           value={output.colon_replacement}
           onChange={(event) => onChange({ colon_replacement: event.currentTarget.value })}
         />
-      </Group>
-      <Switch
-        label="NFO 写入锁定标记"
-        checked={output.nfo_write_lockdata}
-        onChange={(event) => onChange({ nfo_write_lockdata: event.currentTarget.checked })}
-      />
-      <Switch
-        label="NFO 只写一个制片公司"
-        checked={output.nfo_single_studio}
-        onChange={(event) => onChange({ nfo_single_studio: event.currentTarget.checked })}
-      />
-    </Stack>
+      </SettingRow>
+      <SettingRow label="NFO 写入锁定标记" htmlFor={lockId}>
+        <Switch
+          id={lockId}
+          checked={output.nfo_write_lockdata}
+          onChange={(event) => onChange({ nfo_write_lockdata: event.currentTarget.checked })}
+        />
+      </SettingRow>
+      <SettingRow label="NFO 只写一个制片公司" htmlFor={studioId}>
+        <Switch
+          id={studioId}
+          checked={output.nfo_single_studio}
+          onChange={(event) => onChange({ nfo_single_studio: event.currentTarget.checked })}
+        />
+      </SettingRow>
+    </div>
   );
 }

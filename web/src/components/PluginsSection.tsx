@@ -2,24 +2,21 @@ import {
   Alert,
   Anchor,
   Avatar,
-  Badge,
   Button,
   CopyButton,
   Group,
   Modal,
   NumberInput,
-  Paper,
   PasswordInput,
   Radio,
   Stack,
   Switch,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   type DataType,
@@ -34,6 +31,10 @@ import {
   reloadPlugins,
   updatePlugin,
 } from "../api";
+import styles from "../pages/SettingsPage.module.css";
+import { IconRefresh } from "../icons";
+import { SettingCard, SettingRow } from "./settings/SettingLayout";
+import { Pill } from "./ui";
 
 const KIND_LABELS: Record<PluginInfo["kind"], string> = {
   data_type: "数据类型",
@@ -133,70 +134,89 @@ export function PluginsSection() {
   });
 
   return (
-    <Paper withBorder p="md">
-      <Stack>
-        <Group justify="space-between">
-          <Title order={4}>插件</Title>
-          <Button variant="default" loading={reload.isPending} onClick={() => reload.mutate()}>
-            重新加载插件
-          </Button>
-        </Group>
-        <Text size="sm" c="dimmed">
-          插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里。
-        </Text>
-        {plugins.isError && (
+    <SettingCard
+      title="插件"
+      description="插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里。"
+      actions={
+        <Button
+          variant="default"
+          size="sm"
+          leftSection={<IconRefresh size={15} />}
+          loading={reload.isPending}
+          onClick={() => reload.mutate()}
+        >
+          重新加载插件
+        </Button>
+      }
+    >
+      {plugins.isError && (
+        <div className={styles.cardBody}>
           <Alert color="red" title="读不到插件">
             {plugins.error.message}
           </Alert>
-        )}
-        {plugins.isPending && <Text c="dimmed">正在读取插件…</Text>}
-        {plugins.isSuccess && plugins.data.length === 0 && <Text c="dimmed">还没有插件。</Text>}
-        {plugins.data?.map((plugin) => (
-          <Paper key={plugin.id} withBorder p="sm">
-            <Stack gap="sm">
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Stack gap={4}>
-                  <Group gap="xs">
-                    <Text fw={500}>{plugin.name}</Text>
-                    {plugin.version !== "" && (
-                      <Badge variant="outline" color="gray">
-                        {plugin.version}
-                      </Badge>
-                    )}
-                    <Badge variant="light">{KIND_LABELS[plugin.kind]}</Badge>
-                    <Badge variant="outline" color="gray">
-                      {ORIGIN_LABELS[plugin.origin]}
-                    </Badge>
-                  </Group>
-                  {plugin.kind === "source" && (
-                    <Text size="sm" c="dimmed">
-                      服务的数据类型：{typeName(plugin.data_type)}
-                    </Text>
-                  )}
-                  {plugin.kind === "source" && (
-                    <Anchor component={Link} to={`/settings?section=source.${plugin.id}`} size="sm">
-                      去设置
-                    </Anchor>
-                  )}
-                </Stack>
-                <Switch
-                  label="启用"
-                  checked={plugin.enabled}
-                  disabled={toggle.isPending && toggle.variables?.id === plugin.id}
-                  onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
-                />
+        </div>
+      )}
+      {plugins.isPending && (
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            正在读取插件…
+          </Text>
+        </div>
+      )}
+      {plugins.isSuccess && plugins.data.length === 0 && (
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            还没有插件。
+          </Text>
+        </div>
+      )}
+      {plugins.data?.map((plugin) => (
+        <div key={plugin.id} className={styles.listRowCol}>
+          <Group justify="space-between" align="flex-start" wrap="nowrap" gap="md">
+            <Stack gap={4} style={{ minWidth: 0 }}>
+              <Group gap="xs" wrap="wrap">
+                <Text size="sm" fw={600}>
+                  {plugin.name}
+                </Text>
+                {plugin.version !== "" && (
+                  <Pill tone="neutral">
+                    <span className="mo-mono">{plugin.version}</span>
+                  </Pill>
+                )}
+                <Pill tone={plugin.kind === "source" ? "accent" : "neutral"}>
+                  {KIND_LABELS[plugin.kind]}
+                </Pill>
+                <Pill tone="neutral">{ORIGIN_LABELS[plugin.origin]}</Pill>
               </Group>
-              {plugin.error !== null && (
-                <Alert color="red" title="加载失败">
-                  {plugin.error}
-                </Alert>
+              {plugin.kind === "source" && (
+                <Text size="xs" c="var(--mo-muted)">
+                  服务的数据类型：{typeName(plugin.data_type)}
+                </Text>
               )}
-              {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
             </Stack>
-          </Paper>
-        ))}
-      </Stack>
-    </Paper>
+            <Group gap="md" wrap="nowrap" style={{ flexShrink: 0 }}>
+              {plugin.kind === "source" && (
+                <Anchor component={Link} to={`/settings?section=source.${plugin.id}`} size="sm" fw={600}>
+                  去设置
+                </Anchor>
+              )}
+              <Switch
+                label="启用"
+                checked={plugin.enabled}
+                disabled={toggle.isPending && toggle.variables?.id === plugin.id}
+                onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+              />
+            </Group>
+          </Group>
+          {plugin.error !== null && (
+            <Alert color="red" title="加载失败">
+              {plugin.error}
+            </Alert>
+          )}
+          {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
+        </div>
+      ))}
+    </SettingCard>
   );
 }
 
@@ -257,7 +277,7 @@ export function SourcePluginSettings({
     );
   }
   if (plugins.isPending) {
-    return <Text c="dimmed">正在读取插件…</Text>;
+    return <Text c="var(--mo-dim)">正在读取插件…</Text>;
   }
   if (plugin === null) {
     return (
@@ -268,50 +288,105 @@ export function SourcePluginSettings({
   }
 
   return (
-    <Stack>
-      <Paper withBorder p="md">
-        <Stack gap="sm">
-          <Group justify="space-between" wrap="nowrap">
-            <Stack gap={4}>
-              <Group gap="xs">
-                <Title order={4}>{plugin.name}</Title>
-                {plugin.version !== "" && (
-                  <Badge variant="outline" color="gray">
-                    {plugin.version}
-                  </Badge>
-                )}
-                <Badge variant="light">来源</Badge>
-              </Group>
-              <Text size="sm" c="dimmed">
-                用于：{typeName(plugin.data_type) || "（未知类型）"}
-              </Text>
-            </Stack>
-            <Switch
-              label="启用"
-              checked={plugin.enabled}
-              disabled={toggle.isPending}
-              onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
-            />
+    <Stack gap="md">
+      <SettingCard
+        title={
+          <Group gap="xs" wrap="wrap">
+            <span>{plugin.name}</span>
+            {plugin.version !== "" && (
+              <Pill tone="neutral">
+                <span className="mo-mono">{plugin.version}</span>
+              </Pill>
+            )}
+            <Pill tone="accent">来源</Pill>
           </Group>
-          {plugin.error !== null && (
-            <Alert color="red" title="加载失败">
-              {plugin.error}
-            </Alert>
-          )}
-          {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
-        </Stack>
-      </Paper>
-      <Paper withBorder p="md">
-        <PluginSettingsForm plugin={plugin} onChanged={refresh} />
-      </Paper>
-      <Paper withBorder p="md">
-        {plugin.oauth ? (
-          <PluginLogin plugin={plugin} onChanged={refresh} />
-        ) : (
-          <PluginSecretsForm plugin={plugin} onChanged={refresh} />
+        }
+        description={`用于：${typeName(plugin.data_type) || "（未知类型）"}`}
+        actions={
+          <Switch
+            label="启用"
+            checked={plugin.enabled}
+            disabled={toggle.isPending}
+            onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+          />
+        }
+      >
+        {(plugin.error !== null || plugin.notice !== null) && (
+          <div className={styles.cardBody}>
+            <Stack gap="sm">
+              {plugin.error !== null && (
+                <Alert color="red" title="加载失败">
+                  {plugin.error}
+                </Alert>
+              )}
+              {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
+            </Stack>
+          </div>
         )}
-      </Paper>
+      </SettingCard>
+
+      <PluginSettingsForm plugin={plugin} onChanged={refresh} />
+
+      {plugin.oauth ? (
+        <PluginLogin plugin={plugin} onChanged={refresh} />
+      ) : (
+        <PluginSecretsForm plugin={plugin} onChanged={refresh} />
+      )}
     </Stack>
+  );
+}
+
+function PluginSchemaField({
+  fieldKey,
+  property,
+  value,
+  onChange,
+}: {
+  fieldKey: string;
+  property: JsonSchemaProperty;
+  value: unknown;
+  onChange: (next: unknown) => void;
+}) {
+  const inputId = useId();
+  const hintId = useId();
+  const label = property.title ?? fieldKey;
+
+  if (property.type === "boolean") {
+    return (
+      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
+        <Switch
+          id={inputId}
+          aria-describedby={property.description ? hintId : undefined}
+          checked={value === true}
+          onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+      </SettingRow>
+    );
+  }
+  if (property.type === "integer" || property.type === "number") {
+    return (
+      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
+        <NumberInput
+          id={inputId}
+          aria-describedby={property.description ? hintId : undefined}
+          className={styles.monoInput}
+          maw={200}
+          allowDecimal={property.type === "number"}
+          value={asNumber(value)}
+          onChange={(next) => onChange(typeof next === "number" ? next : 0)}
+        />
+      </SettingRow>
+    );
+  }
+  return (
+    <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
+      <TextInput
+        id={inputId}
+        aria-describedby={property.description ? hintId : undefined}
+        value={asText(value)}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </SettingRow>
   );
 }
 
@@ -334,64 +409,97 @@ function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChang
   const entries = schemaEntries(plugin.settings_schema);
   if (entries.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
-        {plugin.name} 没有可改的设置。
-      </Text>
+      <SettingCard title="设置">
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            {plugin.name} 没有可改的设置。
+          </Text>
+        </div>
+      </SettingCard>
     );
   }
   const set = (key: string, value: unknown) => setDraft({ ...draft, [key]: value });
 
   return (
-    <Stack gap={6}>
-      <Text size="sm" fw={500}>
-        设置
-      </Text>
-      {entries.map(([key, property]) => {
-        const label = property.title ?? key;
-        if (property.type === "boolean") {
-          return (
-            <Switch
-              key={key}
-              label={label}
-              description={property.description}
-              checked={draft[key] === true}
-              onChange={(event) => set(key, event.currentTarget.checked)}
-            />
-          );
-        }
-        if (property.type === "integer" || property.type === "number") {
-          return (
-            <NumberInput
-              key={key}
-              label={label}
-              description={property.description}
-              allowDecimal={property.type === "number"}
-              value={asNumber(draft[key])}
-              onChange={(value) => set(key, typeof value === "number" ? value : 0)}
-            />
-          );
-        }
-        return (
-          <TextInput
+    <SettingCard title="设置" description={`配置 ${plugin.name} 的运行参数`}>
+      <div className={styles.fieldList}>
+        {entries.map(([key, property]) => (
+          <PluginSchemaField
             key={key}
-            label={label}
-            description={property.description}
-            value={asText(draft[key])}
-            onChange={(event) => set(key, event.currentTarget.value)}
+            fieldKey={key}
+            property={property}
+            value={draft[key]}
+            onChange={(next) => set(key, next)}
           />
-        );
-      })}
-      {save.isError && (
-        <Text size="sm" c="red">
-          {save.error.message}
-        </Text>
-      )}
-      <Group>
-        <Button variant="light" loading={save.isPending} onClick={() => save.mutate(draft)}>
-          保存设置
+        ))}
+      </div>
+      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
+        <Stack gap="sm">
+          {save.isError && (
+            <Alert color="red" title="保存失败">
+              {save.error.message}
+            </Alert>
+          )}
+          <Group>
+            <Button variant="filled" loading={save.isPending} onClick={() => save.mutate(draft)}>
+              保存设置
+            </Button>
+          </Group>
+        </Stack>
+      </div>
+    </SettingCard>
+  );
+}
+
+function PluginSecretRow({
+  fieldKey,
+  property,
+  isSet,
+  value,
+  busy,
+  onChange,
+  onClear,
+}: {
+  fieldKey: string;
+  property: JsonSchemaProperty;
+  isSet: boolean;
+  value: string;
+  busy: boolean;
+  onChange: (next: string) => void;
+  onClear: () => void;
+}) {
+  const inputId = useId();
+  const hintId = useId();
+  const label = property.title ?? fieldKey;
+  const hint = [
+    isSet ? "已填写。输入新值会覆盖，留空不修改。" : "未填写。",
+    property.description,
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return (
+    <SettingRow label={label} hint={hint} htmlFor={inputId} hintId={hintId} align="start">
+      <Group align="center" gap="xs" wrap="nowrap">
+        <PasswordInput
+          id={inputId}
+          aria-describedby={hintId}
+          style={{ flex: 1 }}
+          autoComplete="new-password"
+          value={value}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+        <Button
+          variant="subtle"
+          color="red"
+          aria-label={`清除${label}`}
+          disabled={!isSet || busy}
+          onClick={onClear}
+        >
+          清除
         </Button>
       </Group>
-    </Stack>
+    </SettingRow>
   );
 }
 
@@ -412,9 +520,13 @@ function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChange
   const entries = schemaEntries(plugin.secrets_schema);
   if (entries.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
-        {plugin.name} 没有需要填的密钥。
-      </Text>
+      <SettingCard title="密钥">
+        <div className={styles.cardBody}>
+          <Text size="sm" c="var(--mo-dim)">
+            {plugin.name} 没有需要填的密钥。
+          </Text>
+        </div>
+      </SettingCard>
     );
   }
   // 只提交填了内容的键；清空由每行的「清除」按钮负责。
@@ -423,52 +535,41 @@ function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChange
     .filter(([, value]) => value !== "");
 
   return (
-    <Stack gap={6}>
-      <Text size="sm" fw={500}>
-        密钥
-      </Text>
-      {entries.map(([key, property]) => (
-        <Group key={key} align="flex-end" wrap="nowrap">
-          <PasswordInput
-            style={{ flex: 1 }}
-            label={property.title ?? key}
-            description={[
-              plugin.secrets?.[key] === true ? "已填写。输入新值会覆盖，留空不修改。" : "未填写。",
-              property.description,
-            ]
-              .filter(Boolean)
-              .join("")}
-            autoComplete="new-password"
+    <SettingCard title="密钥" description="密钥单独保存在数据目录的密钥文件中">
+      <div className={styles.fieldList}>
+        {entries.map(([key, property]) => (
+          <PluginSecretRow
+            key={key}
+            fieldKey={key}
+            property={property}
+            isSet={plugin.secrets?.[key] === true}
             value={draft[key] ?? ""}
-            onChange={(event) => setDraft({ ...draft, [key]: event.currentTarget.value })}
+            busy={save.isPending}
+            onChange={(next) => setDraft({ ...draft, [key]: next })}
+            onClear={() => save.mutate({ [key]: "" })}
           />
-          <Button
-            variant="subtle"
-            color="red"
-            aria-label={`清除${property.title ?? key}`}
-            disabled={plugin.secrets?.[key] !== true || save.isPending}
-            onClick={() => save.mutate({ [key]: "" })}
-          >
-            清除
-          </Button>
-        </Group>
-      ))}
-      {save.isError && (
-        <Text size="sm" c="red">
-          {save.error.message}
-        </Text>
-      )}
-      <Group>
-        <Button
-          variant="light"
-          loading={save.isPending}
-          disabled={filled.length === 0}
-          onClick={() => save.mutate(Object.fromEntries(filled))}
-        >
-          保存密钥
-        </Button>
-      </Group>
-    </Stack>
+        ))}
+      </div>
+      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
+        <Stack gap="sm">
+          {save.isError && (
+            <Alert color="red" title="保存失败">
+              {save.error.message}
+            </Alert>
+          )}
+          <Group>
+            <Button
+              variant="filled"
+              loading={save.isPending}
+              disabled={filled.length === 0}
+              onClick={() => save.mutate(Object.fromEntries(filled))}
+            >
+              保存密钥
+            </Button>
+          </Group>
+        </Stack>
+      </div>
+    </SettingCard>
   );
 }
 
@@ -501,52 +602,60 @@ function PluginLogin({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () 
       : "使用手填的访问令牌";
 
   return (
-    <Paper withBorder p="sm" bg="gray.0">
-      <Group justify="space-between" wrap="nowrap">
-        <Group gap="sm" wrap="nowrap">
-          <Avatar src={who?.avatar_url ?? null} radius="xl" size="lg" alt={who?.name ?? ""} />
-          <Stack gap={2}>
-            <Text size="sm" fw={500}>
-              账号状态
-            </Text>
-            {who !== null &&
-              (who.url !== null ? (
-                <Anchor href={who.url} target="_blank" rel="noreferrer" size="sm">
-                  {who.name}
-                </Anchor>
-              ) : (
-                <Text size="sm">{who.name}</Text>
-              ))}
-            {plugin.logged_in && account.isFetching && who === null && (
-              <Text size="sm" c="dimmed">
-                正在读取账号…
-              </Text>
-            )}
-            {account.data?.error != null && (
-              <Text size="sm" c="red">
-                {account.data.error}
-              </Text>
-            )}
-            <Text size="xs" c="dimmed">
-              {detail}
-            </Text>
-          </Stack>
-        </Group>
-        <Group gap="xs" wrap="nowrap">
-          <Button variant={plugin.logged_in ? "default" : "filled"} onClick={() => setChoosing(true)}>
-            {plugin.logged_in ? "重新登录" : "登录"}
-          </Button>
-          {plugin.logged_in && (
-            <Button variant="subtle" color="red" loading={logout.isPending} onClick={() => logout.mutate()}>
-              退出登录
-            </Button>
-          )}
-        </Group>
-      </Group>
-      {choosing && (
-        <LoginModal plugin={plugin} onChanged={onChanged} onClose={() => setChoosing(false)} />
-      )}
-    </Paper>
+    <SettingCard title="账号状态" description="授权登录或管理访问令牌">
+      <div className={styles.cardBody}>
+        <div className={styles.accountCard}>
+          <Group justify="space-between" wrap="nowrap" gap="md">
+            <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+              <Avatar src={who?.avatar_url ?? null} radius="xl" size="lg" alt={who?.name ?? ""} />
+              <Stack gap={2} style={{ minWidth: 0 }}>
+                {who !== null ? (
+                  who.url !== null ? (
+                    <Anchor href={who.url} target="_blank" rel="noreferrer" size="sm" fw={600}>
+                      {who.name}
+                    </Anchor>
+                  ) : (
+                    <Text size="sm" fw={600}>
+                      {who.name}
+                    </Text>
+                  )
+                ) : (
+                  <Text size="sm" fw={600}>
+                    {plugin.logged_in ? plugin.name : "未登录"}
+                  </Text>
+                )}
+                {plugin.logged_in && account.isFetching && who === null && (
+                  <Text size="sm" c="var(--mo-dim)">
+                    正在读取账号…
+                  </Text>
+                )}
+                {account.data?.error != null && (
+                  <Text size="sm" c="var(--mo-bad)">
+                    {account.data.error}
+                  </Text>
+                )}
+                <Text size="xs" c="var(--mo-muted)">
+                  {detail}
+                </Text>
+              </Stack>
+            </Group>
+            <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+              <Button variant={plugin.logged_in ? "default" : "filled"} onClick={() => setChoosing(true)}>
+                {plugin.logged_in ? "重新登录" : "登录"}
+              </Button>
+              {plugin.logged_in && (
+                <Button variant="subtle" color="red" loading={logout.isPending} onClick={() => logout.mutate()}>
+                  退出登录
+                </Button>
+              )}
+            </Group>
+          </Group>
+        </div>
+        {choosing && (
+          <LoginModal plugin={plugin} onChanged={onChanged} onClose={() => setChoosing(false)} />
+        )}
+      </div>
+    </SettingCard>
   );
 }
 
@@ -618,7 +727,7 @@ function LoginModal({
           <Stack gap={4}>
             <Text size="sm">将跳到 {plugin.name} 的授权页，登录并同意授权后自动回到这里。</Text>
             <Group gap={4}>
-              <Text size="xs" c="dimmed">
+              <Text size="xs" c="var(--mo-muted)">
                 已保存 OAuth 应用。
               </Text>
               <Anchor component="button" type="button" size="xs" onClick={() => setEditingApp(true)}>
@@ -695,6 +804,7 @@ function LoginModal({
             取消
           </Button>
           <Button
+            variant="filled"
             loading={busy}
             disabled={mode === "oauth" ? !appReady : token.trim() === ""}
             onClick={() => (mode === "oauth" ? oauth.mutate() : paste.mutate())}
