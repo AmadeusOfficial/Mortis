@@ -166,6 +166,7 @@ def episode_candidates(
             "original_title": original_title,
             "overview": raw.get("overview"),
             "release_date": raw.get("air_date"),
+            "runtime": raw.get("runtime") or None,
             "ratings": ratings(raw),
             "actors": _guests(raw.get("guest_stars") or []),
             "directors": crew(credits, lambda e: e.get("job") == "Director"),

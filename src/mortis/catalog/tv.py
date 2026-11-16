@@ -59,6 +59,7 @@ TV = DataTypeSpec(
         column("original_title", "原名", "text", applies_to="episode"),
         column("overview", "剧情", "longtext", applies_to="episode"),
         column("release_date", "播出日期", "date", applies_to="episode"),
+        extra("runtime", "时长（分钟）", "number", applies_to="episode"),
         FieldSpec(
             field_key="ratings",
             label="评分",

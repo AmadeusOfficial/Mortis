@@ -1,7 +1,8 @@
 import json
+import os
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import (
@@ -19,6 +20,7 @@ from mortis.db.models import (
     Tag,
     TypeField,
 )
+from mortis.organize.episodes import parse_episode
 from mortis.scrape.apply import level_fields
 
 EDITABLE_TYPES = frozenset({"text", "longtext", "number", "date", "url"})
@@ -160,13 +162,18 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
             .order_by(Item.index_number)
         )
     )
-    videos = dict(
-        session.execute(
-            select(MediaFile.item_id, func.count())
-            .where(MediaFile.item_id.in_([e.id for e in episodes]), MediaFile.file_kind == "video")
-            .group_by(MediaFile.item_id)
-        ).all()
-    )
+    by_id = {e.id: e for e in episodes}
+    covered: set[tuple[int | None, int | None]] = set()
+    for item_id, path in session.execute(
+        select(MediaFile.item_id, MediaFile.path).where(
+            MediaFile.item_id.in_(by_id), MediaFile.file_kind == "video"
+        )
+    ):
+        episode = by_id[item_id]
+        stem = os.path.splitext(os.path.basename(path))[0]
+        parsed = parse_episode(stem, os.path.basename(os.path.dirname(path)))
+        for number in parsed.episodes if parsed else (episode.index_number,):
+            covered.add((episode.parent_id, number))
     thumbs = _first_images(session, [e.id for e in episodes], "thumb")
     by_season: dict[int, list[dict[str, Any]]] = {s.id: [] for s in seasons}
     for episode in episodes:
@@ -176,7 +183,7 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
                 "number": episode.index_number,
                 "title": episode.title,
                 "air_date": episode.release_date,
-                "has_file": episode.id in videos,
+                "has_file": (episode.parent_id, episode.index_number) in covered,
                 "still_url": image_url(thumbs.get(episode.id)),
             }
         )

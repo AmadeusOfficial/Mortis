@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets, TvImages, TvOutputConfig, TvScrapeConfig
@@ -285,3 +285,41 @@ def test_scan_scrapes_show_that_got_new_episodes(
     assert _run(app, "organize", {"library_id": library}).status == "succeeded"
     assert _owners(app)["Narcos.Mexico.S03E01.1080p.mp4"] == ("episode", 1)
     assert not any(path.startswith("/3/tv/") for path in fake.paths()[before:])
+
+
+def test_multi_episode_file_covers_every_episode(app: FastAPI, show_id: int, root: Path) -> None:
+    (root / "毒枭：墨西哥" / "S01" / "Narcos.Mexico.S01E04E05.mp4").write_bytes(b"x")
+    with app.state.session_factory() as session:
+        library = session.scalars(select(Item.library_id).where(Item.id == show_id)).one()
+    assert _run(app, "organize", {"library_id": library}).status == "succeeded"
+    app.state.config_store.save_section("tv", _config(show_missing_episodes=False))
+    _scrape(app, show_id)
+    assert sorted(_tree(app, show_id)[1]) == [1, 2, 3, 4, 5]
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        season = client.get(f"/api/items/{show_id}").json()["seasons"][0]
+        assert [e["has_file"] for e in season["episodes"]] == [True] * 5
+        assert season["file_count"] == 5
+
+
+def test_season_gone_from_tmdb_is_dropped(app: FastAPI, show_id: int, fake: FakeTmdb) -> None:
+    _scrape(app, show_id)
+    assert 3 in _tree(app, show_id)
+    raw = copy.deepcopy(load_fixture("tv_80968.json"))
+    raw["seasons"] = [s for s in raw["seasons"] if s["season_number"] != 3]
+    fake.add("/3/tv/80968", raw)
+    _scrape(app, show_id, force=True)
+    assert sorted(_tree(app, show_id)) == [1, 2]
+    with app.state.session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(Item)) == 1 + 2 + 20
+
+
+def test_episode_runtime_comes_from_tmdb(app: FastAPI, show_id: int) -> None:
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        season = session.scalars(
+            select(Item).where(Item.parent_id == show_id, Item.index_number == 1)
+        ).one()
+        episode = session.scalars(
+            select(Item).where(Item.parent_id == season.id, Item.index_number == 1)
+        ).one()
+        assert json.loads(episode.fields)["runtime"] > 0

@@ -66,16 +66,16 @@ def _subtree_files(session: Session, show_id: int) -> list[MediaFile]:
     )
 
 
-def _local_numbers(files: list[MediaFile]) -> dict[str, tuple[int, int]]:
-    """视频路径 → (季号, 第一集集号)。季号没写时当第 1 季。"""
-    numbers: dict[str, tuple[int, int]] = {}
+def _local_numbers(files: list[MediaFile]) -> dict[str, tuple[int, tuple[int, ...]]]:
+    """视频路径 → (季号, 文件里的各集集号)。季号没写时当第 1 季。"""
+    numbers: dict[str, tuple[int, tuple[int, ...]]] = {}
     for row in files:
         if row.file_kind != "video":
             continue
         folder = os.path.basename(os.path.dirname(row.path))
         parsed = parse_episode(os.path.splitext(os.path.basename(row.path))[0], folder)
         if parsed is not None:
-            numbers[row.path] = (1 if parsed.season is None else parsed.season, parsed.episodes[0])
+            numbers[row.path] = (1 if parsed.season is None else parsed.season, parsed.episodes)
     return numbers
 
 
@@ -176,7 +176,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         season_fields = level_fields(session, data_type_id, "season")
         episode_fields = level_fields(session, data_type_id, "episode")
     local_seasons = {season for season, _ in local.values()}
-    local_episodes = set(local.values())
+    local_episodes = {(season, n) for season, numbers in local.values() for n in numbers}
 
     with open_tmdb(services) as tmdb:
         show_fetched = show_raw is None
@@ -264,13 +264,19 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 episode_count += 1
                 if season.ids.get(number):
                     save_external_ids(session, episode_row.id, {"tmdb": season.ids[number]})
-            for path, key in local.items():
-                if key[0] == season.number and key[1] in season.episodes:
-                    targets[path] = _child(session, season_row, "episode", key[1]).id
+            for path, (number, episodes) in local.items():
+                if number == season.number and episodes[0] in season.episodes:
+                    targets[path] = _child(session, season_row, "episode", episodes[0]).id
             _drop_stale(session, season_row.id, "episode", kept)
         files_on_show = _subtree_files(session, show.id)
         bound = _bind(session, files_on_show, targets, show.id)
         session.flush()
+        for season_id in session.scalars(
+            select(Item.id).where(
+                Item.parent_id == show.id, Item.kind == "season", Item.id.not_in(kept_seasons)
+            )
+        ).all():
+            _drop_stale(session, season_id, "episode", set())
         _drop_stale(session, show.id, "season", kept_seasons)
         session.commit()
         title = show.title

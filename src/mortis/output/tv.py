@@ -323,7 +323,8 @@ def build_episode_nfo(
     _ratings(session, root, episode)
     _text(root, "userrating", 0)
     _text(root, "plot", episode.overview)
-    _text(root, "runtime", show_extra.get("runtime") or 0)
+    runtime = json.loads(episode.fields).get("runtime") or show_extra.get("runtime")
+    _text(root, "runtime", runtime or 0)
     for url in images.get("thumb", [])[:1]:
         _text(root, "thumb", url)
     _text(root, "mpaa", show_extra.get("certification"))
