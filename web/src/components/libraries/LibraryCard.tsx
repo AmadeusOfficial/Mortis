@@ -1,0 +1,336 @@
+import { Button, Menu, Switch } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router";
+import {
+  type Library,
+  type TaskDetail,
+  arrangeLibrary,
+  fetchLibraryArrangePreview,
+  organizeLibrary,
+  scrapeLibrary,
+  updateLibrary,
+} from "../../api";
+import { ArrangePreviewModal } from "../ArrangePreviewModal";
+import {
+  DataTypeIcon,
+  IconEdit,
+  IconFolder,
+  IconMore,
+  IconOrganize,
+  IconScan,
+  IconScrape,
+  IconTrash,
+} from "../../icons";
+import classes from "../../pages/LibrariesPage.module.css";
+import { useTaskWatcher } from "../../useTaskWatcher";
+
+type ActionKind = "organize" | "scrape" | "arrange";
+
+const AUTOMATION_LABELS: Record<string, string> = {
+  manual: "只手动扫描",
+  watch: "发现新文件就整理",
+  schedule: "定时扫描",
+};
+
+const START_MESSAGES: Record<ActionKind, string> = {
+  organize: "已开始扫描",
+  scrape: "已开始刮削还没刮削过的条目",
+  arrange: "已开始整理整库",
+};
+
+const DONE_LABELS: Record<string, string> = {
+  organize: "扫描",
+  scrape_library: "刮削",
+  arrange_library: "整理",
+};
+
+function summary(task: TaskDetail, pluginType: boolean): string {
+  if (task.status !== "succeeded") {
+    return task.error ?? "任务没有完成";
+  }
+  const result = task.result ?? {};
+  if (task.task_type === "organize") {
+    const parts = [
+      `找到 ${String(result.found ?? 0)} 部`,
+      `认出 ${String(result.matched ?? 0)} 部`,
+    ];
+    if (Number(result.unmatched ?? 0) > 0) {
+      parts.push(`${String(result.unmatched)} 部没认出，可在「未识别」里手动匹配`);
+    }
+    if (result.identified === false) {
+      parts.push(
+        pluginType ? "没有启用的来源插件，只扫描了文件" : "没有填 TMDB API Key，只扫描了文件",
+      );
+    }
+    return parts.join("，");
+  }
+  if (task.task_type === "arrange_library") {
+    return `整理了 ${String(result.queued ?? 0)} 部`;
+  }
+  const queued = Number(result.scrape_queued ?? 0);
+  return queued === 0 ? "没有要刮削的电影" : `刮削了 ${queued} 部`;
+}
+
+export function LibraryCard({
+  library,
+  itemUnit,
+  fileUnit,
+  canArrange,
+  onEdit,
+  onDelete,
+}: {
+  library: Library;
+  itemUnit: string;
+  fileUnit: string;
+  canArrange: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [running, setRunning] = useState<ActionKind | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const toggle = useMutation({
+    mutationFn: (isAutoScrape: boolean) =>
+      updateLibrary(library.id, { is_auto_scrape: isAutoScrape }),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      notifications.show({
+        color: "green",
+        message: saved.is_auto_scrape ? "已打开扫描后自动刮削" : "已关闭扫描后自动刮削",
+      });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+
+  const watcher = useTaskWatcher((task) => {
+    setRunning(null);
+    void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    void queryClient.invalidateQueries({ queryKey: ["library", library.id] });
+    void queryClient.invalidateQueries({ queryKey: ["wall", library.id] });
+    void queryClient.invalidateQueries({ queryKey: ["unmatched"] });
+    void queryClient.invalidateQueries({ queryKey: ["library-arrange-preview", library.id] });
+    const failed = task.tree_status.failed ?? 0;
+    notifications.show({
+      color: task.status === "succeeded" && failed === 0 ? "green" : "red",
+      title: `「${library.name}」${DONE_LABELS[task.task_type] ?? task.type_label}结束`,
+      message:
+        failed > 0
+          ? `${summary(task, !canArrange)}；有 ${String(failed)} 部失败，详情看任务页`
+          : summary(task, !canArrange),
+    });
+  });
+
+  const start = useMutation({
+    mutationFn: (kind: ActionKind) => {
+      if (kind === "organize") {
+        return organizeLibrary(library.id);
+      }
+      if (kind === "scrape") {
+        return scrapeLibrary(library.id);
+      }
+      return arrangeLibrary(library.id);
+    },
+    onMutate: (kind) => setRunning(kind),
+    onSuccess: ({ task_id }, kind) => {
+      if (kind === "arrange") {
+        setPreviewing(false);
+      }
+      watcher.watch(task_id);
+      notifications.show({
+        message:
+          kind === "organize" && library.is_auto_scrape
+            ? "已开始扫描，扫完会接着刮削"
+            : START_MESSAGES[kind],
+      });
+    },
+    onError: (error, kind) => {
+      setRunning(null);
+      if (kind === "arrange") {
+        return;
+      }
+      notifications.show({ color: "red", message: error.message });
+    },
+  });
+
+  const preview = useQuery({
+    queryKey: ["library-arrange-preview", library.id],
+    queryFn: () => fetchLibraryArrangePreview(library.id),
+    enabled: previewing,
+    retry: false,
+  });
+
+  const plan = preview.data;
+  const samplePosters = library.sample_posters ?? [];
+  const scrapedCount = library.scraped_count ?? 0;
+  const issueCount = library.issue_count ?? 0;
+  const unscrapedCount = Math.max(0, library.item_count - scrapedCount);
+  const needAttention = issueCount + unscrapedCount;
+  const automationLabel = AUTOMATION_LABELS[library.automation] ?? library.automation;
+  const hasPosters = samplePosters.length > 0;
+
+  return (
+    <article className={classes.card}>
+      <Link
+        to={`/libraries/${library.id}`}
+        className={[classes.strip, hasPosters ? "" : classes.stripEmpty].filter(Boolean).join(" ")}
+        aria-label={`进入媒体库「${library.name}」`}
+      >
+        {samplePosters.map((posterUrl, index) => (
+          <img
+            key={`${posterUrl}-${index}`}
+            src={posterUrl}
+            alt=""
+            className={classes.stripImg}
+            loading="lazy"
+          />
+        ))}
+        <span className={classes.kindBadge}>
+          <DataTypeIcon dataTypeId={library.data_type_id} size={13} />
+          {library.data_type_name}
+        </span>
+      </Link>
+
+      <div className={classes.body}>
+        <h2 className={classes.title}>
+          <Link to={`/libraries/${library.id}`} className={classes.titleLink}>
+            {library.name}
+          </Link>
+        </h2>
+
+        <div className={classes.nums}>
+          <span>
+            <b className="mo-mono">{library.item_count}</b> {itemUnit}
+          </span>
+          <span>
+            <b className="mo-mono">{library.file_count}</b> {fileUnit}
+          </span>
+          <span>
+            <b className="mo-mono">{scrapedCount}</b> 已刮削
+          </span>
+          {needAttention > 0 && (
+            <span className={classes.warnStat}>
+              <b className="mo-mono">{needAttention}</b> 需处理
+            </span>
+          )}
+        </div>
+
+        <div className={classes.paths}>
+          {library.paths.map((path) => (
+            <code key={path} className={`${classes.pathItem} mo-mono`} title={path}>
+              <IconFolder size={13} />
+              <span>{path}</span>
+            </code>
+          ))}
+        </div>
+
+        <div className={classes.footer}>
+          <div className={classes.autoGroup}>
+            <Switch
+              size="sm"
+              label="扫描后自动刮削"
+              checked={library.is_auto_scrape}
+              disabled={toggle.isPending}
+              onChange={(event) => toggle.mutate(event.currentTarget.checked)}
+              styles={{
+                label: {
+                  fontSize: 12.5,
+                  color: "var(--mo-dim)",
+                  paddingLeft: 8,
+                  cursor: "pointer",
+                },
+              }}
+            />
+            <span className={classes.autoMode}>· {automationLabel}</span>
+          </div>
+
+          <div className={classes.actions}>
+            <Button
+              size="xs"
+              variant="default"
+              leftSection={<IconScan size={13} />}
+              loading={running === "organize"}
+              disabled={running !== null}
+              onClick={() => start.mutate("organize")}
+            >
+              扫描
+            </Button>
+            <Button
+              size="xs"
+              variant="default"
+              leftSection={<IconScrape size={13} />}
+              loading={running === "scrape"}
+              disabled={running !== null}
+              onClick={() => start.mutate("scrape")}
+            >
+              刮削未刮削的
+            </Button>
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <Button
+                  size="xs"
+                  variant="default"
+                  className={classes.moreBtn}
+                  aria-label="更多操作"
+                  loading={running === "arrange"}
+                >
+                  <IconMore size={14} />
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                {canArrange && (
+                  <Menu.Item
+                    leftSection={<IconOrganize size={14} />}
+                    disabled={running !== null}
+                    onClick={() => {
+                      start.reset();
+                      setPreviewing(true);
+                    }}
+                  >
+                    整理整库
+                  </Menu.Item>
+                )}
+                <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
+                  编辑
+                </Menu.Item>
+                <Menu.Divider />
+                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={onDelete}>
+                  删除
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </div>
+        </div>
+      </div>
+
+      <ArrangePreviewModal
+        opened={previewing}
+        onClose={() => setPreviewing(false)}
+        plan={
+          plan === undefined
+            ? undefined
+            : {
+                rename: plan.rename,
+                write: plan.write,
+                scope: `整理刮削过的 ${String(plan.count)} 部电影`,
+                empty: plan.count === 0 ? "这个库还没有刮削过的电影，先刮削再整理。" : null,
+                previews: plan.previews,
+                canConfirm: plan.count > 0 && (plan.rename || plan.write),
+              }
+        }
+        loading={preview.isFetching}
+        error={
+          preview.isError
+            ? preview.error.message
+            : start.isError && running === null
+              ? start.error.message
+              : null
+        }
+        onConfirm={() => start.mutate("arrange")}
+        confirming={start.isPending}
+      />
+    </article>
+  );
+}

@@ -1,23 +1,18 @@
 import {
   Alert,
-  Badge,
   Button,
   Group,
   Input,
   Loader,
   Modal,
-  Paper,
   Select,
   Stack,
-  Switch,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router";
 import {
   type Library,
   createLibrary,
@@ -26,15 +21,12 @@ import {
   fetchLibraries,
   updateLibrary,
 } from "../api";
+import { LibraryCard } from "../components/libraries/LibraryCard";
 import { PathPicker } from "../components/PathPicker";
-import { fileUnit, itemUnit, useDataTypes } from "../dataTypes";
-import { LibraryActions } from "../libraryActions";
-
-const AUTOMATION_LABELS: Record<string, string> = {
-  manual: "只手动扫描",
-  watch: "发现新文件就整理",
-  schedule: "定时扫描",
-};
+import { PageHeader, Pill } from "../components/ui";
+import { fileUnit, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
+import { IconPlus } from "../icons";
+import classes from "./LibrariesPage.module.css";
 
 export function LibrariesPage() {
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
@@ -42,38 +34,84 @@ export function LibrariesPage() {
   const [editing, setEditing] = useState<Library | "new" | null>(null);
   const [deleting, setDeleting] = useState<Library | null>(null);
 
+  const list = libraries.data ?? [];
+  const totalItems = list.reduce((sum, library) => sum + library.item_count, 0);
+
   return (
-    <Stack maw={900}>
-      <Group justify="space-between">
-        <Title order={2}>媒体库</Title>
-        <Button onClick={() => setEditing("new")}>新建媒体库</Button>
-      </Group>
+    <Stack gap={0}>
+      <PageHeader
+        title="媒体库"
+        pills={
+          libraries.isSuccess ? (
+            <>
+              <Pill>{list.length} 个库</Pill>
+              <Pill tone="ok">{totalItems} 个条目</Pill>
+            </>
+          ) : undefined
+        }
+        description="按数据类型分库管理，独立扫描与刮削策略"
+        actions={
+          <Button
+            variant="filled"
+            leftSection={<IconPlus size={15} />}
+            onClick={() => setEditing("new")}
+          >
+            新建媒体库
+          </Button>
+        }
+      />
+
       {libraries.isPending && <Loader size="sm" />}
+
       {libraries.isError && (
         <Alert color="red" title="读不到媒体库">
           {libraries.error.message}
         </Alert>
       )}
-      {libraries.isSuccess && libraries.data.length === 0 && (
-        <Text c="dimmed">还没有媒体库。新建一个电影库，选好视频所在的目录。</Text>
+
+      {libraries.isSuccess && list.length === 0 && (
+        <div className={classes.emptyNotice}>
+          还没有媒体库。新建一个电影库，选好视频所在的目录。
+        </div>
       )}
-      {libraries.isSuccess &&
-        libraries.data.map((library) => (
-          <LibraryCard
-            key={library.id}
-            library={library}
-            itemUnit={itemUnit(dataTypes.data, library.data_type_id)}
-            fileUnit={fileUnit(dataTypes.data, library.data_type_id)}
-            onEdit={() => setEditing(library)}
-            onDelete={() => setDeleting(library)}
-          />
-        ))}
+
+      {libraries.isSuccess && (
+        <div className={classes.grid}>
+          {list.map((library) => (
+            <LibraryCard
+              key={library.id}
+              library={library}
+              itemUnit={itemUnit(dataTypes.data, library.data_type_id)}
+              fileUnit={fileUnit(dataTypes.data, library.data_type_id)}
+              canArrange={!isPluginType(dataTypes.data, library.data_type_id)}
+              onEdit={() => setEditing(library)}
+              onDelete={() => setDeleting(library)}
+            />
+          ))}
+
+          <button
+            type="button"
+            className={classes.addCard}
+            onClick={() => setEditing("new")}
+          >
+            <div className={classes.addInner}>
+              <span className={classes.addIcon} aria-hidden="true">
+                <IconPlus size={22} />
+              </span>
+              <span className={classes.addTitle}>新建媒体库</span>
+              <span className={classes.addHint}>选择数据类型，点「浏览」指定目录</span>
+            </div>
+          </button>
+        </div>
+      )}
+
       {editing !== null && (
         <LibraryFormModal
           library={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
         />
       )}
+
       {deleting !== null && (
         <DeleteLibraryModal
           library={deleting}
@@ -83,80 +121,6 @@ export function LibrariesPage() {
         />
       )}
     </Stack>
-  );
-}
-
-function LibraryCard({
-  library,
-  itemUnit,
-  fileUnit,
-  onEdit,
-  onDelete,
-}: {
-  library: Library;
-  itemUnit: string;
-  fileUnit: string;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const toggle = useMutation({
-    mutationFn: (isAutoScrape: boolean) =>
-      updateLibrary(library.id, { is_auto_scrape: isAutoScrape }),
-    onSuccess: (saved) => {
-      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
-      notifications.show({
-        color: "green",
-        message: saved.is_auto_scrape ? "已打开扫描后自动刮削" : "已关闭扫描后自动刮削",
-      });
-    },
-    onError: (error) => notifications.show({ color: "red", message: error.message }),
-  });
-
-  return (
-    <Paper withBorder p="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={4}>
-          <Group gap="xs">
-            <Title order={4}>{library.name}</Title>
-            <Badge variant="light">{library.data_type_name}</Badge>
-          </Group>
-          <Text size="sm" c="dimmed">
-            {library.item_count} {itemUnit} · {library.file_count} {fileUnit}
-          </Text>
-          {library.paths.map((path) => (
-            <Text key={path} size="sm" ff="monospace">
-              {path}
-            </Text>
-          ))}
-          <Text size="xs" c="dimmed">
-            {AUTOMATION_LABELS[library.automation] ?? library.automation}
-          </Text>
-          <Switch
-            label="扫描后自动刮削"
-            checked={library.is_auto_scrape}
-            disabled={toggle.isPending}
-            onChange={(event) => toggle.mutate(event.currentTarget.checked)}
-          />
-        </Stack>
-        <Stack gap="xs" align="flex-end">
-          <Group gap="xs" wrap="nowrap">
-            <Button component={Link} to={`/libraries/${library.id}`} size="xs" variant="default">
-              打开
-            </Button>
-            <LibraryActions library={library} />
-          </Group>
-          <Group gap="xs" wrap="nowrap">
-            <Button variant="default" size="xs" onClick={onEdit}>
-              编辑
-            </Button>
-            <Button variant="subtle" color="red" size="xs" onClick={onDelete}>
-              删除
-            </Button>
-          </Group>
-        </Stack>
-      </Group>
-    </Paper>
   );
 }
 
