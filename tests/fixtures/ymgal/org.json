@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "code": 0,
+  "data": {
+    "org": {
+      "publishVersion": 0,
+      "publishTime": "2021-08-07 00:00:00",
+      "name": "light",
+      "extensionName": [],
+      "introduction": "Disbanded in March 31, 2019 after parent company Greenwood Co., Ltd. has shut down.",
+      "state": "PUBLIC_PUBLISHED",
+      "weights": 0,
+      "mainImg": "",
+      "moreEntry": [],
+      "orgId": 10256,
+      "country": "ja",
+      "website": [
+        {
+          "title": "wikidata",
+          "link": "https://en.wikidata.org/wiki/Q11230111"
+        },
+        {
+          "title": "homepage",
+          "link": "http://www.light.gr.jp/"
+        }
+      ],
+      "type": "ORGANIZATION",
+      "freeze": false
+    }
+  }
+}

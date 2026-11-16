@@ -1,0 +1,985 @@
+{
+  "success": true,
+  "code": 0,
+  "data": {
+    "game": {
+      "publishVersion": 1,
+      "publishTime": "2021-08-17 11:58:25",
+      "publisher": 6803,
+      "name": "Dies irae",
+      "chineseName": "神怒之日",
+      "extensionName": [
+        {
+          "name": "ディエス・イレ",
+          "type": "",
+          "desc": ""
+        }
+      ],
+      "introduction": "1945年、5月1日……德国。在陷落的柏林，一些人正在进行某个仪式。\n\n对他们来说在战争中败北不过是鸡毛蒜皮的小事，甚至还将在战争中产生的大量牺牲者作为仪式的触媒献为祭品。\n\n他们的尝试成功了还是失败了，没有人知道。他们在战后隐藏了行踪，不知是生是死，甚至让人无法确定他们是否真实存在过，无人知道真相，只有传言传播。\n\n圣枪十三骑士团--纳粹德国的黑暗中诞生的超人们。他们终将回归。其时世界将破灭。故，决不可允许他们的再来--这样一个传言。然后61年的时光流逝。知道他们的存在的人，大部分已经死亡，众人忘记了他们。\n\n然而2006年……日本。就读诹访原市的学园的藤井莲，在某事件之后与好友・游佐司狼决裂，仿佛厮杀般干架的结果是两个月的被迫入院生活。季节由秋转冬--圣诞临近的12月。\n\n怀着仿佛半身被夺的丧失感，退院的莲想着要重新构筑没有司狼的崭新日常生活。往者不可追。那么，至少要珍惜如今手中之物……\n但是，连这个愿望也分崩离析。每晚梦见的断头台的噩梦。狩猎人头的杀人犯。追杀他的黑衣“骑士”们。超越常识的不条理覆盖城市，逐渐侵蚀。这份异常完全不是两个月前能相比的，暴力到粉碎至今为止积累而成的全部事物的非日常。不改变的话，没法活下去。不活下去的话，没法回去。\n\n在以加速度疯狂下去的世界中心，莲独自跨过日常与非日常的界线。并没有期望什么了不得的事。\n\n也不是想高举正义与大义的旗帜。只是，想回去而已。回到没趣、无聊然而平凡、温暖的那段时光。胸怀悲壮的决意，司狼的声音回响。只要还在这个城市，无论是谁迟早都要疯掉--他如是说。与圣枪十三骑士团的战斗。充满狂气与杀戮与诅咒的战争的连续。在那尽头，莲究竟将会看到什么呢。",
+      "state": "PUBLIC_PUBLISHED",
+      "weights": 0,
+      "mainImg": "https://cdn.ymgal.games/archive/main/bd/bd1e1fdc9dd74b78aa8d90f95ebafe3c.webp",
+      "moreEntry": [],
+      "gid": 10957,
+      "developerId": 10256,
+      "haveChinese": false,
+      "typeDesc": "ADV",
+      "releaseDate": "2007-12-21",
+      "restricted": true,
+      "country": "",
+      "website": [],
+      "characters": [
+        {
+          "cid": 31714,
+          "cvId": 10233,
+          "characterPosition": 1
+        },
+        {
+          "cid": 31715,
+          "cvId": 10287,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38194,
+          "cvId": 10408,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38513,
+          "cvId": 10099,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38515,
+          "cvId": 31420,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38516,
+          "cvId": 10259,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38517,
+          "cvId": 10135,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38518,
+          "cvId": 10554,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38519,
+          "cvId": 25290,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38520,
+          "cvId": 11978,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38521,
+          "cvId": 10279,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38522,
+          "cvId": 11502,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38523,
+          "cvId": 10233,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38525,
+          "cvId": 10671,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38526,
+          "cvId": 10127,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38527,
+          "cvId": 10794,
+          "characterPosition": 2
+        },
+        {
+          "cid": 38528,
+          "cvId": 11157,
+          "characterPosition": 2
+        }
+      ],
+      "releases": [
+        {
+          "id": 122629,
+          "releaseName": "Dies irae ~Amantes amentes~",
+          "relatedLink": "https://www.kickstarter.com/projects/1986219362/dies-irae-english-localization-project-commences/description",
+          "platform": "PlayStation Vita",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122630,
+          "releaseName": "Dies Irae ~Amantes amentes~",
+          "relatedLink": "https://whitenovelstraducciones.wordpress.com/2021/07/11/dies-irae/",
+          "platform": "Windows",
+          "releaseLanguage": "Spanish",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122631,
+          "releaseName": "Dies irae (Demo)",
+          "relatedLink": "https://anivisual.net/stuff/15-1-0-3564",
+          "platform": "Windows",
+          "releaseDate": "2021-06-28",
+          "releaseLanguage": "Russian",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122632,
+          "releaseName": "Dies irae ~Amantes amentes~ For Nintendo Switch",
+          "relatedLink": "https://masagrator.github.io/DiesIraeNXEN/",
+          "platform": "Nintendo Switch",
+          "releaseDate": "2020-12-27",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122633,
+          "releaseName": "Dies irae ~Amantes amentes~ For Nintendo Switch",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_switch/",
+          "platform": "Nintendo Switch",
+          "releaseDate": "2018-10-18",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122634,
+          "releaseName": "Dies irae ~Amantes amentes~ 4:3 Resolution Patch",
+          "relatedLink": "https://www.kickstarter.com/projects/1986219362/dies-irae-english-localization-project-commences/posts/2299713",
+          "platform": "Windows",
+          "releaseDate": "2018-09-27",
+          "releaseLanguage": "English",
+          "restrictionLevel": "未分级"
+        },
+        {
+          "id": 122635,
+          "releaseName": "Dies irae ~Amantes amentes~ Kickstarter-Exclusive Physical Edition",
+          "relatedLink": "https://www.kickstarter.com/projects/1986219362/dies-irae-english-localization-project-commences",
+          "platform": "Windows",
+          "releaseDate": "2018-04-06",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122636,
+          "releaseName": "Dies irae DX package",
+          "relatedLink": "https://www.mangagamer.com/r18/detail.php?goods_type=1&amp;product_code=1041",
+          "platform": "Windows",
+          "releaseDate": "2017-12-19",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122637,
+          "releaseName": "Dies irae ~Acta est Fabula~",
+          "relatedLink": "https://www.mangagamer.com/r18/freedownload.php?product_name=Dies+irae+DX+package+%28download%29",
+          "platform": "Windows",
+          "releaseDate": "2017-12-15",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122638,
+          "releaseName": "Dies irae ~Acta est Fabula~ HD -Animation Anniversary- ダウンロード版",
+          "relatedLink": "http://www.light.gr.jp/light/products/dies_hdaa/af/index.html",
+          "platform": "Windows",
+          "releaseDate": "2017-11-02",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122639,
+          "releaseName": "Dies irae ~Amantes amentes~ HD -Animation Anniversary- ダウンロード版",
+          "relatedLink": "http://www.light.gr.jp/light/products/dies_hdaa/aa/index.html",
+          "platform": "Windows",
+          "releaseDate": "2017-11-02",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122640,
+          "releaseName": "Dies irae ~Acta est Fabula~ HD -Animation Anniversary-",
+          "relatedLink": "http://www.light.gr.jp/light/products/dies_hdaa/af/index.html",
+          "platform": "Windows",
+          "releaseDate": "2017-09-29",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122641,
+          "releaseName": "Dies irae ~Amantes amentes~ HD -Animation Anniversary-",
+          "relatedLink": "http://www.light.gr.jp/light/products/dies_hdaa/aa/index.html",
+          "platform": "Windows",
+          "releaseDate": "2017-09-29",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122642,
+          "releaseName": "Dies irae &amp; WORLD BOX ~Masada Premium~",
+          "relatedLink": "http://www.light.gr.jp/light/products/masada/index.html",
+          "platform": "Windows",
+          "releaseDate": "2017-09-29",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122643,
+          "releaseName": "Dies irae ~Amantes amentes~ Act I: Omnia Vincit Amor",
+          "relatedLink": "",
+          "platform": "Windows",
+          "releaseDate": "2017-06-01",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122644,
+          "releaseName": "Dies irae ~Amantes amentes~ Act II: Nihil Difficile Amanti",
+          "relatedLink": "",
+          "platform": "Windows",
+          "releaseDate": "2017-06-01",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122645,
+          "releaseName": "Dies irae ~Amantes amentes~",
+          "relatedLink": "",
+          "platform": "Windows",
+          "releaseDate": "2017-06-01",
+          "releaseLanguage": "English",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122646,
+          "releaseName": "Dies irae ~Amantes amentes~ iOS版",
+          "relatedLink": "http://www.light.gr.jp/light/mobile/products/dies_aa/index.html",
+          "platform": "Apple iProduct",
+          "releaseDate": "2016-12-02",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122647,
+          "releaseName": "Dies irae ～Amantes amentes～ Win10リニューアルパッケージ版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/windows/index.html",
+          "platform": "Windows",
+          "releaseDate": "2015-12-28",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122648,
+          "releaseName": "Dies irae ～Acta est Fabula～ Win10リニューアルパッケージ版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/top.html",
+          "platform": "Windows",
+          "releaseDate": "2015-12-25",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122649,
+          "releaseName": "Dies irae ~Amantes amentes~ Android版",
+          "relatedLink": "http://www.light.gr.jp/light/mobile/products/dies_aa/index.html",
+          "platform": "Android",
+          "releaseDate": "2015-08-19",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122650,
+          "releaseName": "Dies irae ~Amantes amentes~ ダウンロード版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/windows/index.html",
+          "platform": "Windows",
+          "releaseDate": "2014-08-08",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122651,
+          "releaseName": "Dies irae ～Acta est Fabula～ ダウンロード版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/",
+          "platform": "Windows",
+          "releaseDate": "2014-08-01",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122652,
+          "releaseName": "Dies irae ~Amantes amentes~ 通常版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/windows/index.html",
+          "platform": "Windows",
+          "releaseDate": "2012-09-20",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122653,
+          "releaseName": "Dies irae ~Amantes amentes~ 初回版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/windows/index.html",
+          "platform": "Windows",
+          "releaseDate": "2012-08-31",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R15+"
+        },
+        {
+          "id": 122654,
+          "releaseName": "Dies irae ~Amantes amentes~ ダウンロード版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/index.html",
+          "platform": "PlayStation Portable",
+          "releaseDate": "2012-07-05",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122655,
+          "releaseName": "Dies irae ~Amantes amentes~ 初回限定版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/index.html",
+          "platform": "PlayStation Portable",
+          "releaseDate": "2012-06-28",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122656,
+          "releaseName": "Dies irae ~Amantes amentes~ 通常版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae_cs/index.html",
+          "platform": "PlayStation Portable",
+          "releaseDate": "2012-06-28",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R17+"
+        },
+        {
+          "id": 122657,
+          "releaseName": "Dies irae ～Acta est Fabula～感謝キャンペーン版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/campaign/campaign_50000.html",
+          "platform": "Windows",
+          "releaseDate": "2010-09-24",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122660,
+          "releaseName": "Dies irae ～Acta est Fabula～ 通常版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/",
+          "platform": "Windows",
+          "releaseDate": "2009-12-25",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122658,
+          "releaseName": "Dies irae ～Acta est Fabula～ 初回版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/",
+          "platform": "Windows",
+          "releaseDate": "2009-12-25",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122659,
+          "releaseName": "Dies irae Also sprach Zarathustra ~Acta est Fabula~ -Scharlachrot Grun-",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/ss/index.html",
+          "platform": "Windows",
+          "releaseDate": "2009-12-25",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122661,
+          "releaseName": "Dies irae ～Acta est Fabula～ 体験版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/download/index.html#trial",
+          "platform": "Windows",
+          "releaseDate": "2009-11-13",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122662,
+          "releaseName": "Dies irae Also sprach Zarathustra -die Wiederkunft- 初回版",
+          "relatedLink": "http://www.light.gr.jp/light/products/dies/index.html",
+          "platform": "Windows",
+          "releaseDate": "2009-07-24",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122663,
+          "releaseName": "Dies irae Also sprach Zarathustra 初回版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/index.htm",
+          "platform": "Windows",
+          "releaseDate": "2007-12-21",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        },
+        {
+          "id": 122664,
+          "releaseName": "Dies irae Also sprach Zarathustra 通常版",
+          "relatedLink": "http://www.light.gr.jp/light/products/diesirae/index.htm",
+          "platform": "Windows",
+          "releaseDate": "2007-12-21",
+          "releaseLanguage": "Japanese",
+          "restrictionLevel": "R18+"
+        }
+      ],
+      "staff": [
+        {
+          "sid": 143405,
+          "pid": 10628,
+          "empName": "Gユウスケ",
+          "empDesc": "",
+          "jobName": "人物设计"
+        },
+        {
+          "sid": 143406,
+          "pid": 26849,
+          "empName": "服部 道知",
+          "empDesc": "Producer",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143407,
+          "pid": 27144,
+          "empName": "上野 研太郎",
+          "empDesc": "Script",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143408,
+          "pid": 27567,
+          "empName": "株式会社ニライカナイ",
+          "empDesc": "Amantes amentes (Nintendo Switch) OP movie production",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143409,
+          "pid": 12709,
+          "empName": "太田 憂",
+          "empDesc": "Script",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143410,
+          "pid": 14405,
+          "empName": "榎本 覚",
+          "empDesc": "Voice direction",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143411,
+          "pid": 11716,
+          "empName": "高濱 亮",
+          "empDesc": "Script",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143412,
+          "pid": 10368,
+          "empName": "正田 崇",
+          "empDesc": "Planning, script",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143413,
+          "pid": 21953,
+          "empName": "もぐたん",
+          "empDesc": "Script",
+          "jobName": "其他"
+        },
+        {
+          "sid": 143414,
+          "pid": 11725,
+          "empName": "夕薙",
+          "empDesc": "Sprites in Switch version side story",
+          "jobName": "原画"
+        },
+        {
+          "sid": 143415,
+          "pid": 10368,
+          "empName": "正田 崇",
+          "empDesc": "Also sprach Zarathustra, Switch version",
+          "jobName": "导演/监督"
+        },
+        {
+          "sid": 143416,
+          "pid": 26287,
+          "empName": "中島 聖",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143417,
+          "pid": 27144,
+          "empName": "上野 研太郎",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143418,
+          "pid": 11817,
+          "empName": "夢野 Q作",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143419,
+          "pid": 21727,
+          "empName": "嘘屋 佐々木 酒人",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143420,
+          "pid": 21959,
+          "empName": "奈落 ハジメ",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143421,
+          "pid": 24434,
+          "empName": "門松 和哉",
+          "empDesc": "Also sprach Zarathustra only",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143422,
+          "pid": 10127,
+          "empName": "榊原 ゆい",
+          "empDesc": "Also sprach Zarathustra OP 'Einsatz', Acta est Fabula OP 'Gregorio' & ED 'Über den Himmel', Amantes amentes OP 'Jubilus' & ED 'Sanctus', Switch Version OP 'Einsatz -zugabe-'",
+          "jobName": "歌曲"
+        },
+        {
+          "sid": 143423,
+          "pid": 10628,
+          "empName": "Gユウスケ",
+          "empDesc": "",
+          "jobName": "原画"
+        },
+        {
+          "sid": 143424,
+          "pid": 16388,
+          "empName": "ヌビア",
+          "empDesc": "Cello and Arrange for 'Einsatz -zugabe-'",
+          "jobName": "音乐"
+        },
+        {
+          "sid": 143425,
+          "pid": 10516,
+          "empName": "与猶 啓至",
+          "empDesc": "BGM",
+          "jobName": "音乐"
+        },
+        {
+          "sid": 143426,
+          "pid": 10368,
+          "empName": "正田 崇",
+          "empDesc": "",
+          "jobName": "脚本"
+        },
+        {
+          "sid": 143427,
+          "pid": 12510,
+          "empName": "まゆき",
+          "empDesc": "",
+          "jobName": "导演/监督"
+        }
+      ],
+      "type": "GAME",
+      "freeze": false
+    },
+    "cidMapping": {
+      "38528": {
+        "cid": 38528,
+        "name": "本城 恵梨依",
+        "chineseName": "本城惠梨依",
+        "mainImg": "https://cdn.ymgal.games/archive/main/4f/4fa51671fb8f430eacd945618394c0ea.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "31714": {
+        "cid": 31714,
+        "name": "藤井 蓮",
+        "chineseName": "藤井莲",
+        "mainImg": "https://cdn.ymgal.games/archive/main/65/65f5c8603caf4c07bef5ab2e778a428d.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "31715": {
+        "cid": 31715,
+        "name": "ラインハルト・トリスタン・オイゲン・ハイドリヒ",
+        "chineseName": "莱因哈德·海德里希",
+        "mainImg": "https://cdn.ymgal.games/archive/main/06/063c2024c4f14b9eb82d586f579c41e2.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38513": {
+        "cid": 38513,
+        "name": "ヴァレリア・トリファ",
+        "chineseName": "瓦莱里亚·吹法",
+        "mainImg": "https://cdn.ymgal.games/archive/main/80/80ede4470f5a4a1785d6512986aba4b3.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38194": {
+        "cid": 38194,
+        "name": "氷室 玲愛",
+        "chineseName": "冰室玲爱",
+        "mainImg": "https://cdn.ymgal.games/archive/main/7e/7eee1d2faf984712a7db159175b8cd87.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38515": {
+        "cid": 38515,
+        "name": "ヴィルヘルム・エーレンブルグ",
+        "chineseName": "威廉·埃伦伯格",
+        "mainImg": "https://cdn.ymgal.games/archive/main/6d/6d4828d952da4fdf96bc1dbdf77c03ca.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38516": {
+        "cid": 38516,
+        "name": "櫻井 螢",
+        "chineseName": "樱井萤",
+        "mainImg": "https://cdn.ymgal.games/archive/main/79/791de2a767b34cde8de74c2c57a0a038.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38517": {
+        "cid": 38517,
+        "name": "ゲッツ・フォン・ベルリッヒンゲン",
+        "mainImg": "https://cdn.ymgal.games/archive/main/e0/e061e041bb4142cc9ed906f076f5223b.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38518": {
+        "cid": 38518,
+        "name": "ルサルカ・シュヴェーゲリン",
+        "mainImg": "https://cdn.ymgal.games/archive/main/c5/c59df1e0f03c438ba18727f916c61e5e.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38519": {
+        "cid": 38519,
+        "name": "エレオノーレ・フォン・ヴィッテンブルグ",
+        "mainImg": "https://cdn.ymgal.games/archive/main/c0/c035fca336fc4dfebde29ee1fa5f789a.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38520": {
+        "cid": 38520,
+        "name": "ロート・シュピーネ",
+        "mainImg": "https://cdn.ymgal.games/archive/main/c0/c004bad7f0964b43a4832b469739eae4.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38521": {
+        "cid": 38521,
+        "name": "リザ・ブレンナー",
+        "mainImg": "https://cdn.ymgal.games/archive/main/48/4843108a702d42e7bbaaf8bac7803826.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38522": {
+        "cid": 38522,
+        "name": "ウォルフガング・シュライバー",
+        "mainImg": "https://cdn.ymgal.games/archive/main/b3/b3cb0344a0d04b40a40a63e1f8d53486.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38523": {
+        "cid": 38523,
+        "name": "メルクリウス",
+        "mainImg": "https://cdn.ymgal.games/archive/main/ec/ec52d2257cd04c6784f0b960ff41d815.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38525": {
+        "cid": 38525,
+        "name": "綾瀬 香純",
+        "chineseName": "绫濑香纯",
+        "mainImg": "https://cdn.ymgal.games/archive/main/31/31a4b52de17e4ea8bd72c33948b153f8.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38526": {
+        "cid": 38526,
+        "name": "マリィ",
+        "chineseName": "玛丽",
+        "mainImg": "https://cdn.ymgal.games/archive/main/a8/a8c6f3bb24e8491594c07cb19c916992.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "38527": {
+        "cid": 38527,
+        "name": "遊佐 司狼",
+        "chineseName": "游佐司狼",
+        "mainImg": "https://cdn.ymgal.games/archive/main/b8/b8f4737438284e46a7d1e4056d109ef3.jpg",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      }
+    },
+    "pidMapping": {
+      "10368": {
+        "pid": 10368,
+        "name": "正田 崇",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "21953": {
+        "pid": 21953,
+        "name": "もぐたん",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "16388": {
+        "pid": 16388,
+        "name": "ヌビア",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10628": {
+        "pid": 10628,
+        "name": "Gユウスケ",
+        "mainImg": "https://cdn.ymgal.games/archive/main/6e/6ee67b1213624dee873a0a8af901a023.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11716": {
+        "pid": 11716,
+        "name": "高濱 亮",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "14405": {
+        "pid": 14405,
+        "name": "榎本 覚",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "21959": {
+        "pid": 21959,
+        "name": "奈落 ハジメ",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "27144": {
+        "pid": 27144,
+        "name": "上野 研太郎",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "25290": {
+        "pid": 25290,
+        "name": "矢口 アサミ",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11978": {
+        "pid": 11978,
+        "name": "はらさわ 晃綺",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11725": {
+        "pid": 11725,
+        "name": "夕薙",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10127": {
+        "pid": 10127,
+        "name": "榊原 ゆい",
+        "chineseName": "榊原由依",
+        "mainImg": "https://cdn.ymgal.games/archive/main/05/0536b06c34ec4991861026df4aa84e66.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10259": {
+        "pid": 10259,
+        "name": "瑞沢 渓",
+        "chineseName": "瑞泽溪",
+        "mainImg": "https://cdn.ymgal.games/archive/main/db/dbd78e2cb09e41c39d186470b78a1073.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10516": {
+        "pid": 10516,
+        "name": "与猶 啓至",
+        "chineseName": "与犹启至",
+        "mainImg": "https://cdn.ymgal.games/archive/main/88/887e5ec155af43e69d8a0517559d159d.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11157": {
+        "pid": 11157,
+        "name": "牧野 芳奈",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10135": {
+        "pid": 10135,
+        "name": "安元 洋貴",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "12510": {
+        "pid": 12510,
+        "name": "まゆき",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "21727": {
+        "pid": 21727,
+        "name": "嘘屋 佐々木 酒人",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "26849": {
+        "pid": 26849,
+        "name": "服部 道知",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "12709": {
+        "pid": 12709,
+        "name": "太田 憂",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10279": {
+        "pid": 10279,
+        "name": "羽吹 梨里",
+        "mainImg": "https://cdn.ymgal.games/archive/main/ee/ee69a65406e74e77a37e89f757a1a91a.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10408": {
+        "pid": 10408,
+        "name": "生天目 仁美",
+        "chineseName": "生天目仁美",
+        "mainImg": "https://cdn.ymgal.games/archive/main/6b/6b372bb6b6e84a5f89ccfeb5fae96807.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11817": {
+        "pid": 11817,
+        "name": "夢野 Q作",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10794": {
+        "pid": 10794,
+        "name": "前田 剛",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "11502": {
+        "pid": 11502,
+        "name": "環 有希",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10287": {
+        "pid": 10287,
+        "name": "諏訪部 順一",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10671": {
+        "pid": 10671,
+        "name": "結下 みちる",
+        "mainImg": "https://cdn.ymgal.games/archive/main/66/6665f6e9186444219ae8bd7be8db6462.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "26287": {
+        "pid": 26287,
+        "name": "中島 聖",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "27567": {
+        "pid": 27567,
+        "name": "株式会社ニライカナイ",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "24434": {
+        "pid": 24434,
+        "name": "門松 和哉",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10099": {
+        "pid": 10099,
+        "name": "成田 剣",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10233": {
+        "pid": 10233,
+        "name": "鳥海 浩輔",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "10554": {
+        "pid": 10554,
+        "name": "いのくち ゆか",
+        "chineseName": "猪口有佳",
+        "mainImg": "https://cdn.ymgal.games/archive/main/ee/eeed14b033374fdbb91ae9ffe042e80e.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      },
+      "31420": {
+        "pid": 31420,
+        "name": "谷山 紀章",
+        "mainImg": "https://cdn.ymgal.games/archive/def_img.webp",
+        "state": "PUBLIC_PUBLISHED",
+        "freeze": false
+      }
+    }
+  }
+}

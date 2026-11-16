@@ -1,0 +1,59 @@
+{
+  "success": true,
+  "code": 0,
+  "data": {
+    "result": [
+      {
+        "id": 10957,
+        "name": "Dies irae",
+        "chineseName": "神怒之日",
+        "state": "PUBLIC_PUBLISHED",
+        "weights": 0,
+        "mainImg": "https://cdn.ymgal.games/archive/main/bd/bd1e1fdc9dd74b78aa8d90f95ebafe3c.webp",
+        "publishVersion": 1,
+        "publishTime": "2021-08-17 11:58:25",
+        "publisher": 6803,
+        "score": "0",
+        "orgId": 10256,
+        "orgName": "light",
+        "releaseDate": "2007-12-21",
+        "haveChinese": false
+      },
+      {
+        "id": 18419,
+        "name": "Dies Irae",
+        "chineseName": "神怒之日",
+        "state": "PUBLIC_PUBLISHED",
+        "weights": 0,
+        "mainImg": "https://cdn.ymgal.games/archive/main/69/69259bd559d84efdac9de5b89d690367.jpg",
+        "publishVersion": 0,
+        "publishTime": "2021-08-07 00:00:00",
+        "score": "0",
+        "orgId": 12221,
+        "orgName": "ファミリーソフト",
+        "releaseDate": "1996-02-15",
+        "haveChinese": false
+      },
+      {
+        "id": 22030,
+        "name": "Dies irae ~Interview with Kaziklu Bey~",
+        "chineseName": "神怒之日 ～夜访穿刺公～",
+        "state": "PUBLIC_PUBLISHED",
+        "weights": 0,
+        "mainImg": "https://cdn.ymgal.games/archive/main/e3/e3916236b5b645cba5bf9a84ada6afe2.webp",
+        "publishVersion": 4,
+        "publishTime": "2026-11-14 15:34:21",
+        "publisher": 61835,
+        "score": "0",
+        "orgId": 10256,
+        "orgName": "light",
+        "releaseDate": "2016-03-25",
+        "haveChinese": true
+      }
+    ],
+    "total": 3,
+    "hasNext": false,
+    "pageNum": 1,
+    "pageSize": 10
+  }
+}
