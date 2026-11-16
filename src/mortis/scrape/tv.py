@@ -13,7 +13,7 @@ from mortis.config.models import TvScrapeConfig
 from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile, utc_now
 from mortis.organize.episodes import parse_episode
-from mortis.organize.names import subtitle_belongs_to
+from mortis.organize.names import parse_name, subtitle_belongs_to
 from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
 from mortis.scrape.common import (
     download_images,
@@ -26,6 +26,7 @@ from mortis.scrape.common import (
 )
 from mortis.scrape.images import ImageStore
 from mortis.sources.tmdb.client import open_tmdb
+from mortis.sources.tmdb.search import similarity
 from mortis.sources.tmdb.tv import (
     episode_candidates,
     fetch_season,
@@ -39,6 +40,8 @@ from mortis.tasks.base import TaskContext, TaskError
 SHOW_IMAGES = {"poster": "poster", "fanart": "fanart", "clearlogo": "clearlogo", "keyart": "keyart"}
 SEASON_IMAGES = {"poster": "season_poster"}
 EPISODE_IMAGES = {"thumb": "episode_thumb"}
+SEASON_NAME_MATCH = 0.6
+SAME_TITLE = 0.95
 
 
 @dataclass
@@ -67,17 +70,79 @@ def _subtree_files(session: Session, show_id: int) -> list[MediaFile]:
     )
 
 
-def _local_numbers(files: list[MediaFile]) -> dict[str, tuple[int, tuple[int, ...]]]:
-    """视频路径 → (季号, 文件里的各集集号)。季号没写时当第 1 季。"""
-    numbers: dict[str, tuple[int, tuple[int, ...]]] = {}
+Local = dict[str, tuple[int | None, tuple[int, ...]]]
+
+
+def _local_numbers(files: list[MediaFile]) -> Local:
+    """视频路径 → (季号, 文件里的各集集号)。季号没写时是 None，花絮不在里面。"""
+    numbers: Local = {}
     for row in files:
         if row.file_kind != "video":
             continue
         folder = os.path.basename(os.path.dirname(row.path))
         parsed = parse_episode(os.path.splitext(os.path.basename(row.path))[0], folder)
         if parsed is not None:
-            numbers[row.path] = (1 if parsed.season is None else parsed.season, parsed.episodes)
+            numbers[row.path] = (parsed.season, parsed.episodes)
     return numbers
+
+
+def _year(date_text: str | None) -> int | None:
+    return int(date_text[:4]) if date_text and date_text[:4].isdigit() else None
+
+
+def _folder_season(folder: str, show_raw: dict[str, Any]) -> int | None:
+    """续作单独一个目录时它对应哪一季：目录年份是某季的播出年份，或冒号后面是那季的季名。"""
+    parsed = parse_name(folder)
+    seasons = [s for s in show_raw.get("seasons") or [] if (s.get("season_number") or 0) >= 1]
+    names = (show_raw.get("name") or "", show_raw.get("original_name") or "")
+    if max(similarity(parsed.title, name) for name in names) >= SAME_TITLE:
+        return None
+    if parsed.year is not None and parsed.year != _year(show_raw.get("first_air_date")):
+        for entry in seasons:
+            if _year(entry.get("air_date")) == parsed.year:
+                return entry["season_number"]
+    _, colon, suffix = parsed.title.partition(":")
+    if colon and suffix.strip():
+        named = [(similarity(suffix, entry.get("name") or ""), entry) for entry in seasons]
+        if named:
+            value, entry = max(named, key=lambda pair: pair[0])
+            if value >= SEASON_NAME_MATCH:
+                return entry["season_number"]
+    return None
+
+
+def _absolute(number: int, show_raw: dict[str, Any]) -> tuple[int, int]:
+    """绝对集数按 TMDB 各季（不含特别篇）集数累加换算成季和集。"""
+    counts = sorted(
+        (s["season_number"], s.get("episode_count") or 0)
+        for s in show_raw.get("seasons") or []
+        if (s.get("season_number") or 0) >= 1
+    )
+    rest = number
+    for season, count in counts:
+        if rest <= count or count == 0:
+            return season, rest
+        rest -= count
+    return (counts[0][0], number) if counts else (1, number)
+
+
+def _resolve(local: Local, show_raw: dict[str, Any]) -> dict[str, tuple[int, tuple[int, ...]]]:
+    """没写季号的视频，先看所在目录对应哪一季，再按绝对集数换算，都不行就当第 1 季。"""
+    resolved: dict[str, tuple[int, tuple[int, ...]]] = {}
+    folders: dict[str, int | None] = {}
+    for path, (season, episodes) in local.items():
+        if season is not None:
+            resolved[path] = (season, episodes)
+            continue
+        folder = os.path.basename(os.path.dirname(path))
+        if folder not in folders:
+            folders[folder] = _folder_season(folder, show_raw)
+        if folders[folder] is not None:
+            resolved[path] = (folders[folder], episodes)
+            continue
+        mapped = [_absolute(number, show_raw) for number in episodes]
+        resolved[path] = (mapped[0][0], tuple(n for s, n in mapped if s == mapped[0][0]))
+    return resolved
 
 
 def _child(session: Session, parent: Item, kind: str, number: int) -> Item:
@@ -180,18 +245,19 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 select(Item).where(Item.parent_id == show.id, Item.kind == "season")
             )
         }
-        local = _local_numbers(_subtree_files(session, show.id))
+        parsed_local = _local_numbers(_subtree_files(session, show.id))
         show_fields = level_fields(session, data_type_id, "work")
         season_fields = level_fields(session, data_type_id, "season")
         episode_fields = level_fields(session, data_type_id, "episode")
-    local_seasons = {season for season, _ in local.values()}
-    local_episodes = {(season, n) for season, numbers in local.values() for n in numbers}
 
     with open_tmdb(services) as tmdb:
         show_fetched = show_raw is None
         if show_raw is None:
             ctx.log(f"请求 TMDB 剧 {tmdb_id}")
             show_raw = fetch_show(tmdb, tmdb_id, config)
+        local = _resolve(parsed_local, show_raw)
+        local_seasons = {season for season, _ in local.values()}
+        local_episodes = {(season, n) for season, numbers in local.values() for n in numbers}
         show_values = show_candidates(show_raw, config)
         seasons: list[_Season] = []
         for entry in show_raw.get("seasons") or []:

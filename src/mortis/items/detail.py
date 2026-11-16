@@ -172,8 +172,10 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
         episode = by_id[item_id]
         stem = os.path.splitext(os.path.basename(path))[0]
         parsed = parse_episode(stem, os.path.basename(os.path.dirname(path)))
-        for number in parsed.episodes if parsed else (episode.index_number,):
-            covered.add((episode.parent_id, number))
+        first = episode.index_number or 0
+        offset = first - parsed.episodes[0] if parsed else 0
+        for number in parsed.episodes if parsed else (first,):
+            covered.add((episode.parent_id, number + offset))
     thumbs = _first_images(session, [e.id for e in episodes], "thumb")
     by_season: dict[int, list[dict[str, Any]]] = {s.id: [] for s in seasons}
     for episode in episodes:
