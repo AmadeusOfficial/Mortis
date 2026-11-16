@@ -1,4 +1,4 @@
-﻿from collections.abc import Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
 import httpx2 as httpx
@@ -47,14 +47,21 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
 
     page.get_by_role("button", name="新建媒体库").click()
     dialog = page.get_by_role("dialog")
-    dialog.get_by_label("目录").fill(str(movies))
+    dialog.get_by_role("button", name="浏览").click()
+    browser = page.get_by_role("dialog", name="选择目录")
+    browser.get_by_label("当前目录").fill(str(movies.parent))
+    browser.get_by_label("当前目录").press("Enter")
+    browser.get_by_text(movies.name, exact=True).click()
+    expect(browser.get_by_label("当前目录")).to_have_value(str(movies))
+    browser.get_by_role("button", name="选择这个目录").click()
+    expect(dialog.get_by_label("目录 1", exact=True)).to_have_value(str(movies))
     dialog.get_by_role("button", name="保存").click()
     expect(page.get_by_text(str(movies))).to_be_visible()
 
     page.get_by_role("button", name="新建媒体库").click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("库名").fill("重复的库")
-    dialog.get_by_label("目录").fill(str(movies))
+    dialog.get_by_label("目录 1", exact=True).fill(str(movies))
     dialog.get_by_role("button", name="保存").click()
     expect(dialog.get_by_text("重复或互相包含")).to_be_visible()
     dialog.get_by_role("button", name="取消").click()
@@ -65,7 +72,8 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
     page.get_by_role("button", name="编辑").click()
     dialog = page.get_by_role("dialog")
     dialog.get_by_label("库名").fill("电影库")
-    dialog.get_by_label("目录").fill(f"{movies}\n{more}")
+    dialog.get_by_role("button", name="添加目录").click()
+    dialog.get_by_label("目录 2", exact=True).fill(str(more))
     dialog.get_by_role("button", name="保存").click()
     expect(page.get_by_text(str(more))).to_be_visible()
     expect(page.get_by_role("heading", name="电影库")).to_be_visible()

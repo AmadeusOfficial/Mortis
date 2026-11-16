@@ -663,3 +663,14 @@ export function isTaskBusy(task: TaskRow): boolean {
   const children = (task.tree_status.queued ?? 0) + (task.tree_status.running ?? 0);
   return task.status === "queued" || task.status === "running" || children > 0;
 }
+
+export interface DirListing {
+  path: string;
+  // 空字符串表示上一级是盘符列表；null 表示已经在盘符列表。
+  parent: string | null;
+  dirs: { name: string; path: string }[];
+}
+
+export function fetchDirs(path: string): Promise<DirListing> {
+  return request("GET", `/api/files/dirs?path=${encodeURIComponent(path)}`);
+}

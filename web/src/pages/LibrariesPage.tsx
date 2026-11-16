@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Group,
+  Input,
   Loader,
   Modal,
   Paper,
@@ -11,7 +12,6 @@ import {
   Switch,
   Text,
   TextInput,
-  Textarea,
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -26,6 +26,7 @@ import {
   fetchLibraries,
   updateLibrary,
 } from "../api";
+import { PathPicker } from "../components/PathPicker";
 import { fileUnit, itemUnit, useDataTypes } from "../dataTypes";
 import { LibraryActions } from "../libraryActions";
 
@@ -166,17 +167,18 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
   const [dataTypeId, setDataTypeId] = useState<string | null>(library?.data_type_id ?? "movie");
   // 用户在新建时手动改过库名后，就不再跟随数据类型的名字。
   const [nameEdited, setNameEdited] = useState(false);
-  const [pathsText, setPathsText] = useState(library?.paths.join("\n") ?? "");
+  const [paths, setPaths] = useState<string[]>(
+    library !== null && library.paths.length > 0 ? library.paths : [""],
+  );
+  const setPathAt = (index: number, value: string) =>
+    setPaths((current) => current.map((path, i) => (i === index ? value : path)));
   const dataTypeName = dataTypes.data?.find((type) => type.id === dataTypeId)?.name ?? "";
   const save = useMutation({
     mutationFn: () => {
-      const paths = pathsText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line !== "");
+      const filled = paths.map((path) => path.trim()).filter((path) => path !== "");
       return library === null
-        ? createLibrary({ name, data_type_id: dataTypeId ?? "", paths })
-        : updateLibrary(library.id, { name, paths });
+        ? createLibrary({ name, data_type_id: dataTypeId ?? "", paths: filled })
+        : updateLibrary(library.id, { name, paths: filled });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
@@ -219,14 +221,37 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
           disabled={library !== null}
           description={library !== null ? "建好后不能改类型" : undefined}
         />
-        <Textarea
-          label="目录"
-          description="一行一个，填视频所在目录的完整路径，例如 M:\plex\movie"
-          autosize
-          minRows={3}
-          value={pathsText}
-          onChange={(event) => setPathsText(event.currentTarget.value)}
-        />
+        <Input.Wrapper label="目录" description="视频所在目录的完整路径，可以点「浏览」选">
+          <Stack gap="xs" mt={4}>
+            {paths.map((path, index) => (
+              <Group key={index} gap="xs" wrap="nowrap">
+                <PathPicker
+                  label={`目录 ${index + 1}`}
+                  value={path}
+                  placeholder="例如 M:\plex\movie"
+                  onChange={(value) => setPathAt(index, value)}
+                />
+                <Button
+                  variant="subtle"
+                  color="red"
+                  disabled={paths.length === 1}
+                  onClick={() => setPaths((current) => current.filter((_, i) => i !== index))}
+                >
+                  删除
+                </Button>
+              </Group>
+            ))}
+            <Group>
+              <Button
+                variant="light"
+                size="xs"
+                onClick={() => setPaths((current) => [...current, ""])}
+              >
+                添加目录
+              </Button>
+            </Group>
+          </Stack>
+        </Input.Wrapper>
         {save.isError && (
           <Alert color="red" title="保存失败">
             {save.error.message}

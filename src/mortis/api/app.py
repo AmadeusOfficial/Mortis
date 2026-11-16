@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from mortis.api.routes import data_types as data_type_routes
+from mortis.api.routes import files as file_routes
 from mortis.api.routes import images as image_routes
 from mortis.api.routes import items as item_routes
 from mortis.api.routes import libraries as library_routes
@@ -126,6 +127,7 @@ def create_app(
     app.include_router(tmdb_routes.router)
     app.include_router(plugin_routes.router)
     app.include_router(source_routes.router)
+    app.include_router(file_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
