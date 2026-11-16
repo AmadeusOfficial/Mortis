@@ -1,0 +1,1663 @@
+{
+  "more": false,
+  "results": [
+    {
+      "alttitle": null,
+      "description": "May 1, 1945 ― Germany. On the eve of Berlin's collapse, a group of men and women carried out a certain ritual. To them, suffering defeat in the war meant nothing. If anything, the countless lives lost in the battle served as a catalyst to their sacrificial ceremony. Whether or not their attempt bore fruit ― not a soul knows. Following the war, they faded from sight, mind, and eventually into the realm of myth.\n\n\n61 years later ― Japan, 2006.\nRen Fujii, a young man attending high school in Suwahara City, finds his friendship with his old buddy Shirou Yusa shatter to pieces following a certain incident, ending in a vicious fight that sees Ren hospitalized for two months.\nThe season shifts from autumn to winter ― to the dawning weeks of December, with Christmas on the horizon. Having lost his best friend, Ren leaves the hospital with the intention to rebuild his new life without Shirou.\nBut even that plan soon falls apart. Irrationality that defies the realm of common sense begins to assault and devour the city. Abnormalities soon seek to destroy everything Ren holds dear before his eyes with overwhelming violence.\nHe must change, even if it means crossing the boundary between the ordinary and the extraordinary. His desires are hardly anything grand. All he wants is to return to those days of old. Back to those days filled with simple, everyday joy.\nThe battle with the Longinus Dreizehn Orden. A continuation of that war full of madness, carnage, and maledictions. What future awaits Ren at the end of his road...?\n\n[From [url=http://store.steampowered.com/app/644540/Dies_irae_Amantes_amentes/]Steam[/url]]\n\nA thoroughly rewritten and expanded remake of [url=/v32116]Dies irae Also sprach Zarathustra[/url]. Henceforth, the two should be treated as different games.",
+      "developers": [
+        {
+          "id": "p242",
+          "name": "light",
+          "original": null
+        },
+        {
+          "id": "p6598",
+          "name": "Greenwood Co., Ltd.",
+          "original": "株式会社グリーンウッド"
+        }
+      ],
+      "extlinks": [
+        {
+          "label": "Wikipedia (en)",
+          "url": "https://en.wikipedia.org/wiki/Dies_irae_(video_game)"
+        },
+        {
+          "label": "Wikipedia (ja)",
+          "url": "https://ja.wikipedia.org/wiki/Dies_irae_-Also_sprach_Zarathustra-"
+        },
+        {
+          "label": "Wikidata",
+          "url": "https://www.wikidata.org/wiki/Q4169889"
+        },
+        {
+          "label": "MobyGames",
+          "url": "https://www.mobygames.com/game/102617/"
+        },
+        {
+          "label": "HowLongToBeat",
+          "url": "http://howlongtobeat.com/game.php?id=46206"
+        },
+        {
+          "label": "IGDB",
+          "url": "https://www.igdb.com/games/dies-irae-amantes-amentes"
+        },
+        {
+          "label": "PCGamingWiki",
+          "url": "https://www.pcgamingwiki.com/wiki/Dies_Irae:_Amantes_Amentes"
+        },
+        {
+          "label": "Lutris",
+          "url": "https://lutris.net/games/dies-irae-amantes-amentes"
+        }
+      ],
+      "id": "v548",
+      "image": {
+        "dims": [
+          411,
+          560
+        ],
+        "url": "https://t.vndb.org/cv/16/79716.jpg"
+      },
+      "length_minutes": 4950,
+      "rating": 81.3,
+      "released": "2009-07-24",
+      "screenshots": [
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 2,
+          "thumbnail": "https://t.vndb.org/sf.t/32/6232.jpg",
+          "url": "https://t.vndb.org/sf/32/6232.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/80/14080.jpg",
+          "url": "https://t.vndb.org/sf/80/14080.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/81/14081.jpg",
+          "url": "https://t.vndb.org/sf/81/14081.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/83/14083.jpg",
+          "url": "https://t.vndb.org/sf/83/14083.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/84/14084.jpg",
+          "url": "https://t.vndb.org/sf/84/14084.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/85/14085.jpg",
+          "url": "https://t.vndb.org/sf/85/14085.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/86/14086.jpg",
+          "url": "https://t.vndb.org/sf/86/14086.jpg"
+        },
+        {
+          "dims": [
+            800,
+            600
+          ],
+          "sexual": 0.07,
+          "thumbnail": "https://t.vndb.org/sf.t/87/14087.jpg",
+          "url": "https://t.vndb.org/sf/87/14087.jpg"
+        },
+        {
+          "dims": [
+            1280,
+            720
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/38/223038.jpg",
+          "url": "https://t.vndb.org/sf/38/223038.jpg"
+        },
+        {
+          "dims": [
+            1280,
+            720
+          ],
+          "sexual": 0,
+          "thumbnail": "https://t.vndb.org/sf.t/39/223039.jpg",
+          "url": "https://t.vndb.org/sf/39/223039.jpg"
+        }
+      ],
+      "staff": [
+        {
+          "id": "s27460",
+          "name": "Colin Crouse",
+          "original": null,
+          "role": "editor"
+        },
+        {
+          "id": "s27508",
+          "name": "John Hooper",
+          "original": null,
+          "role": "translator"
+        },
+        {
+          "id": "s27508",
+          "name": "John Hooper",
+          "original": null,
+          "role": "staff"
+        },
+        {
+          "id": "s27539",
+          "name": "Andrew Hodgson",
+          "original": null,
+          "role": "translator"
+        },
+        {
+          "id": "s27601",
+          "name": "Christopher Foxx",
+          "original": null,
+          "role": "qa"
+        },
+        {
+          "id": "s27662",
+          "name": "Gergely Kovács",
+          "original": null,
+          "role": "translator"
+        },
+        {
+          "id": "s27662",
+          "name": "Gergely Kovács",
+          "original": null,
+          "role": "editor"
+        },
+        {
+          "id": "s27664",
+          "name": "Karolis Januševičius",
+          "original": null,
+          "role": "translator"
+        },
+        {
+          "id": "s27664",
+          "name": "Karolis Januševičius",
+          "original": null,
+          "role": "editor"
+        },
+        {
+          "id": "s53318",
+          "name": "Monaco A. Knox",
+          "original": null,
+          "role": "translator"
+        },
+        {
+          "id": "s207",
+          "name": "Masada Takashi",
+          "original": "正田 崇",
+          "role": "scenario"
+        },
+        {
+          "id": "s207",
+          "name": "Masada Takashi",
+          "original": "正田 崇",
+          "role": "director"
+        },
+        {
+          "id": "s207",
+          "name": "Masada Takashi",
+          "original": "正田 崇",
+          "role": "staff"
+        },
+        {
+          "id": "s272",
+          "name": "Sakakibara Yui",
+          "original": "榊原 ゆい",
+          "role": "songs"
+        },
+        {
+          "id": "s510",
+          "name": "Yonao Keishi",
+          "original": "与猶 啓至",
+          "role": "music"
+        },
+        {
+          "id": "s717",
+          "name": "G Yuusuke",
+          "original": "Gユウスケ",
+          "role": "chardesign"
+        },
+        {
+          "id": "s717",
+          "name": "G Yuusuke",
+          "original": "Gユウスケ",
+          "role": "art"
+        },
+        {
+          "id": "s2093",
+          "name": "Takahama Ryou",
+          "original": "高濱 亮",
+          "role": "staff"
+        },
+        {
+          "id": "s2102",
+          "name": "Yuunagi",
+          "original": "夕薙",
+          "role": "art"
+        },
+        {
+          "id": "s4334",
+          "name": "Mogu-tan",
+          "original": "もぐたん",
+          "role": "staff"
+        },
+        {
+          "id": "s6843",
+          "name": "Ishibashi Yuuko",
+          "original": "石橋 優子",
+          "role": "songs"
+        },
+        {
+          "id": "s9649",
+          "name": "Hattori Michisato",
+          "original": "服部 道知",
+          "role": "staff"
+        },
+        {
+          "id": "s9957",
+          "name": "Ueno Kentarou",
+          "original": "上野 研太郎",
+          "role": "staff"
+        },
+        {
+          "id": "s10409",
+          "name": "NIRAI-KANAI",
+          "original": "株式会社ニライカナイ",
+          "role": "staff"
+        },
+        {
+          "id": "s10649",
+          "name": "Mayuki",
+          "original": "まゆき",
+          "role": "director"
+        },
+        {
+          "id": "s10986",
+          "name": "Oota Yuu",
+          "original": "太田 憂",
+          "role": "staff"
+        },
+        {
+          "id": "s13290",
+          "name": "Enomoto Satoru",
+          "original": "榎本 覚",
+          "role": "staff"
+        },
+        {
+          "id": "s16883",
+          "name": "Nubia",
+          "original": "ヌビア",
+          "role": "music"
+        }
+      ],
+      "tags": [
+        {
+          "id": "g4",
+          "name": "Magic",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g6",
+          "name": "Superpowers",
+          "rating": 2.63157892227173,
+          "spoiler": 0
+        },
+        {
+          "id": "g7",
+          "name": "Horror",
+          "rating": 0.807692289352417,
+          "spoiler": 0
+        },
+        {
+          "id": "g9",
+          "name": "Identity Crisis",
+          "rating": 2,
+          "spoiler": 2
+        },
+        {
+          "id": "g12",
+          "name": "Action",
+          "rating": 2.94736838340759,
+          "spoiler": 0
+        },
+        {
+          "id": "g19",
+          "name": "Mystery",
+          "rating": 2.20000004768372,
+          "spoiler": 0
+        },
+        {
+          "id": "g32",
+          "name": "ADV",
+          "rating": 2.46666669845581,
+          "spoiler": 0
+        },
+        {
+          "id": "g36",
+          "name": "Combat with Firearms",
+          "rating": 2.42857146263123,
+          "spoiler": 0
+        },
+        {
+          "id": "g43",
+          "name": "NVL",
+          "rating": 0.633333325386047,
+          "spoiler": 0
+        },
+        {
+          "id": "g47",
+          "name": "School",
+          "rating": 1.25,
+          "spoiler": 0
+        },
+        {
+          "id": "g57",
+          "name": "Norse Mythology",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g63",
+          "name": "Combat with Bladed Weapons",
+          "rating": 2.57142853736877,
+          "spoiler": 0
+        },
+        {
+          "id": "g65",
+          "name": "Fighting Heroine",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g66",
+          "name": "Sword Combat",
+          "rating": 2.36363625526428,
+          "spoiler": 0
+        },
+        {
+          "id": "g79",
+          "name": "Unarmed Combat",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g80",
+          "name": "Magic/ESP Combat",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g84",
+          "name": "Rape",
+          "rating": 0.0909090936183929,
+          "spoiler": 0
+        },
+        {
+          "id": "g96",
+          "name": "Romance",
+          "rating": 1.39999997615814,
+          "spoiler": 0
+        },
+        {
+          "id": "g104",
+          "name": "Comedy",
+          "rating": 1.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g113",
+          "name": "Protagonist's Senpai as a Heroine",
+          "rating": 2.27272725105286,
+          "spoiler": 0
+        },
+        {
+          "id": "g129",
+          "name": "Goddess Heroine",
+          "rating": 2,
+          "spoiler": 1
+        },
+        {
+          "id": "g131",
+          "name": "Sentient Weapon Heroine",
+          "rating": 2.57142853736877,
+          "spoiler": 1
+        },
+        {
+          "id": "g133",
+          "name": "Male Protagonist",
+          "rating": 2.35714292526245,
+          "spoiler": 0
+        },
+        {
+          "id": "g135",
+          "name": "Protagonist with Voice Acting",
+          "rating": 2.84210515022278,
+          "spoiler": 0
+        },
+        {
+          "id": "g139",
+          "name": "Fighting Protagonist",
+          "rating": 2.88888883590698,
+          "spoiler": 0
+        },
+        {
+          "id": "g141",
+          "name": "Past",
+          "rating": 0.935064911842346,
+          "spoiler": 1
+        },
+        {
+          "id": "g142",
+          "name": "Slice of Life Comedy",
+          "rating": 1.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g143",
+          "name": "Modern Day",
+          "rating": 2.07692313194275,
+          "spoiler": 0
+        },
+        {
+          "id": "g147",
+          "name": "Drama",
+          "rating": 2.20000004768372,
+          "spoiler": 0
+        },
+        {
+          "id": "g148",
+          "name": "Multiple Endings",
+          "rating": 2.59999990463257,
+          "spoiler": 0
+        },
+        {
+          "id": "g149",
+          "name": "Enforced Playing Order",
+          "rating": 2.14285707473755,
+          "spoiler": 2
+        },
+        {
+          "id": "g153",
+          "name": "Murder Mystery",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g157",
+          "name": "Violence",
+          "rating": 2.625,
+          "spoiler": 0
+        },
+        {
+          "id": "g158",
+          "name": "Graphic Violence",
+          "rating": 2.25,
+          "spoiler": 0
+        },
+        {
+          "id": "g160",
+          "name": "Bloody Scenes",
+          "rating": 2.58333325386047,
+          "spoiler": 0
+        },
+        {
+          "id": "g168",
+          "name": "Life and Death Drama",
+          "rating": 2.78571438789368,
+          "spoiler": 0
+        },
+        {
+          "id": "g190",
+          "name": "Airhead Heroine",
+          "rating": 1.83333337306976,
+          "spoiler": 0
+        },
+        {
+          "id": "g194",
+          "name": "Classic Tsundere Heroine",
+          "rating": 1.60000002384186,
+          "spoiler": 0
+        },
+        {
+          "id": "g195",
+          "name": "Deredere Heroine",
+          "rating": 1.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g201",
+          "name": "Protagonist's Childhood Friend as a Heroine",
+          "rating": 1.90909087657928,
+          "spoiler": 0
+        },
+        {
+          "id": "g222",
+          "name": "Fictional Modern Day Japanese Town",
+          "rating": 2.88888883590698,
+          "spoiler": 0
+        },
+        {
+          "id": "g236",
+          "name": "Low Sexual Content",
+          "rating": 2.77777767181396,
+          "spoiler": 0
+        },
+        {
+          "id": "g253",
+          "name": "Psychological Problems",
+          "rating": 2.85714292526245,
+          "spoiler": 2
+        },
+        {
+          "id": "g288",
+          "name": "Madness",
+          "rating": 2.375,
+          "spoiler": 1
+        },
+        {
+          "id": "g292",
+          "name": "Female Protagonist for a Short Time",
+          "rating": 1.63636362552643,
+          "spoiler": 0
+        },
+        {
+          "id": "g318",
+          "name": "Church",
+          "rating": 1.85714280605316,
+          "spoiler": 0
+        },
+        {
+          "id": "g334",
+          "name": "Combat Capable Friends",
+          "rating": 2.79999995231628,
+          "spoiler": 0
+        },
+        {
+          "id": "g349",
+          "name": "Time Loop",
+          "rating": 1.5,
+          "spoiler": 2
+        },
+        {
+          "id": "g355",
+          "name": "Brief NVL Scenes",
+          "rating": 2.12121200561523,
+          "spoiler": 0
+        },
+        {
+          "id": "g358",
+          "name": "Group Sex of One Female and Several Males",
+          "rating": 1,
+          "spoiler": 2
+        },
+        {
+          "id": "g373",
+          "name": "Student Heroine",
+          "rating": 2.41666674613953,
+          "spoiler": 0
+        },
+        {
+          "id": "g407",
+          "name": "Sex Under the Necessity",
+          "rating": 1.18181812763214,
+          "spoiler": 1
+        },
+        {
+          "id": "g432",
+          "name": "Reincarnation",
+          "rating": 2.625,
+          "spoiler": 2
+        },
+        {
+          "id": "g456",
+          "name": "War",
+          "rating": 1.77777779102325,
+          "spoiler": 0
+        },
+        {
+          "id": "g457",
+          "name": "Apocalypse",
+          "rating": 2.875,
+          "spoiler": 1
+        },
+        {
+          "id": "g459",
+          "name": "Unlockable Routes",
+          "rating": 2.88888883590698,
+          "spoiler": 0
+        },
+        {
+          "id": "g530",
+          "name": "Tomboy Heroine",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g544",
+          "name": "Student Protagonist",
+          "rating": 2.75,
+          "spoiler": 0
+        },
+        {
+          "id": "g553",
+          "name": "Multiple Route Mystery",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g567",
+          "name": "Sword Wielding Heroine",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g570",
+          "name": "Duel",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g601",
+          "name": "Unique Routes",
+          "rating": 2.12727284431458,
+          "spoiler": 0
+        },
+        {
+          "id": "g602",
+          "name": "Tsundere Heroine",
+          "rating": 2.25,
+          "spoiler": 0
+        },
+        {
+          "id": "g606",
+          "name": "Branching Plot",
+          "rating": 2.30769228935242,
+          "spoiler": 1
+        },
+        {
+          "id": "g617",
+          "name": "Hotblooded Protagonist",
+          "rating": 2.88888883590698,
+          "spoiler": 0
+        },
+        {
+          "id": "g624",
+          "name": "Male Protagonist for a Short Time",
+          "rating": 0.909090936183929,
+          "spoiler": 0
+        },
+        {
+          "id": "g631",
+          "name": "Mayadere Heroine",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g633",
+          "name": "Other Perspectives",
+          "rating": 2.72727274894714,
+          "spoiler": 0
+        },
+        {
+          "id": "g653",
+          "name": "Priest Support Character",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g664",
+          "name": "Battle Royale",
+          "rating": 2.77777767181396,
+          "spoiler": 0
+        },
+        {
+          "id": "g676",
+          "name": "Flashback",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g679",
+          "name": "Energy Transfer via Sex",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g692",
+          "name": "Proactive Protagonist",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g710",
+          "name": "Friendship",
+          "rating": 2.33333325386047,
+          "spoiler": 0
+        },
+        {
+          "id": "g728",
+          "name": "Protagonist with a Face",
+          "rating": 2.8461537361145,
+          "spoiler": 0
+        },
+        {
+          "id": "g733",
+          "name": "Defloration",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g750",
+          "name": "Footjob",
+          "rating": 1.04999995231628,
+          "spoiler": 0
+        },
+        {
+          "id": "g751",
+          "name": "Boobjob",
+          "rating": 0.793650805950165,
+          "spoiler": 0
+        },
+        {
+          "id": "g756",
+          "name": "Only Virgin Heroines",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g757",
+          "name": "Winter",
+          "rating": 1.88888883590698,
+          "spoiler": 0
+        },
+        {
+          "id": "g775",
+          "name": "Orphan Heroine",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g789",
+          "name": "Thriller",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g794",
+          "name": "Lots of Event CGs",
+          "rating": 1.20000004768372,
+          "spoiler": 0
+        },
+        {
+          "id": "g810",
+          "name": "Secret Society",
+          "rating": 2.71428561210632,
+          "spoiler": 0
+        },
+        {
+          "id": "g811",
+          "name": "Group of Friends",
+          "rating": 2.125,
+          "spoiler": 0
+        },
+        {
+          "id": "g820",
+          "name": "Orphan Protagonist",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g823",
+          "name": "Infinite Spontaneous Power-ups",
+          "rating": 1.7622377872467,
+          "spoiler": 0
+        },
+        {
+          "id": "g839",
+          "name": "Foreigner Heroine",
+          "rating": 2,
+          "spoiler": 1
+        },
+        {
+          "id": "g848",
+          "name": "Death of Heroine",
+          "rating": 2.5,
+          "spoiler": 2
+        },
+        {
+          "id": "g851",
+          "name": "Insert Songs",
+          "rating": 2.33333325386047,
+          "spoiler": 0
+        },
+        {
+          "id": "g872",
+          "name": "No Common Sense Heroine",
+          "rating": 1.66666662693024,
+          "spoiler": 0
+        },
+        {
+          "id": "g873",
+          "name": "Desperation",
+          "rating": 2.41666674613953,
+          "spoiler": 1
+        },
+        {
+          "id": "g878",
+          "name": "Missionary Position",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g916",
+          "name": "Blowjob",
+          "rating": 0.952380955219269,
+          "spoiler": 0
+        },
+        {
+          "id": "g917",
+          "name": "Handjob",
+          "rating": 0.873015880584717,
+          "spoiler": 0
+        },
+        {
+          "id": "g1004",
+          "name": "Metafiction",
+          "rating": 2,
+          "spoiler": 1
+        },
+        {
+          "id": "g1053",
+          "name": "Heroine with Ahoge",
+          "rating": 2.14285707473755,
+          "spoiler": 0
+        },
+        {
+          "id": "g1055",
+          "name": "Resurrection",
+          "rating": 2.625,
+          "spoiler": 2
+        },
+        {
+          "id": "g1061",
+          "name": "Support Character with Ahoge",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g1104",
+          "name": "Nun Support Character",
+          "rating": 2.16666674613953,
+          "spoiler": 0
+        },
+        {
+          "id": "g1154",
+          "name": "Philosophy",
+          "rating": 2.625,
+          "spoiler": 0
+        },
+        {
+          "id": "g1196",
+          "name": "White Haired Heroine",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g1234",
+          "name": "Unlockable Choices",
+          "rating": 1.75,
+          "spoiler": 0
+        },
+        {
+          "id": "g1250",
+          "name": "Protagonist's Opponent as a Heroine",
+          "rating": 2.66666674613953,
+          "spoiler": 0
+        },
+        {
+          "id": "g1265",
+          "name": "Sacrifice",
+          "rating": 2.42857146263123,
+          "spoiler": 2
+        },
+        {
+          "id": "g1269",
+          "name": "Brocon Heroine",
+          "rating": 0.333333343267441,
+          "spoiler": 0
+        },
+        {
+          "id": "g1297",
+          "name": "Doggy Style",
+          "rating": 1.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g1321",
+          "name": "Metropolitan Area",
+          "rating": 2.16666674613953,
+          "spoiler": 0
+        },
+        {
+          "id": "g1343",
+          "name": "Homicide",
+          "rating": 2.59999990463257,
+          "spoiler": 0
+        },
+        {
+          "id": "g1364",
+          "name": "Time Stop",
+          "rating": 2.33333325386047,
+          "spoiler": 1
+        },
+        {
+          "id": "g1393",
+          "name": "Outdoor Sex",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g1475",
+          "name": "Mid-game Videos",
+          "rating": 2.33333325386047,
+          "spoiler": 0
+        },
+        {
+          "id": "g1478",
+          "name": "Bonus Side Stories",
+          "rating": 2.66666674613953,
+          "spoiler": 0
+        },
+        {
+          "id": "g1481",
+          "name": "Multiple Credit Rolls",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g1558",
+          "name": "Read Text Marking",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g1570",
+          "name": "Impulsive Protagonist",
+          "rating": 2.5,
+          "spoiler": 1
+        },
+        {
+          "id": "g1581",
+          "name": "Cowgirl",
+          "rating": 1.14285719394684,
+          "spoiler": 0
+        },
+        {
+          "id": "g1595",
+          "name": "Sex in Water",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g1736",
+          "name": "Sitting Sex",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g1796",
+          "name": "Bathroom Sex",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g1872",
+          "name": "Female Friend",
+          "rating": 1.79999995231628,
+          "spoiler": 1
+        },
+        {
+          "id": "g1897",
+          "name": "Urban Fantasy",
+          "rating": 2.44444441795349,
+          "spoiler": 0
+        },
+        {
+          "id": "g2033",
+          "name": "Unlockable Hero(ine)",
+          "rating": 1.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g2040",
+          "name": "Censored Text",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g2073",
+          "name": "Park",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g2086",
+          "name": "Drastic Character Development (positive)",
+          "rating": 2.28571438789368,
+          "spoiler": 1
+        },
+        {
+          "id": "g2101",
+          "name": "Skip to Choices",
+          "rating": 1.04999995231628,
+          "spoiler": 0
+        },
+        {
+          "id": "g2138",
+          "name": "Quickie Fix Position",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g2149",
+          "name": "Loli Support Character",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g2220",
+          "name": "Hero(ine) Selection",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g2285",
+          "name": "Double Handjob",
+          "rating": 1,
+          "spoiler": 1
+        },
+        {
+          "id": "g2407",
+          "name": "Save Memo Function",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g2452",
+          "name": "Music Recollection",
+          "rating": 2.75,
+          "spoiler": 0
+        },
+        {
+          "id": "g2466",
+          "name": "Unlockable Gallery",
+          "rating": 2.79999995231628,
+          "spoiler": 0
+        },
+        {
+          "id": "g2479",
+          "name": "Transformation Sequence(s)",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g2577",
+          "name": "Hate Sex (Consensual)",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g2619",
+          "name": "In Medias Res",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g2635",
+          "name": "Unlockable Epilogue",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g2689",
+          "name": "Modifications",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g2926",
+          "name": "2000s",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g3003",
+          "name": "Male Friend",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g3005",
+          "name": "Major Antagonist",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g3171",
+          "name": "High School Student Heroine",
+          "rating": 3,
+          "spoiler": 0
+        },
+        {
+          "id": "g3176",
+          "name": "Brief Third-person Narrative Sections",
+          "rating": 2,
+          "spoiler": 0
+        },
+        {
+          "id": "g3212",
+          "name": "Flat Tints Only",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g3349",
+          "name": "Determinant Antagonist",
+          "rating": 2.5,
+          "spoiler": 2
+        },
+        {
+          "id": "g3438",
+          "name": "Has Window Transparency Setting",
+          "rating": 1,
+          "spoiler": 0
+        },
+        {
+          "id": "g23",
+          "name": "Sexual Content",
+          "rating": 0.600000023841858,
+          "spoiler": 0
+        },
+        {
+          "id": "g891",
+          "name": "Fighting Hero",
+          "rating": 0.175824180245399,
+          "spoiler": 0
+        },
+        {
+          "id": "g78",
+          "name": "Combat with Exotic Weapons",
+          "rating": 2.71428561210632,
+          "spoiler": 0
+        },
+        {
+          "id": "g461",
+          "name": "Heroine with Zettai Ryouiki",
+          "rating": 2.5,
+          "spoiler": 0
+        },
+        {
+          "id": "g1184",
+          "name": "High School Student Protagonist",
+          "rating": 2,
+          "spoiler": 0
+        }
+      ],
+      "title": "Dies irae ~Acta est Fabula~",
+      "titles": [
+        {
+          "lang": "ja",
+          "latin": null,
+          "main": true,
+          "official": true,
+          "title": "Dies irae ~Acta est Fabula~"
+        }
+      ],
+      "va": [
+        {
+          "character": {
+            "id": "c34716",
+            "name": "Alfred Der Vogelweide",
+            "original": "アルフレート・デア・フォーゲルヴァイデ"
+          },
+          "staff": {
+            "id": "s551",
+            "name": "Ookawa Tooru",
+            "original": "大川 透"
+          }
+        },
+        {
+          "character": {
+            "id": "c28993",
+            "name": "Rusalka Schwägerin",
+            "original": "ルサルカ・シュヴェーゲリン"
+          },
+          "staff": {
+            "id": "s590",
+            "name": "Kimura Ayaka",
+            "original": "木村 あやか"
+          }
+        },
+        {
+          "character": {
+            "id": "c76293",
+            "name": "Kouha",
+            "original": "コウハ"
+          },
+          "staff": {
+            "id": "s622",
+            "name": "Koshimizu Ami",
+            "original": "小清水 亜美"
+          }
+        },
+        {
+          "character": {
+            "id": "c28994",
+            "name": "Eleonore von Wittenburg",
+            "original": "エレオノーレ・フォン・ヴィッテンブルグ"
+          },
+          "staff": {
+            "id": "s7969",
+            "name": "Taniguchi Kei",
+            "original": "谷口 ケイ"
+          }
+        },
+        {
+          "character": {
+            "id": "c28990",
+            "name": "Wilhelm Ehrenburg",
+            "original": "ヴィルヘルム・エーレンブルグ"
+          },
+          "staff": {
+            "id": "s59",
+            "name": "Sugisaki Kazuya",
+            "original": "杉崎 和哉"
+          }
+        },
+        {
+          "character": {
+            "id": "c34711",
+            "name": "Sakurai Kai",
+            "original": "櫻井 戒"
+          },
+          "staff": {
+            "id": "s63",
+            "name": "Ishikawa Yuusuke",
+            "original": "石川 ゆうすけ"
+          }
+        },
+        {
+          "character": {
+            "id": "c29000",
+            "name": "Ayase Kasumi",
+            "original": "綾瀬 香純"
+          },
+          "staff": {
+            "id": "s794",
+            "name": "Samoto Fuuri",
+            "original": "佐本 二厘"
+          }
+        },
+        {
+          "character": {
+            "id": "c35155",
+            "name": "Neros Satanail",
+            "original": "ネロス・サタナイル"
+          },
+          "staff": {
+            "id": "s85",
+            "name": "Okitsu Kazuyuki",
+            "original": "興津 和幸"
+          }
+        },
+        {
+          "character": {
+            "id": "c34713",
+            "name": "Kirisaki Kyouka",
+            "original": "霧咲 鏡花"
+          },
+          "staff": {
+            "id": "s955",
+            "name": "Mizukiri Keito",
+            "original": "水霧 けいと"
+          }
+        },
+        {
+          "character": {
+            "id": "c76292",
+            "name": "Muzan",
+            "original": "無慙"
+          },
+          "staff": {
+            "id": "s89",
+            "name": "Itou Kentarou",
+            "original": "伊藤 健太郎"
+          }
+        },
+        {
+          "character": {
+            "id": "c29002",
+            "name": "Yusa Shirou",
+            "original": "遊佐 司狼"
+          },
+          "staff": {
+            "id": "s990",
+            "name": "Renaissance Yamada",
+            "original": "ルネッサンス 山田"
+          }
+        },
+        {
+          "character": {
+            "id": "c34715",
+            "name": "Volker Balling",
+            "original": "フォルカー・バルリング"
+          },
+          "staff": {
+            "id": "s119",
+            "name": "Yamazaki Takumi",
+            "original": "山崎 たくみ"
+          }
+        },
+        {
+          "character": {
+            "id": "c34714",
+            "name": "Jane Doe",
+            "original": "ジェーン・ドゥ"
+          },
+          "staff": {
+            "id": "s6",
+            "name": "Tanaka Ryouko",
+            "original": "田中 涼子"
+          }
+        },
+        {
+          "character": {
+            "id": "c29003",
+            "name": "Honjou Erii",
+            "original": "本城 恵梨依"
+          },
+          "staff": {
+            "id": "s1429",
+            "name": "Minami Ibuki",
+            "original": "皆美 伊吹"
+          }
+        },
+        {
+          "character": {
+            "id": "c76295",
+            "name": "Yomi",
+            "original": "ヨミ"
+          },
+          "staff": {
+            "id": "s1433",
+            "name": "Seto Asami",
+            "original": "瀬戸 麻沙美"
+          }
+        },
+        {
+          "character": {
+            "id": "c34717",
+            "name": "Sieglinde Eberwein",
+            "original": "ジークリンデ・エーベルヴァイン"
+          },
+          "staff": {
+            "id": "s131",
+            "name": "Mizuhashi Kaori",
+            "original": "水橋 かおり"
+          }
+        },
+        {
+          "character": {
+            "id": "c28997",
+            "name": "Wolfgang Schreiber",
+            "original": "ウォルフガング・シュライバー"
+          },
+          "staff": {
+            "id": "s1849",
+            "name": "Hiyashi Tanuki",
+            "original": "日椰 たぬき"
+          }
+        },
+        {
+          "character": {
+            "id": "c28988",
+            "name": "Valeria Trifa",
+            "original": "ヴァレリア・トリファ"
+          },
+          "staff": {
+            "id": "s179",
+            "name": "Aoshima Yaiba",
+            "original": "青島 刃"
+          }
+        },
+        {
+          "character": {
+            "id": "c28995",
+            "name": "Rote Spinne",
+            "original": "ロート・シュピーネ"
+          },
+          "staff": {
+            "id": "s2401",
+            "name": "Mikawa Haruto",
+            "original": "三川 春人"
+          }
+        },
+        {
+          "character": {
+            "id": "c29001",
+            "name": "Marie",
+            "original": "マリィ"
+          },
+          "staff": {
+            "id": "s272",
+            "name": "Sakakibara Yui",
+            "original": "榊原 ゆい"
+          }
+        },
+        {
+          "character": {
+            "id": "c76294",
+            "name": "Hirume",
+            "original": "ヒルメ"
+          },
+          "staff": {
+            "id": "s3413",
+            "name": "Ookubo Rumi",
+            "original": "大久保 瑠美"
+          }
+        },
+        {
+          "character": {
+            "id": "c22060",
+            "name": "Fujii Ren",
+            "original": "藤井 蓮"
+          },
+          "staff": {
+            "id": "s45",
+            "name": "Sakiware Spoon",
+            "original": "先割れスプーン"
+          }
+        },
+        {
+          "character": {
+            "id": "c28998",
+            "name": "Mercurius",
+            "original": "メルクリウス"
+          },
+          "staff": {
+            "id": "s45",
+            "name": "Sakiware Spoon",
+            "original": "先割れスプーン"
+          }
+        },
+        {
+          "character": {
+            "id": "c62303",
+            "name": "Lotus Reichhart",
+            "original": "ロートス・ライヒハート"
+          },
+          "staff": {
+            "id": "s45",
+            "name": "Sakiware Spoon",
+            "original": "先割れスプーン"
+          }
+        },
+        {
+          "character": {
+            "id": "c34712",
+            "name": "Helga Ehrenburg",
+            "original": "ヘルガ・エーレンブルグ"
+          },
+          "staff": {
+            "id": "s363",
+            "name": "Arisugawa Miyabi",
+            "original": "有栖川 みや美"
+          }
+        },
+        {
+          "character": {
+            "id": "c28984",
+            "name": "Tubal Cain",
+            "original": "トバル カイン"
+          },
+          "staff": {
+            "id": "s377",
+            "name": "Hidari High Kick",
+            "original": "左 高蹴"
+          }
+        },
+        {
+          "character": {
+            "id": "c28992",
+            "name": "Göetz von Berlichingen",
+            "original": "ゲッツ・フォン・ベルリッヒンゲン"
+          },
+          "staff": {
+            "id": "s377",
+            "name": "Hidari High Kick",
+            "original": "左 高蹴"
+          }
+        },
+        {
+          "character": {
+            "id": "c28996",
+            "name": "Lisa Brenner",
+            "original": "リザ・ブレンナー"
+          },
+          "staff": {
+            "id": "s57",
+            "name": "Ayase Yuu",
+            "original": "彩世 ゆう"
+          }
+        },
+        {
+          "character": {
+            "id": "c22061",
+            "name": "Reinhard Tristan Eugen Heydrich",
+            "original": "ラインハルト・トリスタン・オイゲン・ハイドリヒ"
+          },
+          "staff": {
+            "id": "s66",
+            "name": "Tom Kunoreezu",
+            "original": "トム・クノレーズ"
+          }
+        },
+        {
+          "character": {
+            "id": "c28991",
+            "name": "Sakurai Kei",
+            "original": "櫻井 螢"
+          },
+          "staff": {
+            "id": "s28",
+            "name": "Kawashima Rino",
+            "original": "かわしま りの"
+          }
+        },
+        {
+          "character": {
+            "id": "c28999",
+            "name": "Beatrice Waltrud von Kircheisen",
+            "original": "ベアトリス・ヴァルトルート・フォン・キルヒアイゼン"
+          },
+          "staff": {
+            "id": "s28",
+            "name": "Kawashima Rino",
+            "original": "かわしま りの"
+          }
+        },
+        {
+          "character": {
+            "id": "c28652",
+            "name": "Himuro Rea",
+            "original": "氷室 玲愛"
+          },
+          "staff": {
+            "id": "s270",
+            "name": "Hinami Fuuka",
+            "original": "雛見 風香"
+          }
+        },
+        {
+          "character": {
+            "id": "c34710",
+            "name": "Isaak",
+            "original": "イザーク"
+          },
+          "staff": {
+            "id": "s270",
+            "name": "Hinami Fuuka",
+            "original": "雛見 風香"
+          }
+        },
+        {
+          "character": {
+            "id": "c76291",
+            "name": "Mitra",
+            "original": "ミトラ"
+          },
+          "staff": {
+            "id": "s7545",
+            "name": "Komatsu Mikako",
+            "original": "小松 未可子"
+          }
+        }
+      ],
+      "votecount": 3975
+    }
+  ]
+}
