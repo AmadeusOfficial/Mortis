@@ -5,23 +5,28 @@ from typing import Any
 from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import Session, aliased
 
-from mortis.config.models import MovieImages, MovieScrapeConfig
+from mortis.config.models import MovieScrapeConfig
 from mortis.db.models import (
     Item,
     ItemExternalId,
-    ItemSourceRecord,
     Library,
-    Person,
-    PersonExternalId,
-    TypeField,
     utc_now,
 )
 from mortis.items.identity import find_by_tmdb
-from mortis.organize.service import unscraped_movie_ids
+from mortis.organize.service import unscraped_work_ids
 from mortis.output.service import after_scrape, has_video
 from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
-from mortis.scrape.images import ImageError, ImageStore
-from mortis.sources.tmdb.client import TmdbClient, open_tmdb
+from mortis.scrape.common import (
+    download_images,
+    image_skip,
+    load_snapshot,
+    missing_photos,
+    save_external_ids,
+    save_snapshot,
+    tmdb_id_of,
+)
+from mortis.scrape.images import ImageStore
+from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.movie import (
     SOURCE,
     collection_candidates,
@@ -35,79 +40,6 @@ from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
 # 图片字段 → 设置里控制它的开关。不在表里的图片种类 TMDB 不提供，先跳过。
 WORK_IMAGES = {"poster": "poster", "fanart": "fanart", "clearlogo": "clearlogo", "keyart": "keyart"}
 COLLECTION_IMAGES = {"poster": "collection_poster", "fanart": "collection_fanart"}
-
-
-def _skip(
-    fields: list[TypeField], locked: set[str], toggles: dict[str, str], images: MovieImages
-) -> set[str]:
-    skip = set(locked)
-    for field in fields:
-        if field.value_type == "images":
-            flag = toggles.get(field.field_key)
-            if flag is None or not getattr(images, flag):
-                skip.add(field.field_key)
-    return skip
-
-
-def tmdb_id_of(session: Session, item_id: int) -> int | None:
-    value = session.scalar(
-        select(ItemExternalId.external_id).where(
-            ItemExternalId.item_id == item_id, ItemExternalId.provider == "tmdb"
-        )
-    )
-    return int(value) if value and value.isdigit() else None
-
-
-def _save_snapshot(session: Session, item_id: int, raw: dict[str, Any]) -> None:
-    record = session.get(ItemSourceRecord, (item_id, SOURCE))
-    text = json.dumps(raw, ensure_ascii=False)
-    if record is None:
-        session.add(
-            ItemSourceRecord(item_id=item_id, source=SOURCE, fetched_at=utc_now(), raw=text)
-        )
-    else:
-        record.raw = text
-        record.fetched_at = utc_now()
-
-
-def _snapshot(session: Session, item_id: int | None, force: bool) -> dict[str, Any] | None:
-    if item_id is None or force:
-        return None
-    record = session.get(ItemSourceRecord, (item_id, SOURCE))
-    return json.loads(record.raw) if record is not None else None
-
-
-def _download(
-    store: ImageStore, tmdb: TmdbClient, urls: list[str], ctx: TaskContext
-) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for url in dict.fromkeys(urls):
-        ctx.check_cancelled()
-        try:
-            files[url] = store.download(tmdb.http, url)
-        except ImageError as error:
-            ctx.log(f"图片下载失败：{url}（{error}）")
-    return files
-
-
-def _missing_photos(session: Session, actors: list[dict[str, Any]]) -> list[str]:
-    ids = [str(actor["tmdb_id"]) for actor in actors if actor.get("photo_url")]
-    has_photo = set(
-        session.scalars(
-            select(PersonExternalId.external_id)
-            .join(Person, Person.id == PersonExternalId.person_id)
-            .where(
-                PersonExternalId.provider == "tmdb",
-                PersonExternalId.external_id.in_(ids),
-                Person.photo_path.is_not(None),
-            )
-        )
-    )
-    return [
-        actor["photo_url"]
-        for actor in actors
-        if actor.get("photo_url") and str(actor["tmdb_id"]) not in has_photo
-    ]
 
 
 def drop_empty_collections(session: Session, library_id: int) -> None:
@@ -144,8 +76,8 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         library_id, data_type_id = item.library_id, item.data_type_id
         work_fields = level_fields(session, data_type_id, "work")
         collection_fields = level_fields(session, data_type_id, "collection")
-        raw = _snapshot(session, item.id, force)
-        work_skip = _skip(work_fields, set(), WORK_IMAGES, config.images)
+        raw = load_snapshot(session, item.id, force)
+        work_skip = image_skip(work_fields, set(), WORK_IMAGES, config.images)
 
     # 请求和下载不持锁；写库时再进锁，按当时的锁定集合选值。
     with open_tmdb(services) as tmdb:
@@ -158,7 +90,7 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         urls = image_urls(work_fields, {SOURCE: candidates}, work_skip)
         if config.images.actor_images:
             with ctx.session_factory() as session:
-                urls += _missing_photos(session, candidates.get("actors", []))
+                urls += missing_photos(session, candidates.get("actors", []))
 
         collection: _Collection | None = None
         info = raw.get("belongs_to_collection") or {}
@@ -166,18 +98,18 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
             collection_id = int(info["id"])
             with ctx.session_factory() as session:
                 existing = find_by_tmdb(session, library_id, collection_id, kind="collection")
-                collection_raw = _snapshot(session, existing.id if existing else None, force)
+                collection_raw = load_snapshot(session, existing.id if existing else None, force)
             collection_fetched = collection_raw is None
             if collection_raw is None:
                 ctx.log(f"请求 TMDB 系列 {collection_id}")
                 collection_raw = fetch_collection(tmdb, collection_id, config)
             collection_values = collection_candidates(collection_raw, config)
-            collection_skip = _skip(collection_fields, set(), COLLECTION_IMAGES, config.images)
+            collection_skip = image_skip(collection_fields, set(), COLLECTION_IMAGES, config.images)
             urls += image_urls(collection_fields, {SOURCE: collection_values}, collection_skip)
             collection = _Collection(
                 collection_id, collection_raw, collection_fetched, collection_values
             )
-        files = _download(store, tmdb, urls, ctx)
+        files = download_images(store, tmdb, urls, ctx)
 
     ctx.check_cancelled()
     with services.locks.hold("catalog-write"), ctx.session_factory() as session:
@@ -190,21 +122,12 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
             work_fields,
             {SOURCE: candidates},
             order,
-            _skip(work_fields, locked, WORK_IMAGES, config.images),
+            image_skip(work_fields, locked, WORK_IMAGES, config.images),
         )
         if fetched:
-            _save_snapshot(session, item.id, raw)
+            save_snapshot(session, item.id, raw)
         write_plan(session, item, work_fields, plan, files)
-        for provider, value in movie_external_ids(raw).items():
-            row = session.get(ItemExternalId, (item.id, provider))
-            if row is None:
-                session.add(
-                    ItemExternalId(
-                        item_id=item.id, provider=provider, external_id=value, is_primary=0
-                    )
-                )
-            else:
-                row.external_id = value
+        save_external_ids(session, item.id, movie_external_ids(raw))
 
         if collection is not None:
             parent = find_by_tmdb(session, library_id, collection.tmdb_id, kind="collection")
@@ -229,12 +152,12 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
                     )
                 )
             if collection.fetched:
-                _save_snapshot(session, parent.id, collection.raw)
+                save_snapshot(session, parent.id, collection.raw)
             parent_plan = plan_values(
                 collection_fields,
                 {SOURCE: collection.candidates},
                 order,
-                _skip(
+                image_skip(
                     collection_fields,
                     set(json.loads(parent.locked_fields)),
                     COLLECTION_IMAGES,
@@ -285,7 +208,7 @@ def handle_scrape_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResu
                 )
             )
         else:
-            ids = unscraped_movie_ids(session, library_id)
+            ids = unscraped_work_ids(session, library_id)
     ctx.log(f"排了 {len(ids)} 个刮削任务")
     return TaskResult(
         result={"scrape_queued": len(ids)},
