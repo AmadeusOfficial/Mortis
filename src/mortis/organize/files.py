@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -31,8 +32,16 @@ def _size(path: str) -> int | None:
         return None
 
 
-def sync_media_files(session: Session, library: Library, movies: list[FoundMovie]) -> SyncReport:
-    """把扫到的文件写进 media_files。只 flush，调用方提交。"""
+def sync_media_files(
+    session: Session,
+    library: Library,
+    movies: list[FoundMovie],
+    owner: Callable[[int], int] | None = None,
+) -> SyncReport:
+    """把扫到的文件写进 media_files。只 flush，调用方提交。
+
+    owner 把已绑定的条目换成这一组该挂的条目（剧集的视频挂在集上，新文件要挂到剧上）。
+    """
     existing = {
         row.path: row
         for row in session.scalars(select(MediaFile).where(MediaFile.library_id == library.id))
@@ -50,6 +59,8 @@ def sync_media_files(session: Session, library: Library, movies: list[FoundMovie
             ),
             None,
         )
+        if bound is not None and owner is not None:
+            bound = owner(bound)
         rows: list[MediaFile] = []
         for kind, paths in (("video", movie.videos), ("subtitle", movie.subtitles)):
             for path in paths:

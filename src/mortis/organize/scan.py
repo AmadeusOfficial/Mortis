@@ -171,6 +171,17 @@ def _walk(folder: str, is_root: bool, walk: _Walk) -> None:
         _walk(entry.path, False, walk)
 
 
+def _new_walk(
+    video_extensions: Iterable[str], subtitle_extensions: Iterable[str], skip_folders: Iterable[str]
+) -> _Walk:
+    return _Walk(
+        videos=frozenset(ext.lower() for ext in video_extensions),
+        subtitles=frozenset(ext.lower() for ext in subtitle_extensions),
+        skip=SKIP_DIR_NAMES | {name.casefold() for name in skip_folders},
+        result=ScanResult(),
+    )
+
+
 def scan_paths(
     roots: Iterable[str],
     *,
@@ -178,15 +189,61 @@ def scan_paths(
     subtitle_extensions: Iterable[str],
     skip_folders: Iterable[str],
 ) -> ScanResult:
-    walk = _Walk(
-        videos=frozenset(ext.lower() for ext in video_extensions),
-        subtitles=frozenset(ext.lower() for ext in subtitle_extensions),
-        skip=SKIP_DIR_NAMES | {name.casefold() for name in skip_folders},
-        result=ScanResult(),
-    )
+    walk = _new_walk(video_extensions, subtitle_extensions, skip_folders)
     for root in roots:
         if not os.path.isdir(root):
             walk.result.errors.append(f"目录不存在或无法访问：{root}")
             continue
         _walk(root, True, walk)
+    return walk.result
+
+
+def _collect(folder: str, walk: _Walk, videos: list[str], subtitles: list[str]) -> None:
+    listed = _list(folder, walk)
+    if listed is None:
+        return
+    dirs, files = listed
+    for entry in files:
+        stem, ext = _split(entry.name)
+        if ext in walk.videos and not _SAMPLE.search(stem) and not _TRAILER.search(stem):
+            videos.append(entry.path)
+        elif ext in walk.subtitles:
+            subtitles.append(entry.path)
+    for entry in dirs:
+        lowered = entry.name.casefold()
+        if lowered in walk.skip or entry.name.startswith((".", "$")):
+            continue
+        _collect(entry.path, walk, videos, subtitles)
+
+
+def scan_shows(
+    roots: Iterable[str],
+    *,
+    video_extensions: Iterable[str],
+    subtitle_extensions: Iterable[str],
+    skip_folders: Iterable[str],
+) -> ScanResult:
+    """库目录下每个子目录是一部剧，剧目录里的视频不论多深都归这部剧。"""
+    walk = _new_walk(video_extensions, subtitle_extensions, skip_folders)
+    for root in roots:
+        listed = _list(root, walk) if os.path.isdir(root) else None
+        if listed is None:
+            if not os.path.isdir(root):
+                walk.result.errors.append(f"目录不存在或无法访问：{root}")
+            continue
+        dirs, files = listed
+        loose = [entry.name for entry in files if _split(entry.name)[1] in walk.videos]
+        if loose:
+            walk.result.errors.append(f"库目录 {root} 下有 {len(loose)} 个视频没放在剧目录里，跳过")
+        for entry in dirs:
+            lowered = entry.name.casefold()
+            if lowered in walk.skip or entry.name.startswith((".", "$")):
+                continue
+            videos: list[str] = []
+            subtitles: list[str] = []
+            _collect(entry.path, walk, videos, subtitles)
+            if videos:
+                walk.result.movies.append(
+                    FoundMovie(entry.path, entry.name, parse_name(entry.name), videos, subtitles)
+                )
     return walk.result

@@ -45,6 +45,12 @@ class FakeTmdb:
             if year is not None:
                 results = [r for r in results if (r.get("release_date") or "").startswith(year)]
             return httpx.Response(200, json={"page": 1, "results": results})
+        if request.url.path == "/3/search/tv":
+            results = self.searches.get(request.url.params.get("query", ""), [])
+            year = request.url.params.get("first_air_date_year")
+            if year is not None:
+                results = [r for r in results if (r.get("first_air_date") or "").startswith(year)]
+            return httpx.Response(200, json={"page": 1, "results": results})
         status, body = self.routes.get(request.url.path, (404, {"status_message": "not found"}))
         return httpx.Response(status, json=body)
 
@@ -67,5 +73,17 @@ def hit(
         "release_date": date,
         "overview": "",
         "poster_path": poster,
+        "popularity": 1.0,
+    }
+
+
+def tv_hit(tmdb_id: int, name: str, date: str, original: str | None = None) -> dict[str, Any]:
+    return {
+        "id": tmdb_id,
+        "name": name,
+        "original_name": original or name,
+        "first_air_date": date,
+        "overview": "",
+        "poster_path": None,
         "popularity": 1.0,
     }

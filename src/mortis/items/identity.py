@@ -32,6 +32,14 @@ def find_by_tmdb(
     )
 
 
+def work_of(session: Session, item_id: int) -> int:
+    """季和集向上找到所属的剧；作品和系列原样返回。"""
+    item = session.get(Item, item_id)
+    while item is not None and item.kind in ("season", "episode") and item.parent_id is not None:
+        item = session.get(Item, item.parent_id)
+    return item.id if item is not None else item_id
+
+
 def find_or_create_movie(session: Session, library: Library, ref: MovieRef) -> tuple[Item, bool]:
     """同一个库里按 TMDB 编号去重。只 flush，调用方提交。"""
     existing = find_by_tmdb(session, library.id, ref.tmdb_id)

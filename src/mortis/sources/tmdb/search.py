@@ -2,7 +2,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any
+from typing import Any, Literal
 
 from mortis.organize.names import ParsedName
 from mortis.sources.tmdb.client import TmdbClient
@@ -86,13 +86,39 @@ def score(hit: MovieHit, title: str, year: int | None) -> float:
     return base - 0.15
 
 
-def find_best(tmdb: TmdbClient, parsed: ParsedName) -> Match | None:
+def search_tv(tmdb: TmdbClient, query: str, year: int | None = None) -> list[MovieHit]:
+    params: dict[str, Any] = {
+        "query": query,
+        "language": tmdb.language,
+        "include_adult": "true" if tmdb.include_adult else "false",
+    }
+    if year is not None:
+        params["first_air_date_year"] = year
+    body = tmdb.get("/search/tv", params)
+    return [
+        _hit(
+            {
+                **raw,
+                "title": raw.get("name"),
+                "original_title": raw.get("original_name"),
+                "release_date": raw.get("first_air_date"),
+            }
+        )
+        for raw in body.get("results", [])
+        if raw.get("id")
+    ]
+
+
+def find_best(
+    tmdb: TmdbClient, parsed: ParsedName, *, kind: Literal["movie", "tv"] = "movie"
+) -> Match | None:
     """按解析出的几种标题依次搜，有年份先带年份搜，搜不到再不带年份搜。返回最高分，不管阈值。"""
+    search = search_tv if kind == "tv" else search_movies
     best: Match | None = None
     for query in parsed.search_titles:
-        hits = search_movies(tmdb, query, parsed.year)
+        hits = search(tmdb, query, parsed.year)
         if not hits and parsed.year is not None:
-            hits = search_movies(tmdb, query, None)
+            hits = search(tmdb, query, None)
         for candidate in hits[:RESULTS_PER_QUERY]:
             value = max(score(candidate, title, parsed.year) for title in parsed.search_titles)
             if best is None or value > best.score:
