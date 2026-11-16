@@ -114,6 +114,48 @@ export interface MovieScrapeConfig {
   output: MovieOutputConfig;
 }
 
+export interface TvImages {
+  poster: boolean;
+  fanart: boolean;
+  clearlogo: boolean;
+  keyart: boolean;
+  season_poster: boolean;
+  episode_thumb: boolean;
+  actor_images: boolean;
+}
+
+export interface TvOutputConfig {
+  organize_after_scrape: boolean;
+  organize_rename: boolean;
+  organize_write_files: boolean;
+  show_template: string;
+  season_template: string;
+  file_template: string;
+  show_space: string;
+  season_space: string;
+  file_space: string;
+  colon_replacement: string;
+  first_char_number: string;
+  nfo_write_lockdata: boolean;
+  nfo_single_studio: boolean;
+}
+
+export interface TvScrapeConfig {
+  language: string;
+  certification_country: string;
+  include_adult: boolean;
+  match_threshold: number;
+  skip_folders: string[];
+  poster_size: string;
+  fanart_size: string;
+  still_size: string;
+  prefer_textless_fanart: boolean;
+  show_missing_episodes: boolean;
+  show_missing_specials: boolean;
+  images: TvImages;
+  output: TvOutputConfig;
+}
+
 export interface TasksConfig {
   concurrency: number;
   keep_days: number;
@@ -123,10 +165,11 @@ export interface AppConfig {
   network: NetworkConfig;
   files: FilesConfig;
   movie: MovieScrapeConfig;
+  tv: TvScrapeConfig;
   tasks: TasksConfig;
 }
 
-export type SettingsSection = "network" | "files" | "movie" | "tasks";
+export type SettingsSection = "network" | "files" | "movie" | "tv" | "tasks";
 
 export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password";
 export type SecretsStatus = Record<SecretKey, boolean>;

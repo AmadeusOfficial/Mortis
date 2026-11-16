@@ -26,6 +26,9 @@ import {
   type SecretKey,
   type SecretsUpdate,
   type SettingsSection,
+  type TvImages,
+  type TvOutputConfig,
+  type TvScrapeConfig,
   checkTmdb,
   fetchSecretsStatus,
   fetchSettings,
@@ -50,6 +53,7 @@ export function SettingsPage() {
           <NetworkSection />
           <TmdbSection />
           <MovieSection />
+          <TvSection />
           <FilesSection />
           <TasksSection />
         </>
@@ -534,6 +538,252 @@ function MovieSection() {
             }}
           >
             保存电影刮削设置
+          </Button>
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
+const STILL_SIZES = [
+  { value: "w185", label: "小（w185）" },
+  { value: "w300", label: "中（w300）" },
+  { value: "original", label: "大（原图）" },
+];
+
+const TV_IMAGE_LABELS: [keyof TvImages, string][] = [
+  ["poster", "海报"],
+  ["fanart", "同人画"],
+  ["clearlogo", "透明标志"],
+  ["keyart", "关键艺术图"],
+  ["season_poster", "季海报"],
+  ["episode_thumb", "集缩略图"],
+  ["actor_images", "演员头像"],
+];
+
+const TV_TEMPLATE_HINT =
+  "可用 ${showTitle} ${showOriginalTitle} ${showYear} ${seasonNr} ${seasonNr2} ${episodeNr} ${episodeNr2} ${title}（集标题）${tmdb} ${imdb}；${前缀,标记,后缀} 只在标记有值时出现";
+
+function TvSection() {
+  const { draft: tv, setDraft, save } = useSection("tv", "电视剧刮削设置");
+  const [skipText, setSkipText] = useState<string | null>(null);
+  if (tv === null) {
+    return null;
+  }
+  const set = (patch: Partial<TvScrapeConfig>) => setDraft({ ...tv, ...patch });
+  const setOutput = (patch: Partial<TvOutputConfig>) => set({ output: { ...tv.output, ...patch } });
+  const skip = skipText ?? tv.skip_folders.join("\n");
+  const country = tv.certification_country;
+  const countryInvalid = !/^[A-Z]{2}$/.test(country);
+
+  return (
+    <Paper withBorder p="md">
+      <Stack>
+        <Title order={4}>电视剧刮削</Title>
+        <Group grow align="flex-start">
+          <Select
+            label="刮削语言"
+            data={LANGUAGES}
+            allowDeselect={false}
+            value={tv.language}
+            onChange={(value) => value !== null && set({ language: value })}
+          />
+          <TextInput
+            label="分级国家"
+            description="TMDB 的国家代码，例如 US、CN"
+            maxLength={2}
+            value={country}
+            error={countryInvalid ? "填两位字母" : undefined}
+            onChange={(event) =>
+              set({ certification_country: event.currentTarget.value.toUpperCase() })
+            }
+          />
+        </Group>
+        <NumberInput
+          label="匹配阈值"
+          description="剧目录名和 TMDB 结果的相似度达到这个值才自动认定"
+          min={0}
+          max={1}
+          step={0.05}
+          decimalScale={2}
+          value={tv.match_threshold}
+          onChange={(value) => typeof value === "number" && set({ match_threshold: value })}
+        />
+        <Switch
+          label="包含成人内容"
+          checked={tv.include_adult}
+          onChange={(event) => set({ include_adult: event.currentTarget.checked })}
+        />
+        <Group grow align="flex-start">
+          <Select
+            label="海报尺寸"
+            data={POSTER_SIZES}
+            allowDeselect={false}
+            value={tv.poster_size}
+            onChange={(value) => value !== null && set({ poster_size: value })}
+          />
+          <Select
+            label="同人画尺寸"
+            data={FANART_SIZES}
+            allowDeselect={false}
+            value={tv.fanart_size}
+            onChange={(value) => value !== null && set({ fanart_size: value })}
+          />
+          <Select
+            label="集缩略图尺寸"
+            data={STILL_SIZES}
+            allowDeselect={false}
+            value={tv.still_size}
+            onChange={(value) => value !== null && set({ still_size: value })}
+          />
+        </Group>
+        <Switch
+          label="优先无文字的同人画"
+          checked={tv.prefer_textless_fanart}
+          onChange={(event) => set({ prefer_textless_fanart: event.currentTarget.checked })}
+        />
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            要抓的图片
+          </Text>
+          <Group gap="md">
+            {TV_IMAGE_LABELS.map(([key, label]) => (
+              <Checkbox
+                key={key}
+                label={label}
+                checked={tv.images[key]}
+                onChange={(event) =>
+                  set({ images: { ...tv.images, [key]: event.currentTarget.checked } })
+                }
+              />
+            ))}
+          </Group>
+        </Stack>
+        <Switch
+          label="显示缺少的集"
+          description="已播出但本地没有文件的集也列出来，灰色标「缺」"
+          checked={tv.show_missing_episodes}
+          onChange={(event) => set({ show_missing_episodes: event.currentTarget.checked })}
+        />
+        <Switch
+          label="显示缺少的特别篇"
+          checked={tv.show_missing_specials}
+          onChange={(event) => set({ show_missing_specials: event.currentTarget.checked })}
+        />
+        <Textarea
+          label="跳过的目录"
+          description="一行一个目录名，扫描时整个目录不看"
+          autosize
+          minRows={2}
+          value={skip}
+          onChange={(event) => setSkipText(event.currentTarget.value)}
+        />
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            整理
+          </Text>
+          <Text size="xs" c="dimmed">
+            刮削只改莫提斯里的资料；整理才动磁盘，让 Emby、Plex、Kodi 能直接读到。
+          </Text>
+          <Switch
+            label="刮削后自动整理"
+            checked={tv.output.organize_after_scrape}
+            onChange={(event) =>
+              setOutput({ organize_after_scrape: event.currentTarget.checked })
+            }
+          />
+          <Switch
+            label="整理时重命名"
+            description="按下面的模板改剧目录、季目录和文件名"
+            checked={tv.output.organize_rename}
+            onChange={(event) => setOutput({ organize_rename: event.currentTarget.checked })}
+          />
+          <Switch
+            label="整理时写 NFO 和图片"
+            description="tvshow.nfo 和剧图写进剧目录，season.nfo 写进季目录，集 NFO 和缩略图写在视频旁边"
+            checked={tv.output.organize_write_files}
+            onChange={(event) =>
+              setOutput({ organize_write_files: event.currentTarget.checked })
+            }
+          />
+          <TextInput
+            label="剧目录模板"
+            description={TV_TEMPLATE_HINT}
+            value={tv.output.show_template}
+            onChange={(event) => setOutput({ show_template: event.currentTarget.value })}
+          />
+          <TextInput
+            label="季目录模板"
+            value={tv.output.season_template}
+            onChange={(event) => setOutput({ season_template: event.currentTarget.value })}
+          />
+          <TextInput
+            label="文件模板"
+            description="一个文件里有多集时，${episodeNr2} 写成 01E02"
+            value={tv.output.file_template}
+            onChange={(event) => setOutput({ file_template: event.currentTarget.value })}
+          />
+          <Group grow align="flex-start">
+            <TextInput
+              label="剧目录名空格换成"
+              placeholder="不换"
+              maxLength={3}
+              value={tv.output.show_space}
+              onChange={(event) => setOutput({ show_space: event.currentTarget.value })}
+            />
+            <TextInput
+              label="季目录名空格换成"
+              placeholder="不换"
+              maxLength={3}
+              value={tv.output.season_space}
+              onChange={(event) => setOutput({ season_space: event.currentTarget.value })}
+            />
+            <TextInput
+              label="文件名空格换成"
+              maxLength={3}
+              value={tv.output.file_space}
+              onChange={(event) => setOutput({ file_space: event.currentTarget.value })}
+            />
+            <TextInput
+              label="冒号换成"
+              description="只换半角冒号，全角「：」保留"
+              maxLength={3}
+              value={tv.output.colon_replacement}
+              onChange={(event) => setOutput({ colon_replacement: event.currentTarget.value })}
+            />
+          </Group>
+          <Switch
+            label="NFO 写入锁定标记"
+            checked={tv.output.nfo_write_lockdata}
+            onChange={(event) =>
+              setOutput({ nfo_write_lockdata: event.currentTarget.checked })
+            }
+          />
+          <Switch
+            label="NFO 只写一个制片公司"
+            checked={tv.output.nfo_single_studio}
+            onChange={(event) =>
+              setOutput({ nfo_single_studio: event.currentTarget.checked })
+            }
+          />
+        </Stack>
+        <SaveError error={save.error} />
+        <Group>
+          <Button
+            loading={save.isPending}
+            disabled={countryInvalid}
+            onClick={() => {
+              const skipFolders = skip
+                .split("\n")
+                .map((line) => line.trim())
+                .filter((line) => line !== "");
+              save.mutate(
+                { ...tv, skip_folders: skipFolders },
+                { onSuccess: () => setSkipText(null) },
+              );
+            }}
+          >
+            保存电视剧刮削设置
           </Button>
         </Group>
       </Stack>
