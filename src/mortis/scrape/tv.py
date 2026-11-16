@@ -193,11 +193,14 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 continue
             ctx.check_cancelled()
             raw = season_raws.get(number)
+            if raw is not None and "original_names" not in raw:
+                raw = None
             fetched = raw is None
             if raw is None:
                 ctx.log(f"请求 TMDB 第 {number} 季")
-                raw = fetch_season(tmdb, tmdb_id, number, config)
+                raw = fetch_season(tmdb, tmdb_id, number, config, show_raw.get("original_language"))
             season = _Season(number, raw, fetched, season_candidates(raw, config))
+            originals = raw.get("original_names") or {}
             for episode in raw.get("episodes") or []:
                 key = (number, episode.get("episode_number"))
                 has_file = key in local_episodes
@@ -206,7 +209,9 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                     number != 0 or config.show_missing_specials
                 )
                 if has_file or (aired and missing_ok):
-                    season.episodes[key[1]] = episode_candidates(episode, config)
+                    season.episodes[key[1]] = episode_candidates(
+                        episode, config, originals.get(str(key[1]))
+                    )
                     if episode.get("id"):
                         season.ids[key[1]] = str(episode["id"])
             if season.episodes or number in local_seasons:

@@ -185,7 +185,7 @@ def test_snapshots_are_reused_and_rescan_keeps_bindings(
     assert _owners(app)[f"{EPISODE.format(season=2, episode=3)}.mp4"] == ("episode", 3)
 
     _scrape(app, show_id, force=True)
-    assert len([p for p in fake.paths() if p.startswith("/3/tv/")]) == count + 4
+    assert len([p for p in fake.paths() if p.startswith("/3/tv/")]) == count * 2
 
 
 def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -> None:
@@ -216,6 +216,11 @@ def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -
         assert episode["show"]["title"] == "毒枭：墨西哥"
         assert [f["file_kind"] for f in episode["files"]] == ["video", "subtitle"]
         assert {s["name"] for s in episode["sections"]} >= {"基本信息", "演职员"}
+        assert episode["poster_url"] == first["still_url"]
+        assert episode["scraped_at"] is not None and season["scraped_at"] is not None
+        basic = next(s for s in episode["sections"] if s["name"] == "基本信息")
+        original = next(f for f in basic["fields"] if f["key"] == "original_title")
+        assert original["value"] == "卡美洛"
 
 
 def test_without_missing_episodes_only_local_ones(app: FastAPI, show_id: int) -> None:

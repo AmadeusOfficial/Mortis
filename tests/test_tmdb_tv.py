@@ -94,6 +94,17 @@ def test_fetch_params() -> None:
         "aggregate_credits,images,content_ratings,keywords,videos,external_ids"
     )
     assert params["include_image_language"] == "zh,en,null"
-    season = fetch_season(tmdb, 80968, 1, TvScrapeConfig())
+    before = len(fake.requests)
+    season = fetch_season(tmdb, 80968, 1, TvScrapeConfig(), "zh")
     assert len(season["episodes"]) == 10
+    assert len(fake.requests) == before + 1
     assert fake.requests[-1].url.params["append_to_response"] == "images"
+    assert season["original_names"]["1"] == season["episodes"][0]["name"]
+
+    season = fetch_season(tmdb, 80968, 1, TvScrapeConfig(), "en")
+    assert fake.requests[-2].url.params["language"] == "zh-CN"
+    assert fake.requests[-1].url.params["language"] == "en"
+    assert "append_to_response" not in fake.requests[-1].url.params
+    assert set(season["original_names"]) == {str(n) for n in range(1, 11)}
+    episode = episode_candidates(season["episodes"][0], TvScrapeConfig(), "Camelot")
+    assert episode["original_title"] == "Camelot"

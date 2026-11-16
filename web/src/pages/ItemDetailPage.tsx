@@ -148,12 +148,18 @@ export function ItemDetailPage() {
   const isWork = detail.kind === "work";
   const canArrange = isWork && hasVideo && detail.scraped_at !== null;
 
+  const landscape = detail.kind === "episode";
   const header = (
     <Group align="flex-start" wrap="nowrap" p="md">
       {detail.poster_url !== null ? (
-        <Image src={detail.poster_url} alt={detail.title} w={200} radius="md" />
+        <Image
+          src={detail.poster_url}
+          alt={detail.title}
+          w={landscape ? 320 : 200}
+          radius="md"
+        />
       ) : (
-        <Paper w={200} h={300} bg="gray.1" radius="md" />
+        <Paper w={landscape ? 320 : 200} h={landscape ? 180 : 300} bg="gray.1" radius="md" />
       )}
       <Stack gap="xs">
         <Title order={2}>{detail.title}</Title>

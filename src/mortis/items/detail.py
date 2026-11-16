@@ -257,7 +257,12 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         if item.kind == "work" and data_type is not None and data_type.structure == "series"
         else []
     )
-    record = session.get(ItemSourceRecord, (item.id, "tmdb"))
+    record = session.get(ItemSourceRecord, ((show or item).id, "tmdb"))
+    cover = (
+        _first_images(session, [item.id], "thumb").get(item.id)
+        if item.kind == "episode"
+        else item.poster_path
+    )
     external_ids = {
         provider: value
         for provider, value in session.execute(
@@ -283,7 +288,7 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         "title": item.title,
         "subtitle": item.subtitle,
         "year": year_of(item.release_date),
-        "poster_url": image_url(item.poster_path),
+        "poster_url": image_url(cover),
         "fanart_url": image_url(fanart),
         "external_ids": external_ids,
         "collection": {

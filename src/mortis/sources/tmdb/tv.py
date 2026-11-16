@@ -42,16 +42,31 @@ def fetch_show(tmdb: TmdbClient, tmdb_id: int, config: TvScrapeConfig) -> dict[s
 
 
 def fetch_season(
-    tmdb: TmdbClient, tmdb_id: int, season: int, config: TvScrapeConfig
+    tmdb: TmdbClient,
+    tmdb_id: int,
+    season: int,
+    config: TvScrapeConfig,
+    original_language: str | None,
 ) -> dict[str, Any]:
-    return tmdb.get(
-        f"/tv/{tmdb_id}/season/{season}",
+    """季详情；另按剧的原语言再请求一次，集原名放在 original_names（集号 → 名字）。"""
+    path = f"/tv/{tmdb_id}/season/{season}"
+    raw = tmdb.get(
+        path,
         {
             "language": config.language,
             "append_to_response": "images",
             "include_image_language": image_languages(config),
         },
     )
+    episodes = raw.get("episodes") or []
+    if original_language and original_language != language_code(config):
+        episodes = tmdb.get(path, {"language": original_language}).get("episodes") or []
+    raw["original_names"] = {
+        str(entry["episode_number"]): entry["name"]
+        for entry in episodes
+        if entry.get("episode_number") is not None and entry.get("name")
+    }
+    return raw
 
 
 def _aggregate_cast(credits: dict[str, Any]) -> list[dict[str, Any]]:
@@ -140,12 +155,15 @@ def season_candidates(raw: dict[str, Any], config: TvScrapeConfig) -> dict[str, 
     )
 
 
-def episode_candidates(raw: dict[str, Any], config: TvScrapeConfig) -> dict[str, Any]:
+def episode_candidates(
+    raw: dict[str, Any], config: TvScrapeConfig, original_title: str | None = None
+) -> dict[str, Any]:
     credits = {"crew": raw.get("crew") or []}
     still = raw.get("still_path")
     return compact(
         {
             "title": raw.get("name"),
+            "original_title": original_title,
             "overview": raw.get("overview"),
             "release_date": raw.get("air_date"),
             "ratings": ratings(raw),
