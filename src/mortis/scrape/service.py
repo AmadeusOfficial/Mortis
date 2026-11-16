@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, aliased
 
 from mortis.config.models import MovieScrapeConfig
 from mortis.db.models import (
+    DataType,
     Item,
     ItemExternalId,
     Library,
@@ -26,6 +27,7 @@ from mortis.scrape.common import (
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
+from mortis.scrape.tv import scrape_show
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.common import SOURCE
 from mortis.sources.tmdb.movie import (
@@ -179,7 +181,16 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
 
 def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     item_id = int(payload["item_id"])
-    result = scrape_movie(ctx, item_id, force=bool(payload.get("force")))
+    force = bool(payload.get("force"))
+    with ctx.session_factory() as session:
+        structure = session.scalar(
+            select(DataType.structure)
+            .join(Item, Item.data_type_id == DataType.id)
+            .where(Item.id == item_id)
+        )
+    if structure == "series":
+        return TaskResult(result=scrape_show(ctx, item_id, force=force))
+    result = scrape_movie(ctx, item_id, force=force)
     with ctx.session_factory() as session:
         followups = after_scrape(ctx.services.config_store.load_config().movie, item_id)
         if not has_video(session, item_id):
