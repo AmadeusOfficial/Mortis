@@ -1,0 +1,1223 @@
+{
+  "id": 80,
+  "name": "三色△绘恋",
+  "anotherName": "三色绘恋，Tricolour Lovestory",
+  "briefIntroduction": "2005年，江城的暖秋。  童年有如被铁笼囚住一般，早已自觉为灰色浸染的男孩  第一次走进名为「艺术班」的教室之中。     恰巧在同桌的位置上出现的，  宛若冰山，却又似轻风薄雾的朝霞一般，  紫水晶色的她......     被「他们」焚毁象征着同那女孩回忆的画卷时，  在炽热的火光下啜泣的，  那一抹橘色的她......     两个色彩截然不同的少女，  同时伸出双手",
+  "mainPicture": "https://tucang.cngal.top/api/image/show/1dd5c5356cc0db8f4de850ba5eac9e72?https://media.st.dl.eccdnx.com/steam/apps/668630/header.jpg",
+  "backgroundPicture": "",
+  "smallBackgroundPicture": "",
+  "thumbnail": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+  "isEdit": false,
+  "isHidden": false,
+  "isHideOutlink": false,
+  "isScored": true,
+  "isDubbing": true,
+  "tabIndex": 1,
+  "productionGroups": [
+    {
+      "displayName": "绘恋制作组",
+      "id": 2662
+    }
+  ],
+  "publishers": [
+    {
+      "displayName": "SakuraGame",
+      "id": 1426
+    }
+  ],
+  "mainState": "None",
+  "mainPageState": "None",
+  "imagesState": "None",
+  "relevancesState": "None",
+  "inforState": "None",
+  "tagState": "None",
+  "audioState": "None",
+  "websiteState": "None",
+  "canComment": true,
+  "type": "Game",
+  "template": "None",
+  "booking": null,
+  "websiteAddInfor": null,
+  "information": [
+    {
+      "name": "别称",
+      "value": "三色绘恋，Tricolour Lovestory",
+      "icon": "mdi-card-account-details-outline"
+    },
+    {
+      "name": "结局数",
+      "value": "2",
+      "icon": "mdi-road"
+    },
+    {
+      "name": "文本量(千字)",
+      "value": "约10000",
+      "icon": "mdi-book-open-page-variant"
+    },
+    {
+      "name": "取景地",
+      "value": "武汉",
+      "icon": "mdi-map-search"
+    }
+  ],
+  "allInformation": [
+    {
+      "id": 22012,
+      "modifier": "基本信息",
+      "displayName": "结局数",
+      "displayValue": "2",
+      "additional": []
+    },
+    {
+      "id": 22013,
+      "modifier": "基本信息",
+      "displayName": "文本量(千字)",
+      "displayValue": "约10000",
+      "additional": []
+    },
+    {
+      "id": 22014,
+      "modifier": "基本信息",
+      "displayName": "取景地",
+      "displayValue": "武汉",
+      "additional": []
+    }
+  ],
+  "staffs": [
+    {
+      "modifier": null,
+      "staffList": [
+        {
+          "modifier": "动画",
+          "names": [
+            {
+              "displayName": "白乌鸦",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "动画制作协力",
+          "names": [
+            {
+              "displayName": "Otc.",
+              "id": 2538
+            },
+            {
+              "displayName": "阿软",
+              "id": 2539
+            },
+            {
+              "displayName": "氷藍",
+              "id": 2576
+            }
+          ]
+        },
+        {
+          "modifier": "UI设计",
+          "names": [
+            {
+              "displayName": "Otc.",
+              "id": 2538
+            }
+          ]
+        },
+        {
+          "modifier": "美术设计",
+          "names": [
+            {
+              "displayName": "kumako",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "音乐",
+          "names": [
+            {
+              "displayName": "project lights",
+              "id": 7358
+            }
+          ]
+        },
+        {
+          "modifier": "剧本",
+          "names": [
+            {
+              "displayName": "姐夫大黑手",
+              "id": 2533
+            }
+          ]
+        },
+        {
+          "modifier": "CV",
+          "names": [
+            {
+              "displayName": "新月冰冰",
+              "id": 297
+            },
+            {
+              "displayName": "北炎",
+              "id": 295
+            },
+            {
+              "displayName": "Emiya",
+              "id": 293
+            },
+            {
+              "displayName": "可可味",
+              "id": 280
+            },
+            {
+              "displayName": "昨夜阳光",
+              "id": 290
+            },
+            {
+              "displayName": "成子",
+              "id": 288
+            },
+            {
+              "displayName": "朱雀橙",
+              "id": 284
+            },
+            {
+              "displayName": "Mace",
+              "id": 299
+            },
+            {
+              "displayName": "小N",
+              "id": 510
+            }
+          ]
+        },
+        {
+          "modifier": "演出",
+          "names": [
+            {
+              "displayName": "阿软",
+              "id": 2539
+            }
+          ]
+        },
+        {
+          "modifier": "脚本协力",
+          "names": [
+            {
+              "displayName": "悠久",
+              "id": 2575
+            },
+            {
+              "displayName": "很不想囧",
+              "id": 2561
+            },
+            {
+              "displayName": "Kirmy",
+              "id": 2574
+            }
+          ]
+        },
+        {
+          "modifier": "配音后期",
+          "names": [
+            {
+              "displayName": "姐夫大黑手",
+              "id": 2533
+            },
+            {
+              "displayName": "邱菓",
+              "id": 2560
+            },
+            {
+              "displayName": "悠久",
+              "id": 2575
+            }
+          ]
+        },
+        {
+          "modifier": "音效",
+          "names": [
+            {
+              "displayName": "阿软",
+              "id": 2539
+            },
+            {
+              "displayName": "很不想囧",
+              "id": 2561
+            }
+          ]
+        },
+        {
+          "modifier": "CG",
+          "names": [
+            {
+              "displayName": "小卡",
+              "id": 2536
+            },
+            {
+              "displayName": "Kazuzu",
+              "id": 2534
+            },
+            {
+              "displayName": "kumako",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "SD原画",
+          "names": [
+            {
+              "displayName": "贺崽Load",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "主美术",
+          "names": [
+            {
+              "displayName": "Kazuzu",
+              "id": 2534
+            }
+          ]
+        },
+        {
+          "modifier": "原画",
+          "names": [
+            {
+              "displayName": "Kazuzu",
+              "id": 2534
+            }
+          ]
+        },
+        {
+          "modifier": "背景",
+          "names": [
+            {
+              "displayName": "Otc.",
+              "id": 2538
+            },
+            {
+              "displayName": "小莫",
+              "id": 2537
+            },
+            {
+              "displayName": "Kazuzu",
+              "id": 2534
+            }
+          ]
+        },
+        {
+          "modifier": "角色设计",
+          "names": [
+            {
+              "displayName": "Kazuzu",
+              "id": 2534
+            }
+          ]
+        },
+        {
+          "modifier": "WEB制作",
+          "names": [
+            {
+              "displayName": "Himeno Sena",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "程序",
+          "names": [
+            {
+              "displayName": "yaqinking",
+              "id": 414
+            }
+          ]
+        },
+        {
+          "modifier": "宣传",
+          "names": [
+            {
+              "displayName": "悠久",
+              "id": 2575
+            },
+            {
+              "displayName": "海色",
+              "id": 2564
+            },
+            {
+              "displayName": "一库",
+              "id": 0
+            },
+            {
+              "displayName": "很不想囧",
+              "id": 2561
+            },
+            {
+              "displayName": "氷藍",
+              "id": 2576
+            }
+          ]
+        },
+        {
+          "modifier": "运营",
+          "names": [
+            {
+              "displayName": "霭切丸KyTN",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "企划原案",
+          "names": [
+            {
+              "displayName": "阿软",
+              "id": 2539
+            },
+            {
+              "displayName": "姐夫大黑手",
+              "id": 2533
+            }
+          ]
+        },
+        {
+          "modifier": "制作人",
+          "names": [
+            {
+              "displayName": "Kyatana",
+              "id": 0
+            }
+          ]
+        },
+        {
+          "modifier": "多语言脚本",
+          "names": [
+            {
+              "displayName": "傻根",
+              "id": 2540
+            }
+          ]
+        },
+        {
+          "modifier": "语音制作",
+          "names": [
+            {
+              "displayName": "邱菓",
+              "id": 2560
+            }
+          ]
+        },
+        {
+          "modifier": "配音顾问",
+          "names": [
+            {
+              "displayName": "北炎",
+              "id": 295
+            },
+            {
+              "displayName": "闲踏梧桐",
+              "id": 406
+            },
+            {
+              "displayName": "紫苏九月",
+              "id": 273
+            }
+          ]
+        },
+        {
+          "modifier": "实体版制品",
+          "names": [
+            {
+              "displayName": "YAMAYURI GAMES",
+              "id": 2588
+            }
+          ]
+        },
+        {
+          "modifier": "监督",
+          "names": [
+            {
+              "displayName": "姐夫大黑手",
+              "id": 2533
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "newsOfEntry": [
+    {
+      "title": "《泡沫冬景》现已在《三色绘恋》Steam应用内免费推出。 ",
+      "briefIntroduction": "NTR型理财游戏最高峰， 9年后\n《三色绘恋》代领Steam迈入正版2合1卡带时代。\n\n🐎 三学家的2026新春福利第二弹\n这个春节，三学家们再次迎来历史性时刻！\n绘恋制作组通过 《世纪末之诗》众筹项目 充值 50,000元法人档位，与 NEKODAY 成功建立联系，并达成堪称奇迹般的光速联动合作。\n在双方的深入沟通与我们的积极争取下，我们最终获得了《泡沫冬景》限时体验包的特别发行权限，得以通过《三色绘恋》的应用体系，将这一完整作品以体验卡形式带给所有三学家。\n这份跨越时间与信任所促成的授权，最终化作这份沉甸甸的新春贺礼——\n🎁 《三色绘恋》LSP体验卡\n《泡沫冬景》限时体验活动正式开启！\n即日起至 2026年4月30日，所有已拥有《三色绘恋》的玩家，将自动获得：✨ 《泡沫冬景》本篇、DLC《樱色零落》&《景色萧然》 完整体验资格。\n也就是说！！！！原价 51元 的完整《泡沫冬景》内容，现已作为《三色绘恋》的联动体验卡内容，向所有三学家开放。无需额外购买，无需额外下载。只需打开《三色绘恋》，即可进入这段冬日的故事。\n\n🎮 体验方法\nSTEP 1\n在 Steam 游戏库中点击启动《三色绘恋》；\nSTEP 2\n在弹出的启动选项中选择：\n\n进入体验卡启动器；\nSTEP 3\n根据启动器提示领取体验资格，即可开启《泡沫冬景》的完整体验之旅。\n\n值此新春之际，我们谨代表绘恋制作组向所有三学家致以最诚挚的祝福：愿诸位在新的一年里，心有所向，行有所至；步履如风，前路皆明。感谢你们长久以来的陪伴与支持。\n新春快乐。",
+      "link": "https://t.bilibili.com/1169404605574938633",
+      "groupName": "绘恋制作组",
+      "groupId": 2662,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/59694761ed46af3b8513a3713a6c6d07?https://image.cngal.org/images/2021/09/22/a743da5f667b.png",
+      "userId": null,
+      "happenedTime": "2026-02-14T23:27:07.0000000Z",
+      "articleId": 7732
+    },
+    {
+      "title": "《三色绘恋TSF ~我变成她的那一天~》 官方首发 💄",
+      "briefIntroduction": "亲爱的三学家：\n\n许久未见！还认识我吗？\n\n在令人感动的大结局推出的4年后，我们为大家带来了最新的内容创作，请各位欣赏——\n\n△ 作品预览\n\n熊雯雯领衔，\n\n六十八中课外兴趣小组新发现\n\n快乐水新功效判明，\n\n文墨集团紧急跟进——\n\n“如果是女生的话，\n\n三个人在一起，也没问题了呢”\n\n只记得那天的居民大院，\n\n突然多了一位邱澄酱……\n\n那是，朝思夜想也未尝得到的自由。\n\n那是，至今为止都不曾体会的懵懂\n\n△ 角色设定\n\n△ 更多精彩\n\n——献给三学家的2026新春福利💄 无字漫画小剧场《三色绘恋TSF ~我变成她的那一天~》小黑盒震撼首发！\n\n欢迎前往特设页面获取原尺寸大图全集。\n\n————————\n\n最近我们拿出了大约2万份《三色绘恋》Steam版的销售收入支持了朋友的新项目，也算是代替大家消费了一把！欢迎感兴趣的三学家去看一看瞧一瞧>>https://zhongchou.modian.com/item/154750.html",
+      "link": "https://api.xiaoheihe.cn/v3/bbs/app/api/web/share?h_camp=link&h_src=YXBwX3NoYXJl&link_id=56aa7184a8fb",
+      "groupName": "绘恋制作组",
+      "groupId": 2662,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/59694761ed46af3b8513a3713a6c6d07?https://image.cngal.org/images/2021/09/22/a743da5f667b.png",
+      "userId": null,
+      "happenedTime": "2026-02-09T07:35:16.0000000Z",
+      "articleId": 7690
+    },
+    {
+      "title": "关于6周年纪念活动素材替换的通知",
+      "briefIntroduction": "亲爱的三学家：\n自6周年纪念活动（网页链接）发布后，我们收到了游戏玩家的广泛讨论和热烈反馈。在通过用户社群和订货渠道与大家的交流过程中，我们发现诸多用户反馈了活动使用的主视觉图暨纪念周边“‘比翼连理’墨小菊&文芷角色印花大浴巾”上的角色画风不够还原的问题。在此非常感谢各位提供宝贵真诚的意见，对于这个问题，我们虚心接受各位的指正。\n\n经过了解，造成画风偏离的主要原因是美术团队多年积累的画风变化以及策划阶段对流行要素的考量综合造成的。虽然从独立产品角度是好看的，可以接受的，但确实和活动“纪念”的初衷与大多数用户的期望相违背。因此经过慎重考虑，我们决定对原有素材进行修正替换，并在今后曝光的活动图片和。修正前后的对比贴在了配图当中，请您过目。\n\n同时，本次素材修正可能会导致您对购买决策产生影响，非常抱歉给您添了麻烦。针对于已经订购了全套周边和“浴巾”的用户，我们做出了以下救济和补偿方案：\n①如果您不再想要，可以申请无条件退款；\n②如果您决定继续支持产品，我们将（新订购的用户也可以收到）。\n再次感谢大家对LoveStoryProject的支持，如有任何问题可以私信我或者通过旺旺联系LoveStore的客服人员。\n\n.三色绘恋 【绘恋6周年】三色绘恋6周年纪念周边/实体版/10月出货\n",
+      "link": "https://weibo.com/5643366143/Nl5pdbfwx",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2023-09-26T08:23:54.0000000Z",
+      "articleId": 3037
+    },
+    {
+      "title": "【活动预告】去年有点水，今年会发点福利",
+      "briefIntroduction": "【活动预告】去年有点水，今年会发点福利 \n",
+      "link": "https://weibo.com/5877446372/NjTyDyOOd",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2023-09-18T12:23:52.0000000Z",
+      "articleId": 3009
+    },
+    {
+      "title": "他们的故事叶已完结，你我的故事还在继续……",
+      "briefIntroduction": "△\n今天是《三色绘恋》初次见面5周年的日子\n他们的故事叶已完结，你我的故事还在继续…… \n",
+      "link": "https://weibo.com/5877446372/M6GisdtYD",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-09-20T16:00:02.0000000Z",
+      "articleId": 1636
+    },
+    {
+      "title": "「那些或许你曾耳熟能详的国产视觉小说音乐，今日电音归来！」",
+      "briefIntroduction": "或许是的迷你LIVE\n\n▲四组联合 诚意敬献▲\n\n\n节目表\n《小白兔电商》——爱打工的小动物\n《葬花：暗黑桃花源》——花葬桃源\n《三色绘恋》——三色绘恋\n《泡沫冬景》——都市之歌\n\n特别鸣谢（排名不分先后）@被炒的炒饭   @零创游戏  @LSP企划屋\n演奏：@卡特团长_CATE",
+      "link": "https://weibo.com/6528050509/M1AtPkMuj",
+      "groupName": "Nekoday",
+      "groupId": 539,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/de87ad2b18d031e7a209a811becca1a5?https://image.cngal.org/images/2021/10/17/ce19fbe804c7.jpg",
+      "userId": null,
+      "happenedTime": "2022-08-18T04:00:03.0000000Z",
+      "articleId": 1510
+    },
+    {
+      "title": "新年未到，福先到，祝大家新的一年过的红红火火，心想事成",
+      "briefIntroduction": " Day660\n新年未到，福先到，祝大家新的一年过的红红火火，心想事成。\n说到红红火火，那就不能不提一下这两天在施提姆瞬间破千评论红到炸的一款国产视觉文字AVG游戏：《三色绘恋TE》。\n由于这作太火了，火到我鼠标点下商店手指就烫伤了，所以我立马决定抽一份：《假如脸色嫣红》初回限定版来拱拱🔥\nTE炸就炸了！过年开开心心最要紧，好游戏未来有很多！！  \n哦，确实莫小菊只有一个。没有邱诚的未来可能会更好。 ",
+      "link": "https://weibo.com/6502230542/LdkLzrhNA",
+      "groupName": "龍之咲",
+      "groupId": 557,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/4b7af89d8d8ec72ca98d7f580f379c07?https://image.cngal.org/images/2021/12/23/4dc068ed6887.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-31T11:19:10.0000000Z",
+      "articleId": 630
+    },
+    {
+      "title": "除夕快乐！！！《三色绘恋》TrueEnd 同人文 —— 墨小菊线",
+      "briefIntroduction": "除夕快乐！！！ 三色绘恋 TrueEnd 同人文——墨小菊线\n\n> “所谓的‘续作’，真的是个很麻烦的东西呐。”\n\n冷不防，坐在我对面的金发帅哥如此说道。\n\n倘若看他那戏谑的表情，那似乎是他深思熟虑的结果，可是说出来的话却没有任何一个字够称得上是“深思熟虑”，反倒像是朋友间那日常而无趣的对白，像是毫无意义毫无价值的戏言。\n\n> “你不这样认为吗？在前作完整度已经达标的情况下，那些贪婪的制作人也差不多该见好就收啦。喜欢不喜欢自己笔下的作品姑且不论，但就算消费读者的爱也最好有个限度嘛，就算是已经钓上来的鱼，也多少给点饵料比较好啊。”\n\n见我没有表态，那家伙不知为何来了精神，继续说道.......\n\n......\n\n",
+      "link": "https://weibo.com/7114360277/LdjINqs4g",
+      "groupName": "夜语制作组",
+      "groupId": 3374,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/765e8df80d2f2339e4c7442b5a5ef69a?https://image.cngal.org/images/2022/08/01/8486c23181b2.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-31T08:39:35.0000000Z",
+      "articleId": 626
+    },
+    {
+      "title": "——为自己的TrueEnd写下寄语",
+      "briefIntroduction": "——为自己的TrueEnd写下寄语\n《TrueEnd》发布过去了一天，相信不少三学家已经进行了游玩。\nᵀ　ᴱ\n生活就是悲欢离合，欢聚是瞬间，长期陪伴我们的无外乎事与愿违，隔靴搔痒，破镜难圆……你曾经喜欢的那个人，在多年不见之后，也会拥有新的恋人，步入他山殿堂。一个人，如果能坦然地接受描绘TA的婚礼，一定会在未来找寻到自己的幸福。  ",
+      "link": "https://weibo.com/5877446372/Ld0dowrfq",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-29T07:00:02.0000000Z",
+      "articleId": 619
+    },
+    {
+      "title": "《TrueEnd》今天，陪伴你我5年的恋爱故事系列迎来“大结局”——",
+      "briefIntroduction": "今天，陪伴你我5年的恋爱故事系列迎来“大结局”——  \n本篇六年后的故事，以绘卷形式的短篇DLC在全平台正式上线。\n\n即便是这种结局……\n已经长大的你，应该可以接受吧。\n\n至此，三色交织的恋爱故事系列终于画上休止符。  \n然而，你我的故事还将继续……",
+      "link": "https://weibo.com/5877446372/LcRdgAG4Q",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-28T08:05:07.0000000Z",
+      "articleId": 615
+    },
+    {
+      "title": "【无印插图欣赏】阳光下的婚礼 - 迟菓",
+      "briefIntroduction": "  无印插图欣赏\n本条02.01抽1人送出【三色绘恋百万纪念套装】\n❚ 阳光下的婚礼 - 迟菓\nIllust : DSマイル (韩) @绘师DSmile / Keyword : 花嫁、幸福、灿烂",
+      "link": "https://weibo.com/5877446372/LcoTL5uDN",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-25T08:00:55.0000000Z",
+      "articleId": 597
+    },
+    {
+      "title": "【无印插图欣赏】水色夏日 - 墨小菊",
+      "briefIntroduction": "  无印插图欣赏\n本条01.31抽1人送出【三色绘恋百万纪念套装】\n❚ 水色夏日 - 墨小菊\nIllust : ゆさの (日) / Keyword : 清凉、湿透\n❚ 本插图届时会印制成B2幅面的挂轴，收录在百万纪念套装内，欢迎各位三学家前往订购 >",
+      "link": "https://weibo.com/5877446372/LcfRCtW55",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-24T09:00:48.0000000Z",
+      "articleId": 589
+    },
+    {
+      "title": "《三色△绘恋》完全版(CE)现已全平台上线",
+      "briefIntroduction": "team库中持有\"Tricolour Lovestory\"的用户可以通过下载免费DLC进行游戏，这可能是一个推完剧情的好机会[苦涩]  \n  \n完全版中，我们使用了系列全新引擎对原有剧情重制了游戏。现在，新的三色绘恋已经支持多端互通存档、弹幕、手势等功能，我们还增加了CG并优化了演出，希望给您带来更优质的游戏体验",
+      "link": "https://weibo.com/5877446372/LbDLh9pwv",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-20T08:00:01.0000000Z",
+      "articleId": 573
+    },
+    {
+      "title": "庆祝《三色△绘恋》Steam本体销量突破百万里程碑🍻",
+      "briefIntroduction": "庆祝《三色△绘恋》Steam本体销量突破百万里程碑🍻\n今起连续9天和将合计送出110份回馈大礼！关注我们，获取全新周边预定、完全版与大结局下载等信息",
+      "link": "https://weibo.com/5877446372/LbDmVvjA4",
+      "groupName": "LoveStoryProject",
+      "groupId": 3347,
+      "newsType": "动态",
+      "image": "https://tucang.cngal.top/api/image/show/52e78eead4ed5d4406750b5d23c3ea27?https://image.cngal.org/images/2021/12/24/3d96f21bd03c.jpg",
+      "userId": null,
+      "happenedTime": "2022-01-20T07:00:42.0000000Z",
+      "articleId": 574
+    },
+    {
+      "title": "相信我，你能在这篇文章中看到每周最新最全的天朝GALGAME咨讯",
+      "briefIntroduction": "“人想要进步，最需要的就是总结！”子睿酱：小莫你这个开头让我以为进了碧阳学生会。。。小莫：我不管！上次微博那边有读者发来反馈说不方便找往期文章，总而言之国G七日报总集篇整理计划开始推进！行动代号：“最初的梦想”！太莫拉：最初的梦想，...",
+      "link": "https://zhuanlan.zhihu.com/p/266845862",
+      "groupName": "三色△绘恋",
+      "groupId": 80,
+      "newsType": "动态",
+      "image": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "userId": null,
+      "happenedTime": "2021-02-07T10:03:00.0000000Z",
+      "articleId": 509
+    },
+    {
+      "title": "国G七日报2020_9_21-2020_9_27",
+      "briefIntroduction": "游学者新的征程 《丽丽公主》续作《梦醒少女》开宣一起做黄油Pro——关于炒饭老师被投资人亲切教育的那些事泡沫冬景踏出国门——未来可期！白露社新系列作品也筹备中！之前的传说也等待揭晓《三色△绘恋》三周年纪念《机忆》安卓版开始预约，等待十月公测...",
+      "link": "https://zhuanlan.zhihu.com/p/259863887",
+      "groupName": "三色△绘恋",
+      "groupId": 80,
+      "newsType": "动态",
+      "image": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "userId": null,
+      "happenedTime": "2020-09-27T10:44:00.0000000Z",
+      "articleId": 468
+    }
+  ],
+  "roles": [
+    {
+      "age": "17",
+      "height": "162cm",
+      "birthday": "10月7日",
+      "cv": "朱雀橙",
+      "roleIdentity": "同桌、老师",
+      "standingPainting": "https://tucang.cngal.top/api/image/show/c7f792885b6773d444e8f76523266ebb?https://image.cngal.org/images/upload/20230921/dc1c381761f1158bb75a2daeb691899452ca2156.jpeg",
+      "id": 285,
+      "type": "Role",
+      "name": "文芷",
+      "mainImage": "https://tucang.cngal.top/api/image/show/1256cb1362ce3af904594b851a4013f6?https://image.cngal.org/images/upload/20230921/c5cdcd5dfbe41a30fdb24ce91de66a8da79ca062.jpeg",
+      "briefIntroduction": "紫水晶一般的深邃双瞳、柔顺的黑色长发、文静可爱的侧脸，还有走在哪里都会引人注意的胸围，这么一位“冰山美人”——",
+      "lastEditTime": "2023-09-22T00:57:41.9033110Z",
+      "publishTime": null,
+      "readerCount": 4958,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "朱雀橙",
+              "id": 284
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": "16~17",
+      "height": "157cm",
+      "birthday": "8月10日",
+      "cv": "小N",
+      "roleIdentity": "青梅竹马",
+      "standingPainting": "https://tucang.cngal.top/api/image/show/383e76737bc13b9dfc7065c72cc745f2?https://image.cngal.org/images/2021/09/27/2b3758092008.png",
+      "id": 287,
+      "type": "Role",
+      "name": "墨小菊",
+      "mainImage": "https://tucang.cngal.top/api/image/show/383e76737bc13b9dfc7065c72cc745f2?https://image.cngal.org/images/2021/09/27/2b3758092008.png",
+      "briefIntroduction": "明知年岁较小却总强行自称姐姐，是最值得依靠的知心好友。",
+      "lastEditTime": "2022-09-05T16:28:38.1012810Z",
+      "publishTime": null,
+      "readerCount": 10086,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "小N",
+              "id": 510
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": "17",
+      "height": null,
+      "birthday": null,
+      "cv": "诺辰",
+      "roleIdentity": "师贰高学生会成员",
+      "standingPainting": "https://tucang.cngal.top/api/image/show/23aaf8a4e6085152feeeff0c02dc1835?https://image.cngal.org/images/2021/09/22/1f5955b00ea0.jpg",
+      "id": 289,
+      "type": "Role",
+      "name": "骆衍",
+      "mainImage": "https://tucang.cngal.top/api/image/show/5918ec71cf6400ddcd751a6f17c930fe?https://image.cngal.org/images/2021/09/27/41f4dd05f68a.jpg",
+      "briefIntroduction": "看着忠厚老实，实际是个笨蛋。",
+      "lastEditTime": "2022-10-02T03:35:52.1572450Z",
+      "publishTime": null,
+      "readerCount": 3569,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "诺辰",
+              "id": 1343
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": "16~17",
+      "height": null,
+      "birthday": null,
+      "cv": "昨夜阳光",
+      "roleIdentity": "班长、打工战士",
+      "standingPainting": "https://tucang.cngal.top/api/image/show/36788cec412cb177a97dee2d803bf151?https://image.cngal.org/images/2021/09/27/82c8ee0630f1.png",
+      "id": 291,
+      "type": "Role",
+      "name": "迟耀",
+      "mainImage": "https://tucang.cngal.top/api/image/show/36788cec412cb177a97dee2d803bf151?https://image.cngal.org/images/2021/09/27/82c8ee0630f1.png",
+      "briefIntroduction": "系列前传的主角，本篇中的艺术班的班长，待人奉行等价交换主义，绰号“万事通”。",
+      "lastEditTime": "2021-09-27T14:37:06.4897510Z",
+      "publishTime": null,
+      "readerCount": 5876,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "昨夜阳光",
+              "id": 290
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": "14~15",
+      "height": "152cm",
+      "birthday": "5月11日",
+      "cv": "可可味",
+      "roleIdentity": "中学生、迟耀妹妹",
+      "standingPainting": "https://tucang.cngal.top/api/image/show/8a0cac53e4e638a8325461d9394ed86f?https://image.cngal.org/images/2021/09/27/043d76ff9b89.png",
+      "id": 292,
+      "type": "Role",
+      "name": "迟菓",
+      "mainImage": "https://tucang.cngal.top/api/image/show/8a0cac53e4e638a8325461d9394ed86f?https://image.cngal.org/images/2021/09/27/043d76ff9b89.png",
+      "briefIntroduction": "迟耀的亲妹妹，对于哥哥有着绝对的信任。",
+      "lastEditTime": "2022-07-12T12:57:13.2872930Z",
+      "publishTime": null,
+      "readerCount": 6788,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "可可味",
+              "id": 280
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": null,
+      "height": null,
+      "birthday": null,
+      "cv": "Emiya",
+      "roleIdentity": null,
+      "standingPainting": "",
+      "id": 294,
+      "type": "Role",
+      "name": "墨叔",
+      "mainImage": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2023-04-24T10:42:06.3653300Z",
+      "publishTime": null,
+      "readerCount": 1382,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "Emiya",
+              "id": 293
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": null,
+      "height": null,
+      "birthday": null,
+      "cv": "北炎",
+      "roleIdentity": null,
+      "standingPainting": "",
+      "id": 296,
+      "type": "Role",
+      "name": "朱特",
+      "mainImage": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2021-08-19T04:20:20.0996740Z",
+      "publishTime": null,
+      "readerCount": 2002,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "北炎",
+              "id": 295
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": null,
+      "height": null,
+      "birthday": null,
+      "cv": "新月冰冰",
+      "roleIdentity": null,
+      "standingPainting": "",
+      "id": 298,
+      "type": "Role",
+      "name": "丁老师",
+      "mainImage": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2021-08-19T04:20:20.2671570Z",
+      "publishTime": null,
+      "readerCount": 1349,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "新月冰冰",
+              "id": 297
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "age": null,
+      "height": null,
+      "birthday": null,
+      "cv": "Mace",
+      "roleIdentity": null,
+      "standingPainting": "",
+      "id": 300,
+      "type": "Role",
+      "name": "琳",
+      "mainImage": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/user.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2021-08-19T04:20:20.4013830Z",
+      "publishTime": null,
+      "readerCount": 1480,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "配音",
+          "contents": [
+            {
+              "displayName": "Mace",
+              "id": 299
+            }
+          ]
+        }
+      ],
+      "audio": []
+    }
+  ],
+  "staffGames": [],
+  "mainPage": "<p>2005年，江城的暖秋。</p>\n<p>童年有如被铁笼囚住一般，早已自觉为灰色浸染的男孩第一次走进名为「艺术班」的教室之中。</p>\n<p>恰巧在同桌的位置上出现的，宛若冰山，却又似轻风薄雾的朝霞一般，紫水晶色的她......</p>\n<p>被「他们」焚毁象征着同那女孩回忆的画卷时，在炽热的火光下啜泣的，那一抹橘色的她......</p>\n<br>\n两个色彩截然不同的少女，同时伸出双手\n<p>---------------相会、再会、交织、着色......</p>\n<p>来不及找到心中的那抹缤纷，男孩已经提起画笔</p>\n<p>「......「一起画画」啊......」</p>\n<p>「......嘿嘿，现在是我们三个人呢......」</p>\n",
+  "entryRelevances": [
+    {
+      "id": 82,
+      "type": "Game",
+      "name": "假若恋色嫣红",
+      "mainImage": "https://tucang.cngal.top/api/image/show/5d8aabc5cf3ce2cc12b3dc0e410c84a9?https://image.cngal.org/images/2021/09/22/5bf933d2cd1b.png",
+      "briefIntroduction": "处于休学中的高二下学期\n受他人之托从北京回师贰高中办理某个插班生的学籍事务的迟耀\n本想用一个周末秘密行动速战速决\n却在学校和加班的叶心撞了个满怀\n毫无准备地开启了为期三日的学姐家留宿生活\n以及从那个雨天延绵至今，迟早要面对的“问题”\n\n堆积了半年的吐露\n未来不确定的旅途\n在不断的“逼问”之下\n少年会给出怎样的答案呢？\n\n为了不让嫣红的未来旁落\n200,000 三学家叶力同心下诞生的 IF 形恋爱短篇——\n待到杜鹃花开 愿有情人终成眷属",
+      "lastEditTime": "2023-12-27T14:00:55.4928570Z",
+      "publishTime": "2020-06-04T00:00:00.0000000Z",
+      "readerCount": 34045,
+      "commentCount": 0,
+      "addInfors": [],
+      "audio": []
+    },
+    {
+      "id": 81,
+      "type": "Game",
+      "name": "三色绘恋S",
+      "mainImage": "https://tucang.cngal.top/api/image/show/03a73dc99a2e03bd4f64314df254784a?https://image.cngal.org/upload/c2-20210825/03a73dc99a2e03bd4f64314df254784a.jpg",
+      "briefIntroduction": "深秋的雨还在到来的路上，恰逢那个为人熟知的故事整整一年之前。  —【三色绘恋Ｓ】An Angelic Conte of IMOUTO.",
+      "lastEditTime": "2026-10-24T01:14:58.6825940Z",
+      "publishTime": "2020-05-20T00:00:00.0000000Z",
+      "readerCount": 53622,
+      "commentCount": 5,
+      "addInfors": [],
+      "audio": []
+    },
+    {
+      "id": 2662,
+      "type": "ProductionGroup",
+      "name": "绘恋制作组",
+      "mainImage": "https://tucang.cngal.top/api/image/show/5d4b263c885edbc06da3c15dfda5f183?https://image.cngal.org/images/2021/09/22/82e7fb9c4372.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2023-10-25T02:19:59.9333770Z",
+      "publishTime": null,
+      "readerCount": 11743,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "参与作品",
+          "contents": [
+            {
+              "displayName": "假若恋色嫣红",
+              "id": 82
+            },
+            {
+              "displayName": "三色绘恋S",
+              "id": 81
+            },
+            {
+              "displayName": "三色△绘恋",
+              "id": 80
+            }
+          ]
+        }
+      ],
+      "audio": []
+    },
+    {
+      "id": 3347,
+      "type": "ProductionGroup",
+      "name": "LoveStoryProject",
+      "mainImage": "https://tucang.cngal.top/api/image/show/e8b9a80b42073b63ba57d776d587abf0?https://image.cngal.org/images/2021/12/24/663f543dab6e.jpg",
+      "briefIntroduction": "2021年成立的中文恋爱游戏制作、发行与推广服务品牌",
+      "lastEditTime": "2026-09-20T10:21:15.9884870Z",
+      "publishTime": null,
+      "readerCount": 56901,
+      "commentCount": 1,
+      "addInfors": [],
+      "audio": []
+    },
+    {
+      "id": 7358,
+      "type": "ProductionGroup",
+      "name": "project lights",
+      "mainImage": "https://res.cngal.org/_content/CnGalWebSite.Shared/images/default/app.png",
+      "briefIntroduction": null,
+      "lastEditTime": "2026-10-24T05:31:55.9453590Z",
+      "publishTime": null,
+      "readerCount": 113,
+      "commentCount": 0,
+      "addInfors": [
+        {
+          "modifier": "参与作品",
+          "contents": [
+            {
+              "displayName": "三色绘恋S",
+              "id": 81
+            },
+            {
+              "displayName": "三色△绘恋",
+              "id": 80
+            }
+          ]
+        }
+      ],
+      "audio": []
+    }
+  ],
+  "articleRelevances": [
+    {
+      "id": 149,
+      "type": "Interview",
+      "name": "“我只希望能保持创作者的本心“—《三色绘恋S》联合编剧、galgame剧作家秋思恋雨专访",
+      "displayName": "“我只希望能保持创作者的本心“—《三色绘恋S》联合编剧、galgame剧作家秋思恋雨专访",
+      "createUserName": "GAL评测学校",
+      "createUserId": "8384f8ca-9d59-4cd9-b020-6ff8c29777f1",
+      "mainImage": "https://tucang.cngal.top/api/image/show/753d12e10f727dd6a818cf0b9fc0a6de?https://image.cngal.org/images/2021/12/16/caaf1d166aa6.jpg",
+      "briefIntroduction": "国产galgame领域的最新话题作《三色绘恋S》终于在上个月发布，我们有幸采访到了本作编剧之一，资深galgame剧作家秋思恋雨老师。过去两年里他也参与了《梦末》《昙花》《某1种青春》等多部作品的编剧工作。作为国内屈指可数的galgame剧作家，秋思恋雨老师与我们坦诚地回顾和分享了他的创作经历与心得。",
+      "lastEditTime": "2021-12-16T08:37:28.1926730Z",
+      "readerCount": 5751,
+      "thumbsUpCount": 3,
+      "commentCount": 0,
+      "link": "https://zhuanlan.zhihu.com/p/147723092"
+    },
+    {
+      "id": 1954,
+      "type": "Interview",
+      "name": "当发行商骂了玩家之后",
+      "displayName": "当发行商骂了玩家之后",
+      "createUserName": "搬运姬",
+      "createUserId": "30e74a97-12f9-420e-8f90-03aab796fa05",
+      "mainImage": "https://tucang.cngal.top/api/image/show/c1f121221795b9209ac38644102b0af9?https://image.cngal.org/images/2022/11/26/f62e9ee39403.jpg",
+      "briefIntroduction": "“世界就是这样的。”编辑丨袁伟腾丨　前因后果微博上记录的争吵日期是2022年9月6日，但在更早的时候，就有了爆发的苗头。9月3日，在国产文字恋爱冒险游戏《彷徨之街》的玩家QQ群中，发行商的官方客服和玩家发生了口角。起因是有玩家指责发行商“刷好...",
+      "lastEditTime": "2022-11-27T02:32:44.2805710Z",
+      "readerCount": 3811,
+      "thumbsUpCount": 1,
+      "commentCount": 2,
+      "link": "https://zhuanlan.zhihu.com/p/566825993"
+    }
+  ],
+  "videoRelevances": [],
+  "otherRelevances": [
+    {
+      "image": null,
+      "displayName": "App Store",
+      "displayValue": null,
+      "link": "https://apps.apple.com/tw/app/id1597925485/",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "Bangumi",
+      "displayValue": null,
+      "link": "https://bangumi.tv/subject/202892",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "QooApp",
+      "displayValue": null,
+      "link": "https://apps.qoo-app.com/app/19312?continueFlag=7fd5e260b899049cba47e7b5fb4fd849",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "VNDB",
+      "displayValue": null,
+      "link": "https://vndb.org/v21803",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "WikiData",
+      "displayValue": null,
+      "link": "https://www.wikidata.org/wiki/Q48903578",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "中文维基百科",
+      "displayValue": null,
+      "link": "https://zh.wikipedia.org/wiki/三色△绘恋",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "官网",
+      "displayValue": null,
+      "link": "https://www.hlavg.com/",
+      "id": 0
+    },
+    {
+      "image": null,
+      "displayName": "百万纪念活动",
+      "displayValue": null,
+      "link": "https://m.hlavg.com/",
+      "id": 0
+    }
+  ],
+  "pictures": [
+    {
+      "modifier": "",
+      "pictures": [
+        {
+          "note": "",
+          "url": "https://tucang.cngal.top/api/image/show/861737ca05a782289d67deaf738cba33?https://image.cngal.org/images/2021/09/24/CG02.png",
+          "priority": 0
+        },
+        {
+          "note": "",
+          "url": "https://tucang.cngal.top/api/image/show/731616f3ba2d00579eafb963aef6bb8b?https://image.cngal.org/images/2021/09/24/CG01.png",
+          "priority": 0
+        }
+      ]
+    }
+  ],
+  "audio": [],
+  "tags": [
+    {
+      "id": 854,
+      "name": "三恋一匣"
+    }
+  ],
+  "releases": [
+    {
+      "name": "三色△绘恋",
+      "publishPlatformType": "Steam",
+      "publishPlatformName": null,
+      "type": "Official",
+      "gamePlatformTypes": [
+        "Windows"
+      ],
+      "time": "2017-09-21T00:00:00.0000000Z",
+      "timeNote": null,
+      "engine": "吉里吉里2/KAGEX",
+      "link": "668630",
+      "storeInfor": {
+        "platformType": "Steam",
+        "platformName": null,
+        "link": "668630",
+        "name": "三色△绘恋",
+        "state": "OnSale",
+        "currencyCode": "CNY",
+        "updateType": "Automatic",
+        "originalPrice": 11,
+        "priceNow": 3.85,
+        "cutNow": 65,
+        "priceLowest": 3.3,
+        "cutLowest": 70,
+        "playTime": 1255,
+        "evaluationCount": 26189,
+        "recommendationRate": 81,
+        "estimationOwnersMax": 1332260,
+        "estimationOwnersMin": 1332260,
+        "updateTime": "2026-11-15T18:21:16.7524950Z"
+      }
+    },
+    {
+      "name": "我们恋爱吧：三色绘恋",
+      "publishPlatformType": "TapTap",
+      "publishPlatformName": null,
+      "type": "Official",
+      "gamePlatformTypes": [
+        "Android"
+      ],
+      "time": null,
+      "timeNote": null,
+      "engine": null,
+      "link": null,
+      "storeInfor": {
+        "platformType": "TapTap",
+        "platformName": null,
+        "link": null,
+        "name": "我们恋爱吧：三色绘恋",
+        "state": "None",
+        "currencyCode": "CNY",
+        "updateType": "Automatic",
+        "originalPrice": null,
+        "priceNow": null,
+        "cutNow": null,
+        "priceLowest": null,
+        "cutLowest": null,
+        "playTime": null,
+        "evaluationCount": null,
+        "recommendationRate": null,
+        "estimationOwnersMax": null,
+        "estimationOwnersMin": null,
+        "updateTime": "2026-11-12T23:57:14.8836320Z"
+      }
+    },
+    {
+      "name": "三色△绘恋",
+      "publishPlatformType": "Other",
+      "publishPlatformName": "PlayStation™Store",
+      "type": "Official",
+      "gamePlatformTypes": [
+        "PS"
+      ],
+      "time": null,
+      "timeNote": null,
+      "engine": null,
+      "link": null,
+      "storeInfor": {
+        "platformType": "Other",
+        "platformName": "PlayStation™Store",
+        "link": null,
+        "name": "三色△绘恋",
+        "state": "None",
+        "currencyCode": "CNY",
+        "updateType": "Automatic",
+        "originalPrice": null,
+        "priceNow": null,
+        "cutNow": null,
+        "priceLowest": null,
+        "cutLowest": null,
+        "playTime": null,
+        "evaluationCount": null,
+        "recommendationRate": null,
+        "estimationOwnersMax": null,
+        "estimationOwnersMin": null,
+        "updateTime": "2023-05-20T02:12:32.6368450Z"
+      }
+    }
+  ]
+}
