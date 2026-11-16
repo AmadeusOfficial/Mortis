@@ -48,10 +48,12 @@ collection_fanart = true
 actor_images = true
 
 [movie.output]
-# 刮削后写 NFO 和图片
-write_after_scrape = true
-# 刮削后重命名
-rename_after_scrape = false
+# 刮削后自动整理
+organize_after_scrape = true
+# 整理时按模板重命名目录和文件
+organize_rename = false
+# 整理时把 NFO 和图片写到视频旁边
+organize_write_files = true
 # NFO 文件名：movie 写 movie.nfo，filename 写 <视频名>.nfo
 nfo_names = ["movie", "filename"]
 # 图片文件名：filename 写 <视频名>-poster.jpg，plain 写 poster.jpg

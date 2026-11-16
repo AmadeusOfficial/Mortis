@@ -72,7 +72,7 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
     expect(page.get_by_text("1 部电影 · 2 个视频")).to_be_visible()
 
     page.get_by_role("link", name="任务").click()
-    expect(page.get_by_text("整理媒体库").first).to_be_visible()
+    expect(page.get_by_text("扫描媒体库").first).to_be_visible()
     expect(page.get_by_text("子任务 2/2")).to_be_visible(timeout=SLOW)
 
     page.get_by_role("link", name="媒体库").click()
@@ -90,7 +90,7 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
     expect(page.get_by_role("heading", name="骇客任务")).to_be_visible()
     expect(page.get_by_role("button", name="解锁片名")).to_be_visible()
 
-    page.get_by_role("button", name="重新刮削").click()
+    page.get_by_role("button", name="刮削", exact=True).click()
     expect(page.get_by_text("刮削完成")).to_be_visible(timeout=SLOW)
     expect(page.get_by_role("heading", name="骇客任务")).to_be_visible()
 
@@ -107,7 +107,9 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
     expect(page.get_by_role("link", name="盗火线").first).to_be_visible(timeout=SLOW)
 
 
-def test_written_files_and_rename_preview(page: Page, base_url: str, movies: Path) -> None:
+def test_arrange_writes_files_and_renames(
+    page: Page, base_url: str, movies: Path, tmp_path: Path
+) -> None:
     page.goto(base_url + "/libraries")
     page.get_by_role("button", name="新建媒体库").click()
     dialog = page.get_by_role("dialog")
@@ -128,12 +130,18 @@ def test_written_files_and_rename_preview(page: Page, base_url: str, movies: Pat
     expect(page.get_by_text("movie.nfo")).to_have_count(0)
     expect(page.get_by_text(".actors")).to_have_count(0)
 
-    page.get_by_role("button", name="重命名", exact=True).click()
+    store = ConfigStore(tmp_path / "data")
+    movie = store.load_config().movie
+    movie.output.organize_rename = True
+    store.save_section("movie", movie)
+
+    page.get_by_role("button", name="整理", exact=True).click()
     dialog = page.get_by_role("dialog")
-    expect(dialog.get_by_text("黑客帝国 (1999)")).to_be_visible(timeout=SLOW)
+    expect(dialog.get_by_text("按模板重命名目录和文件")).to_be_visible(timeout=SLOW)
+    expect(dialog.get_by_text("黑客帝国 (1999)")).to_be_visible()
     expect(dialog.get_by_text("黑客帝国.mkv")).to_be_visible()
-    dialog.get_by_role("button", name="确认重命名").click()
-    expect(page.get_by_text("重命名完成")).to_be_visible(timeout=SLOW)
+    dialog.get_by_role("button", name="确认整理").click()
+    expect(page.get_by_text("整理完成")).to_be_visible(timeout=SLOW)
     folder = movies / "黑客帝国 (1999)"
     expect(page.get_by_text(str(folder / "黑客帝国.mkv"))).to_be_visible()
     assert (folder / "黑客帝国.nfo").is_file() and (folder / "黑客帝国-poster.jpg").is_file()

@@ -28,7 +28,7 @@ def app(tmp_path: Path) -> FastAPI:
     )
     app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
     config = app.state.config_store.load_config().movie
-    config.output.write_after_scrape = False
+    config.output.organize_after_scrape = False
     app.state.config_store.save_section("movie", config)
     return app
 

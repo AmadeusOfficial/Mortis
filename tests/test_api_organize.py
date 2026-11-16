@@ -30,7 +30,7 @@ def test_organize_enqueues_once(client: TestClient, tmp_path: Path) -> None:
     task = client.get(f"/api/tasks/{first.json()['task_id']}").json()
     assert (task["task_type"], task["type_label"], task["title"]) == (
         "organize",
-        "整理媒体库",
+        "扫描媒体库",
         "电影",
     )
     assert task["payload"] == {"library_id": library["id"], "scrape": None}

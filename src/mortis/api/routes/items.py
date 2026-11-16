@@ -12,6 +12,7 @@ from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
 from mortis.items.identity import MovieRef
 from mortis.items.matching import bind_file, guess, rematch
+from mortis.output.service import rewrite_if_arranged
 from mortis.tasks import repo as task_repo
 from mortis.tasks.runner import TaskRunner
 
@@ -177,9 +178,12 @@ def read_item(item_id: int, session: SessionDep) -> dict[str, Any]:
 
 
 @router.patch("/items/{item_id}/fields", response_model=ItemDetail)
-def update_fields(item_id: int, body: FieldsUpdate, session: SessionDep) -> dict[str, Any]:
+def update_fields(
+    item_id: int, body: FieldsUpdate, session: SessionDep, runner: RunnerDep
+) -> dict[str, Any]:
     item = get_item(session, item_id)
     edit_fields(session, item, body.values)
+    rewrite_if_arranged(session, runner, item)
     return item_detail(session, item)
 
 

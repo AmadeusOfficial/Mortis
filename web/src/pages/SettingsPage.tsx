@@ -406,21 +406,30 @@ function MovieSection() {
         />
         <Stack gap={6}>
           <Text size="sm" fw={500}>
-            写到视频旁边
+            整理
+          </Text>
+          <Text size="xs" c="dimmed">
+            刮削只改莫提斯里的资料；整理才动磁盘，让 Emby、Plex、Kodi 能直接读到。
           </Text>
           <Switch
-            label="刮削后写出 NFO 和图片"
-            checked={movie.output.write_after_scrape}
+            label="刮削后自动整理"
+            checked={movie.output.organize_after_scrape}
             onChange={(event) =>
-              setOutput({ write_after_scrape: event.currentTarget.checked })
+              setOutput({ organize_after_scrape: event.currentTarget.checked })
             }
           />
           <Switch
-            label="刮削后重命名"
-            description="先改目录和文件名，再写出 NFO 和图片"
-            checked={movie.output.rename_after_scrape}
+            label="整理时重命名"
+            description="按下面的模板改目录和文件名"
+            checked={movie.output.organize_rename}
+            onChange={(event) => setOutput({ organize_rename: event.currentTarget.checked })}
+          />
+          <Switch
+            label="整理时写 NFO 和图片"
+            description="写到视频旁边；已经写过的条目改名后总会重写"
+            checked={movie.output.organize_write_files}
             onChange={(event) =>
-              setOutput({ rename_after_scrape: event.currentTarget.checked })
+              setOutput({ organize_write_files: event.currentTarget.checked })
             }
           />
           <Checkbox.Group

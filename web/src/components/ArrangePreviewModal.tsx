@@ -9,7 +9,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import type { RenamePreview } from "../api";
+import type { ArrangePreview } from "../api";
 
 function fileName(path: string): string {
   const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -24,7 +24,7 @@ function PathText({ path }: { path: string }) {
   );
 }
 
-function PreviewBlock({ preview }: { preview: RenamePreview }) {
+function PreviewBlock({ preview }: { preview: ArrangePreview }) {
   const hasProblems = preview.problems.length > 0;
   const renamed = preview.moves.filter((move) => fileName(move.source) !== fileName(move.target));
   return (
@@ -32,7 +32,7 @@ function PreviewBlock({ preview }: { preview: RenamePreview }) {
       <Stack gap="xs">
         <Text fw={500}>{preview.title}</Text>
         {hasProblems && (
-          <Alert color="red" title="会跳过">
+          <Alert color="red" title="不会重命名">
             <Stack gap={2}>
               {preview.problems.map((problem) => (
                 <Text key={problem} size="sm">
@@ -82,10 +82,44 @@ function PreviewBlock({ preview }: { preview: RenamePreview }) {
   );
 }
 
-export function RenamePreviewModal({
+export interface ArrangePlan {
+  rename: boolean;
+  write: boolean;
+  scope: string;
+  empty: string | null;
+  previews: ArrangePreview[];
+  canConfirm: boolean;
+}
+
+function Steps({ plan }: { plan: ArrangePlan }) {
+  if (plan.empty !== null) {
+    return <Text c="dimmed">{plan.empty}</Text>;
+  }
+  if (!plan.rename && !plan.write) {
+    return (
+      <Text c="dimmed">
+        设置里「整理时重命名」和「整理时写 NFO 和图片」都关着，整理不会做任何事。
+      </Text>
+    );
+  }
+  const renamed = plan.previews.some((preview) => preview.changes);
+  return (
+    <Stack gap={4}>
+      <Text size="sm">{plan.scope}会：</Text>
+      {plan.rename && (
+        <Text size="sm">
+          · 按模板重命名目录和文件{renamed ? "，改动列在下面" : "（已经是目标名字，不用改）"}
+        </Text>
+      )}
+      {plan.write && <Text size="sm">· 把 NFO、海报、背景图和演员头像写到视频旁边</Text>}
+    </Stack>
+  );
+}
+
+export function ArrangePreviewModal({
   opened,
   onClose,
-  previews,
+  plan,
   loading,
   error,
   onConfirm,
@@ -93,29 +127,26 @@ export function RenamePreviewModal({
 }: {
   opened: boolean;
   onClose: () => void;
-  previews: RenamePreview[] | undefined;
+  plan: ArrangePlan | undefined;
   loading: boolean;
   error: string | null;
   onConfirm: () => void;
   confirming: boolean;
 }) {
-  const pending = (previews ?? []).filter(
-    (preview) => preview.problems.length === 0 && preview.changes,
+  const previews = (plan?.previews ?? []).filter(
+    (preview) => preview.changes || preview.problems.length > 0,
   );
-  const nothingToDo =
-    previews !== undefined &&
-    previews.every((preview) => preview.problems.length === 0 && !preview.changes);
   return (
-    <Modal opened={opened} onClose={onClose} title="重命名预览" size="xl">
+    <Modal opened={opened} onClose={onClose} title="整理预览" size="xl">
       <Stack>
         {loading && <Loader size="sm" />}
         {error !== null && (
-          <Alert color="red" title="没法重命名">
+          <Alert color="red" title="没法整理">
             {error}
           </Alert>
         )}
-        {nothingToDo && <Text c="dimmed">都已经是目标名字，不用改。</Text>}
-        {previews !== undefined && previews.length > 0 && !nothingToDo && (
+        {plan !== undefined && <Steps plan={plan} />}
+        {previews.length > 0 && (
           <ScrollArea.Autosize mah={480}>
             <Stack gap="sm">
               {previews.map((preview) => (
@@ -130,10 +161,10 @@ export function RenamePreviewModal({
           </Button>
           <Button
             loading={confirming}
-            disabled={loading || pending.length === 0}
+            disabled={loading || plan === undefined || !plan.canConfirm}
             onClick={onConfirm}
           >
-            确认重命名
+            确认整理
           </Button>
         </Group>
       </Stack>

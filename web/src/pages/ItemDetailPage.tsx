@@ -4,6 +4,7 @@ import {
   BackgroundImage,
   Badge,
   Button,
+  Divider,
   Group,
   Image,
   Loader,
@@ -13,6 +14,7 @@ import {
   Table,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,19 +24,18 @@ import {
   type FieldOut,
   type ItemDetail,
   type MovieHit,
+  arrangeItem,
   fetchItem,
-  fetchItemRenamePreview,
+  fetchItemArrangePreview,
   rematchItem,
-  renameItem,
   scrapeItem,
   updateItemFields,
   updateItemLocks,
-  writeItemFiles,
 } from "../api";
+import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
-import { RenamePreviewModal } from "../components/RenamePreviewModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { formatSize, formatTime } from "../format";
 import { useTaskWatcher } from "../useTaskWatcher";
@@ -60,16 +61,16 @@ export function ItemDetailPage() {
   const item = useQuery({ queryKey: ["item", id], queryFn: () => fetchItem(id) });
   const [editing, setEditing] = useState<FieldOut | null>(null);
   const [rematching, setRematching] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [outputKind, setOutputKind] = useState<"write" | "rename" | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
     void queryClient.invalidateQueries({ queryKey: ["wall", detail.library_id] });
   };
   const watcher = useTaskWatcher((task) => {
-    setOutputKind(null);
+    setArranging(false);
     void queryClient.invalidateQueries({ queryKey: ["item", id] });
-    void queryClient.invalidateQueries({ queryKey: ["item-rename-preview", id] });
+    void queryClient.invalidateQueries({ queryKey: ["item-arrange-preview", id] });
     void queryClient.invalidateQueries({ queryKey: ["wall"] });
     notifications.show(
       task.status === "succeeded"
@@ -82,33 +83,21 @@ export function ItemDetailPage() {
     onSuccess: ({ task_id }) => watcher.watch(task_id),
     onError: (error) => notifications.show({ color: "red", message: error.message }),
   });
-  const writeFiles = useMutation({
-    mutationFn: () => writeItemFiles(id),
-    onMutate: () => setOutputKind("write"),
-    onSuccess: ({ task_id }) => {
-      watcher.watch(task_id);
-      notifications.show({ message: "已开始写出文件" });
-    },
-    onError: (error) => {
-      setOutputKind(null);
-      notifications.show({ color: "red", message: error.message });
-    },
-  });
-  const renamePreview = useQuery({
-    queryKey: ["item-rename-preview", id],
-    queryFn: () => fetchItemRenamePreview(id),
-    enabled: renaming,
+  const preview = useQuery({
+    queryKey: ["item-arrange-preview", id],
+    queryFn: () => fetchItemArrangePreview(id),
+    enabled: previewing,
     retry: false,
   });
-  const rename = useMutation({
-    mutationFn: () => renameItem(id),
-    onMutate: () => setOutputKind("rename"),
+  const arrange = useMutation({
+    mutationFn: () => arrangeItem(id),
+    onMutate: () => setArranging(true),
     onSuccess: ({ task_id }) => {
-      setRenaming(false);
+      setPreviewing(false);
       watcher.watch(task_id);
-      notifications.show({ message: "已开始重命名" });
+      notifications.show({ message: "已开始整理" });
     },
-    onError: () => setOutputKind(null),
+    onError: () => setArranging(false),
   });
   const rematch = useMutation({
     mutationFn: (hit: MovieHit) => rematchItem(id, hit.tmdb_id),
@@ -153,7 +142,7 @@ export function ItemDetailPage() {
   const busy = watcher.watching || scrape.isPending;
   const hasVideo = detail.files.some((file) => file.file_kind === "video");
   const sourceFiles = detail.files.filter((file) => file.file_kind in FILE_KIND_LABELS);
-  const canOutput = detail.kind === "work" && hasVideo;
+  const canArrange = detail.kind === "work" && hasVideo && detail.scraped_at !== null;
 
   const header = (
     <Group align="flex-start" wrap="nowrap" p="md">
@@ -192,41 +181,46 @@ export function ItemDetailPage() {
           {detail.scraped_at !== null ? `上次刮削 ${formatTime(detail.scraped_at)}` : "还没刮削"}
         </Text>
         {detail.kind === "work" && (
-          <Group>
-            <Button loading={busy} onClick={() => scrape.mutate()}>
-              重新刮削
-            </Button>
-            <Button
-              variant="default"
-              disabled={busy}
-              onClick={() => {
-                rematch.reset();
-                setRematching(true);
-              }}
-            >
-              重新匹配
-            </Button>
-            {canOutput && (
-              <>
+          <Group gap="md">
+            <Group gap="xs">
+              <Tooltip label="从 TMDB 重新拿资料，锁定的字段不动；按设置刮完会自动整理">
                 <Button
-                  variant="default"
-                  loading={outputKind === "write"}
+                  loading={busy && !arranging}
                   disabled={busy}
-                  onClick={() => writeFiles.mutate()}
+                  onClick={() => scrape.mutate()}
                 >
-                  写出文件
+                  刮削
                 </Button>
+              </Tooltip>
+              <Tooltip label="认错了电影时用，搜一部对的换上去再刮削">
                 <Button
                   variant="default"
-                  loading={outputKind === "rename"}
                   disabled={busy}
                   onClick={() => {
-                    rename.reset();
-                    setRenaming(true);
+                    rematch.reset();
+                    setRematching(true);
                   }}
                 >
-                  重命名
+                  换一部匹配
                 </Button>
+              </Tooltip>
+            </Group>
+            {canArrange && (
+              <>
+                <Divider orientation="vertical" />
+                <Tooltip label="按设置改名，并把 NFO 和图片写到视频旁边，让 Emby、Plex 直接读到">
+                  <Button
+                    variant="default"
+                    loading={arranging}
+                    disabled={busy}
+                    onClick={() => {
+                      arrange.reset();
+                      setPreviewing(true);
+                    }}
+                  >
+                    整理
+                  </Button>
+                </Tooltip>
               </>
             )}
           </Group>
@@ -360,7 +354,7 @@ export function ItemDetailPage() {
       )}
       {rematching && (
         <TmdbSearchModal
-          title="重新匹配"
+          title="换一部匹配"
           initialQuery={detail.title}
           initialYear={detail.year}
           picking={rematch.isPending}
@@ -369,20 +363,32 @@ export function ItemDetailPage() {
           onClose={() => setRematching(false)}
         />
       )}
-      <RenamePreviewModal
-        opened={renaming}
-        onClose={() => setRenaming(false)}
-        previews={renamePreview.data === undefined ? undefined : [renamePreview.data]}
-        loading={renamePreview.isFetching}
+      <ArrangePreviewModal
+        opened={previewing}
+        onClose={() => setPreviewing(false)}
+        plan={
+          preview.data === undefined
+            ? undefined
+            : {
+                rename: preview.data.rename,
+                write: preview.data.write,
+                scope: "整理这部电影",
+                empty: null,
+                previews: [preview.data],
+                canConfirm:
+                  preview.data.problems.length === 0 && (preview.data.write || preview.data.changes),
+              }
+        }
+        loading={preview.isFetching}
         error={
-          renamePreview.isError
-            ? renamePreview.error.message
-            : rename.isError
-              ? rename.error.message
+          preview.isError
+            ? preview.error.message
+            : arrange.isError
+              ? arrange.error.message
               : null
         }
-        onConfirm={() => rename.mutate()}
-        confirming={rename.isPending}
+        onConfirm={() => arrange.mutate()}
+        confirming={arrange.isPending}
       />
     </Stack>
   );

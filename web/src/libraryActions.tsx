@@ -1,29 +1,31 @@
-import { Button, Group } from "@mantine/core";
+import { Button, Divider, Group, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   type Library,
   type TaskDetail,
-  fetchLibraryRenamePreview,
+  arrangeLibrary,
+  fetchLibraryArrangePreview,
   organizeLibrary,
-  renameLibrary,
   scrapeLibrary,
-  writeLibraryFiles,
 } from "./api";
-import { RenamePreviewModal } from "./components/RenamePreviewModal";
+import { ArrangePreviewModal } from "./components/ArrangePreviewModal";
 import { useTaskWatcher } from "./useTaskWatcher";
 
-type Kind = "organize" | "scrape" | "write" | "rename";
+type Kind = "organize" | "scrape" | "arrange";
 
 const START_MESSAGES: Record<Kind, string> = {
   organize: "已开始扫描",
   scrape: "已开始刮削还没刮削过的电影",
-  write: "已开始写出整库文件",
-  rename: "已开始重命名整库",
+  arrange: "已开始整理整库",
 };
 
-const DONE_LABELS: Record<string, string> = { organize: "扫描", scrape_library: "刮削" };
+const DONE_LABELS: Record<string, string> = {
+  organize: "扫描",
+  scrape_library: "刮削",
+  arrange_library: "整理",
+};
 
 function summary(task: TaskDetail): string {
   if (task.status !== "succeeded") {
@@ -40,8 +42,8 @@ function summary(task: TaskDetail): string {
     }
     return parts.join("，");
   }
-  if (task.task_type === "write_files_library" || task.task_type === "rename_library") {
-    return `排了 ${String(result.queued ?? 0)} 部`;
+  if (task.task_type === "arrange_library") {
+    return `整理了 ${String(result.queued ?? 0)} 部`;
   }
   const queued = Number(result.scrape_queued ?? 0);
   return queued === 0 ? "没有要刮削的电影" : `刮削了 ${queued} 部`;
@@ -50,14 +52,14 @@ function summary(task: TaskDetail): string {
 export function LibraryActions({ library }: { library: Library }) {
   const queryClient = useQueryClient();
   const [running, setRunning] = useState<Kind | null>(null);
-  const [renaming, setRenaming] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const watcher = useTaskWatcher((task) => {
     setRunning(null);
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
     void queryClient.invalidateQueries({ queryKey: ["library", library.id] });
     void queryClient.invalidateQueries({ queryKey: ["wall", library.id] });
     void queryClient.invalidateQueries({ queryKey: ["unmatched"] });
-    void queryClient.invalidateQueries({ queryKey: ["library-rename-preview", library.id] });
+    void queryClient.invalidateQueries({ queryKey: ["library-arrange-preview", library.id] });
     const failed = task.child_status.failed ?? 0;
     notifications.show({
       color: task.status === "succeeded" && failed === 0 ? "green" : "red",
@@ -76,15 +78,12 @@ export function LibraryActions({ library }: { library: Library }) {
       if (kind === "scrape") {
         return scrapeLibrary(library.id);
       }
-      if (kind === "write") {
-        return writeLibraryFiles(library.id);
-      }
-      return renameLibrary(library.id);
+      return arrangeLibrary(library.id);
     },
     onMutate: (kind) => setRunning(kind),
     onSuccess: ({ task_id }, kind) => {
-      if (kind === "rename") {
-        setRenaming(false);
+      if (kind === "arrange") {
+        setPreviewing(false);
       }
       watcher.watch(task_id);
       notifications.show({
@@ -96,64 +95,74 @@ export function LibraryActions({ library }: { library: Library }) {
     },
     onError: (error, kind) => {
       setRunning(null);
-      if (kind === "rename") {
+      if (kind === "arrange") {
         return;
       }
       notifications.show({ color: "red", message: error.message });
     },
   });
   const preview = useQuery({
-    queryKey: ["library-rename-preview", library.id],
-    queryFn: () => fetchLibraryRenamePreview(library.id),
-    enabled: renaming,
+    queryKey: ["library-arrange-preview", library.id],
+    queryFn: () => fetchLibraryArrangePreview(library.id),
+    enabled: previewing,
     retry: false,
   });
+  const plan = preview.data;
   return (
     <>
       <Group gap="xs" wrap="wrap">
-        <Button
-          size="xs"
-          loading={running === "organize"}
-          disabled={running !== null}
-          onClick={() => start.mutate("organize")}
-        >
-          扫描
-        </Button>
-        <Button
-          size="xs"
-          variant="light"
-          loading={running === "scrape"}
-          disabled={running !== null}
-          onClick={() => start.mutate("scrape")}
-        >
-          刮削未刮削的
-        </Button>
-        <Button
-          size="xs"
-          variant="light"
-          loading={running === "write"}
-          disabled={running !== null}
-          onClick={() => start.mutate("write")}
-        >
-          写出整库文件
-        </Button>
-        <Button
-          size="xs"
-          variant="light"
-          loading={running === "rename"}
-          disabled={running !== null}
-          onClick={() => {
-            start.reset();
-            setRenaming(true);
-          }}
-        >
-          重命名整库
-        </Button>
+        <Tooltip label="找出新加的视频文件，认出是哪部电影">
+          <Button
+            size="xs"
+            loading={running === "organize"}
+            disabled={running !== null}
+            onClick={() => start.mutate("organize")}
+          >
+            扫描
+          </Button>
+        </Tooltip>
+        <Tooltip label="给还没刮削过的电影从 TMDB 拿资料">
+          <Button
+            size="xs"
+            variant="light"
+            loading={running === "scrape"}
+            disabled={running !== null}
+            onClick={() => start.mutate("scrape")}
+          >
+            刮削未刮削的
+          </Button>
+        </Tooltip>
+        <Divider orientation="vertical" />
+        <Tooltip label="把刮削过的电影按设置改名，并写出 NFO 和图片">
+          <Button
+            size="xs"
+            variant="light"
+            loading={running === "arrange"}
+            disabled={running !== null}
+            onClick={() => {
+              start.reset();
+              setPreviewing(true);
+            }}
+          >
+            整理整库
+          </Button>
+        </Tooltip>
       </Group>
-      <RenamePreviewModal
-        opened={renaming}
-        onClose={() => setRenaming(false)}
-        previews={preview.data}
+      <ArrangePreviewModal
+        opened={previewing}
+        onClose={() => setPreviewing(false)}
+        plan={
+          plan === undefined
+            ? undefined
+            : {
+                rename: plan.rename,
+                write: plan.write,
+                scope: `整理刮削过的 ${String(plan.count)} 部电影`,
+                empty: plan.count === 0 ? "这个库还没有刮削过的电影，先刮削再整理。" : null,
+                previews: plan.previews,
+                canConfirm: plan.count > 0 && (plan.rename || plan.write),
+              }
+        }
         loading={preview.isFetching}
         error={
           preview.isError
@@ -162,7 +171,7 @@ export function LibraryActions({ library }: { library: Library }) {
               ? start.error.message
               : null
         }
-        onConfirm={() => start.mutate("rename")}
+        onConfirm={() => start.mutate("arrange")}
         confirming={start.isPending}
       />
     </>

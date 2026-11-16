@@ -1,17 +1,24 @@
-"""写出文件和重命名的任务。动磁盘和改 media_files 都在 catalog-write 锁里。"""
+"""整理任务：按设置改名，并把 NFO 和图片写到视频旁边。
 
-from typing import Any
+动磁盘和改 media_files 都在 catalog-write 锁里。
+"""
+
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from mortis.config.models import MovieScrapeConfig
-from mortis.db.models import Item, Library, MediaFile
+from mortis.db.models import Item, ItemSourceRecord, Library, MediaFile
 from mortis.output.writer import WRITTEN_KINDS, write_item_files
 from mortis.rename.apply import RenameError, apply_rename
 from mortis.rename.plan import plan_rename
 from mortis.scrape.images import ImageStore
+from mortis.tasks import repo as task_repo
 from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
+
+if TYPE_CHECKING:
+    from mortis.tasks.runner import TaskRunner
 
 
 def _config(ctx: TaskContext) -> MovieScrapeConfig:
@@ -33,7 +40,11 @@ def has_video(session: Session, item_id: int) -> bool:
     )
 
 
-def _has_written(session: Session, item_id: int) -> bool:
+def is_scraped(session: Session, item_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(ItemSourceRecord.item_id == item_id))))
+
+
+def has_written(session: Session, item_id: int) -> bool:
     return bool(
         session.scalar(
             select(
@@ -44,80 +55,94 @@ def _has_written(session: Session, item_id: int) -> bool:
 
 
 def after_scrape(config: MovieScrapeConfig, item_id: int) -> list[Followup]:
-    output = config.output
-    if output.rename_after_scrape:
-        return [Followup("rename", {"item_id": item_id, "write": output.write_after_scrape})]
-    if output.write_after_scrape:
-        return [Followup("write_files", {"item_id": item_id})]
+    if config.output.organize_after_scrape:
+        return [Followup("arrange", {"item_id": item_id})]
     return []
 
 
-def handle_write_files(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
-    config = _config(ctx)
-    store = ImageStore(ctx.services.data_dir)
-    with ctx.services.locks.hold("catalog-write"), ctx.session_factory() as session:
-        item = _work(session, int(payload["item_id"]))
-        report = write_item_files(session, store, item, config)
-        session.commit()
-        title = item.title
-    for path in report.skipped:
-        ctx.log(f"图片不在本地图库里，跳过：{path}")
-    ctx.log(
-        f"写出文件：{title}，新写 {len(report.written)} 个，未变 {len(report.unchanged)} 个，"
-        f"删掉旧的 {len(report.removed)} 个"
-    )
-    return TaskResult(
-        result={
-            "item_id": int(payload["item_id"]),
-            "title": title,
-            "written": len(report.written),
-            "unchanged": len(report.unchanged),
-            "removed": len(report.removed),
-            "skipped": len(report.skipped),
-        }
-    )
+def arrange_steps(
+    session: Session, item_id: int, config: MovieScrapeConfig, payload: dict[str, Any]
+) -> tuple[bool, bool]:
+    """返回（改不改名，写不写文件）。已经写过文件的条目改名后一定重写，免得留下旧名字的文件。"""
+    output = config.output
+    rename = output.organize_rename if payload.get("rename") is None else bool(payload["rename"])
+    write = payload.get("write")
+    if write is None:
+        write = output.organize_write_files or has_written(session, item_id)
+    return rename, bool(write)
 
 
-def handle_rename(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
+def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     config = _config(ctx)
     store = ImageStore(ctx.services.data_dir)
+    item_id = int(payload["item_id"])
+    problems: list[str] = []
+    renamed = 0
+    written = 0
+    folder: str | None = None
     with ctx.services.locks.hold("catalog-write"), ctx.session_factory() as session:
-        item = _work(session, int(payload["item_id"]))
+        item = _work(session, item_id)
         title = item.title
-        plan = plan_rename(session, item, config.output)
-        if plan.problems:
-            raise TaskError(f"「{title}」没有重命名：" + "；".join(plan.problems))
-        rewrite = bool(payload.get("write")) or _has_written(session, item.id)
-        if plan.changes:
-            try:
-                apply_rename(session, plan)
-            except RenameError as error:
-                raise TaskError(str(error)) from None
-            session.commit()
-            for move in plan.moves:
-                if move.source != move.target:
-                    ctx.log(f"{move.source} → {move.target}")
-        else:
-            ctx.log(f"「{title}」已经是目标名字")
-        written = 0
-        if rewrite:
+        rename, write = arrange_steps(session, item_id, config, payload)
+        if rename:
+            plan = plan_rename(session, item, config.output)
+            problems = plan.problems
+            if not problems and plan.changes:
+                try:
+                    apply_rename(session, plan)
+                except RenameError as error:
+                    problems = [str(error)]
+                else:
+                    session.commit()
+                    folder = plan.folder_to
+                    for move in plan.moves:
+                        if move.source != move.target:
+                            renamed += 1
+                            ctx.log(f"{move.source} → {move.target}")
+            elif not problems:
+                ctx.log(f"「{title}」已经是目标名字")
+        if write:
             report = write_item_files(session, store, item, config)
             session.commit()
             written = len(report.written)
+            for path in report.skipped:
+                ctx.log(f"图片不在本地图库里，跳过：{path}")
+            ctx.log(
+                f"写出 NFO 和图片：新写 {len(report.written)} 个，未变 {len(report.unchanged)} 个，"
+                f"删掉旧的 {len(report.removed)} 个"
+            )
+    if problems:
+        done = "，NFO 和图片已写出" if write else ""
+        raise TaskError(f"「{title}」没有重命名：" + "；".join(problems) + done)
     return TaskResult(
         result={
-            "item_id": int(payload["item_id"]),
+            "item_id": item_id,
             "title": title,
-            "renamed": sum(m.source != m.target for m in plan.moves),
-            "folder": plan.folder_to,
+            "renamed": renamed,
+            "folder": folder,
             "written": written,
         }
     )
 
 
-def _library_items(session: Session, library_id: int) -> list[int]:
-    if session.get(Library, library_id) is None:
-        raise TaskError("媒体库不存在，可能已被删除")
+def enqueue_arrange(session: Session, runner: TaskRunner, item_id: int, **options: object) -> int:
+    queued = task_repo.find_queued(session, "arrange", "item_id", item_id)
+    if queued is not None:
+        return queued.id
+    task = task_repo.enqueue(session, "arrange", {"item_id": item_id, **options}, priority=1)
+    session.commit()
+    runner.wake()
+    return task.id
+
+
+def rewrite_if_arranged(session: Session, runner: TaskRunner, item: Item) -> None:
+    """库是唯一的依据：整理过的条目手动改了字段，就重写它的 NFO，不改名。"""
+    if item.kind == "work" and has_written(session, item.id):
+        enqueue_arrange(session, runner, item.id, rename=False, write=True)
+
+
+def arrangeable_items(session: Session, library_id: int) -> list[int]:
+    """整库整理只管刮削过、有视频的电影。"""
     return list(
         session.scalars(
             select(Item.id)
@@ -125,27 +150,21 @@ def _library_items(session: Session, library_id: int) -> list[int]:
                 Item.library_id == library_id,
                 Item.kind == "work",
                 exists().where(MediaFile.item_id == Item.id, MediaFile.file_kind == "video"),
+                exists().where(ItemSourceRecord.item_id == Item.id),
             )
             .order_by(Item.id)
         )
     )
 
 
-def handle_write_files_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
+def handle_arrange_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
+    library_id = int(payload["library_id"])
     with ctx.session_factory() as session:
-        ids = _library_items(session, int(payload["library_id"]))
-    ctx.log(f"排了 {len(ids)} 个写出任务")
+        if session.get(Library, library_id) is None:
+            raise TaskError("媒体库不存在，可能已被删除")
+        ids = arrangeable_items(session, library_id)
+    ctx.log(f"排了 {len(ids)} 个整理任务")
     return TaskResult(
         result={"queued": len(ids)},
-        followups=[Followup("write_files", {"item_id": item_id}) for item_id in ids],
-    )
-
-
-def handle_rename_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
-    with ctx.session_factory() as session:
-        ids = _library_items(session, int(payload["library_id"]))
-    ctx.log(f"排了 {len(ids)} 个重命名任务")
-    return TaskResult(
-        result={"queued": len(ids)},
-        followups=[Followup("rename", {"item_id": item_id}) for item_id in ids],
+        followups=[Followup("arrange", {"item_id": item_id}) for item_id in ids],
     )

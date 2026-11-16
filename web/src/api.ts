@@ -84,8 +84,9 @@ export interface MovieImages {
 }
 
 export interface MovieOutputConfig {
-  write_after_scrape: boolean;
-  rename_after_scrape: boolean;
+  organize_after_scrape: boolean;
+  organize_rename: boolean;
+  organize_write_files: boolean;
   nfo_names: ("movie" | "filename")[];
   image_style: "filename" | "plain";
   collection_image_names: boolean;
@@ -277,15 +278,25 @@ export interface RenameMove {
   target: string;
 }
 
-export interface RenamePreview {
+export interface ArrangePreview {
   item_id: number;
   title: string;
+  rename: boolean;
+  write: boolean;
+  folder: string;
   folder_from: string | null;
   folder_to: string | null;
   make_folder: boolean;
   moves: RenameMove[];
   problems: string[];
   changes: boolean;
+}
+
+export interface LibraryArrangePreview {
+  count: number;
+  rename: boolean;
+  write: boolean;
+  previews: ArrangePreview[];
 }
 
 export interface MovieHit {
@@ -378,17 +389,13 @@ export const scrapeItem = (id: number, force = true) =>
   request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
 export const rematchItem = (id: number, tmdbId: number) =>
   request<Enqueued>("POST", `/api/items/${id}/rematch`, { tmdb_id: tmdbId });
-export const writeItemFiles = (id: number) =>
-  request<Enqueued>("POST", `/api/items/${id}/write-files`);
-export const fetchItemRenamePreview = (id: number) =>
-  request<RenamePreview>("GET", `/api/items/${id}/rename-preview`);
-export const renameItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/rename`);
-export const writeLibraryFiles = (id: number) =>
-  request<Enqueued>("POST", `/api/libraries/${id}/write-files`);
-export const fetchLibraryRenamePreview = (id: number) =>
-  request<RenamePreview[]>("GET", `/api/libraries/${id}/rename-preview`);
-export const renameLibrary = (id: number) =>
-  request<Enqueued>("POST", `/api/libraries/${id}/rename`);
+export const fetchItemArrangePreview = (id: number) =>
+  request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
+export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);
+export const fetchLibraryArrangePreview = (id: number) =>
+  request<LibraryArrangePreview>("GET", `/api/libraries/${id}/arrange-preview`);
+export const arrangeLibrary = (id: number) =>
+  request<Enqueued>("POST", `/api/libraries/${id}/arrange`);
 export const searchTmdbMovies = (query: string, year: number | null) => {
   const params = new URLSearchParams({ query });
   if (year !== null) {

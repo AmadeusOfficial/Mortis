@@ -1,8 +1,8 @@
 import re
 from ipaddress import AddressValueError, IPv6Address
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from mortis.rename.template import render
@@ -173,12 +173,13 @@ _FORBIDDEN_NAME_CHARS = frozenset('/\\:*?"<>|')
 
 
 class MovieOutputConfig(BaseModel):
-    """刮削后写到视频旁边的 NFO、图片和改名规则。"""
+    """整理：按模板改名，并把 NFO 和图片写到视频旁边。"""
 
     model_config = ConfigDict(extra="ignore")
 
-    write_after_scrape: bool = True
-    rename_after_scrape: bool = False
+    organize_after_scrape: bool = True
+    organize_rename: bool = False
+    organize_write_files: bool = True
     nfo_names: list[Literal["movie", "filename"]] = Field(
         default_factory=lambda: ["movie", "filename"]
     )
@@ -193,6 +194,22 @@ class MovieOutputConfig(BaseModel):
     first_char_number: str = "#"
     nfo_write_lockdata: bool = False
     nfo_single_studio: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_old_switches(cls, data: Any) -> Any:
+        """旧版的「刮削后写出」「刮削后重命名」换算成整理的三个开关。"""
+        if not isinstance(data, dict) or not (
+            {"write_after_scrape", "rename_after_scrape"} & data.keys()
+        ):
+            return data
+        data = dict(data)
+        write = bool(data.pop("write_after_scrape", True))
+        rename = bool(data.pop("rename_after_scrape", False))
+        data.setdefault("organize_after_scrape", write or rename)
+        data.setdefault("organize_rename", rename)
+        data.setdefault("organize_write_files", write or not rename)
+        return data
 
     @field_validator("nfo_names")
     @classmethod

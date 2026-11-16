@@ -9,8 +9,9 @@ from mortis.config.store import ConfigStore
 
 def test_output_defaults() -> None:
     output = MovieOutputConfig()
-    assert output.write_after_scrape is True
-    assert output.rename_after_scrape is False
+    assert output.organize_after_scrape is True
+    assert output.organize_rename is False
+    assert output.organize_write_files is True
     assert output.nfo_names == ["movie", "filename"]
     assert output.image_style == "filename"
     assert output.collection_image_names is True
@@ -23,6 +24,24 @@ def test_output_defaults() -> None:
     assert output.first_char_number == "#"
     assert output.nfo_write_lockdata is False
     assert output.nfo_single_studio is False
+
+
+@pytest.mark.parametrize(
+    ("old", "expected"),
+    [
+        ({"write_after_scrape": True, "rename_after_scrape": False}, (True, False, True)),
+        ({"write_after_scrape": False, "rename_after_scrape": False}, (False, False, True)),
+        ({"write_after_scrape": False, "rename_after_scrape": True}, (True, True, False)),
+        ({"write_after_scrape": True, "rename_after_scrape": True}, (True, True, True)),
+    ],
+)
+def test_old_switches_become_organize(old: dict[str, bool], expected: tuple[bool, ...]) -> None:
+    output = MovieOutputConfig.model_validate(old)
+    assert (
+        output.organize_after_scrape,
+        output.organize_rename,
+        output.organize_write_files,
+    ) == expected
 
 
 def test_movie_output_has_defaults() -> None:
@@ -75,8 +94,9 @@ def test_output_roundtrip_through_store(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path / "data")
     movie = MovieScrapeConfig(
         output=MovieOutputConfig(
-            write_after_scrape=False,
-            rename_after_scrape=True,
+            organize_after_scrape=False,
+            organize_rename=True,
+            organize_write_files=False,
             nfo_names=["filename"],
             image_style="plain",
             actor_images_folder="actors",
@@ -93,6 +113,6 @@ def test_output_roundtrip_through_store(tmp_path: Path) -> None:
     store.save_section("movie", movie)
     loaded = store.load_config().movie.output
     assert loaded == movie.output
-    assert loaded.rename_after_scrape is True
+    assert loaded.organize_rename is True
     assert loaded.nfo_names == ["filename"]
     assert loaded.image_style == "plain"
