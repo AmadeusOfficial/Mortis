@@ -47,6 +47,7 @@ class _Season:
     fetched: bool
     values: dict[str, Any]
     episodes: dict[int, dict[str, Any]] = field(default_factory=dict)
+    ids: dict[int, str] = field(default_factory=dict)
 
 
 def _subtree_files(session: Session, show_id: int) -> list[MediaFile]:
@@ -206,6 +207,8 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 )
                 if has_file or (aired and missing_ok):
                     season.episodes[key[1]] = episode_candidates(episode, config)
+                    if episode.get("id"):
+                        season.ids[key[1]] = str(episode["id"])
             if season.episodes or number in local_seasons:
                 seasons.append(season)
 
@@ -254,6 +257,8 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                     session, episode_row, "episode", values, EPISODE_IMAGES, config, order, files
                 )
                 episode_count += 1
+                if season.ids.get(number):
+                    save_external_ids(session, episode_row.id, {"tmdb": season.ids[number]})
             for path, key in local.items():
                 if key[0] == season.number and key[1] in season.episodes:
                     targets[path] = _child(session, season_row, "episode", key[1]).id

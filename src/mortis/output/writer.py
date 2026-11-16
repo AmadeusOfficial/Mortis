@@ -47,11 +47,12 @@ class WriteReport:
 
 
 @dataclass
-class _Target:
+class Target:
     path: Path
     kind: str
     content: bytes | None = None
     source: Path | None = None
+    owner: int | None = None
 
 
 def actor_file_name(name: str) -> str:
@@ -104,7 +105,7 @@ def _first_images(session: Session, item_id: int) -> dict[str, str]:
 
 def _targets(
     session: Session, store: ImageStore, item: Item, config: MovieScrapeConfig
-) -> tuple[list[_Target], list[str]]:
+) -> tuple[list[Target], list[str]]:
     output = config.output
     videos = list(
         session.scalars(
@@ -140,7 +141,7 @@ def _targets(
         else []
     )
 
-    targets: list[_Target] = []
+    targets: list[Target] = []
     missing: list[str] = []
 
     def image(path: Path, rel: str) -> None:
@@ -148,15 +149,15 @@ def _targets(
         if source is None:
             missing.append(str(path))
         else:
-            targets.append(_Target(path.with_suffix(source.suffix), "image", source=source))
+            targets.append(Target(path.with_suffix(source.suffix), "image", source=source))
 
     for folder, stem in groups:
         alone = folder not in shared
         for name in output.nfo_names:
             if name == "filename":
-                targets.append(_Target(folder / f"{stem}.nfo", "nfo", content=nfo))
+                targets.append(Target(folder / f"{stem}.nfo", "nfo", content=nfo))
             elif alone:
-                targets.append(_Target(folder / "movie.nfo", "nfo", content=nfo))
+                targets.append(Target(folder / "movie.nfo", "nfo", content=nfo))
         plain = output.image_style == "plain" and alone
         for kind, file_kind in WORK_IMAGES.items():
             if kind in images:
@@ -169,13 +170,13 @@ def _targets(
             file_name = actor_file_name(name)
             if file_name:
                 image(folder / output.actor_images_folder / f"{file_name}.jpg", rel)
-    unique: dict[str, _Target] = {}
+    unique: dict[str, Target] = {}
     for target in targets:
         unique.setdefault(str(target.path).casefold(), target)
     return list(unique.values()), missing
 
 
-def _same(path: Path, target: _Target) -> bool:
+def _same(path: Path, target: Target) -> bool:
     try:
         if target.source is not None:
             if path.stat().st_size != target.source.stat().st_size:
@@ -186,7 +187,7 @@ def _same(path: Path, target: _Target) -> bool:
         return False
 
 
-def _write(target: _Target) -> None:
+def _write(target: Target) -> None:
     target.path.parent.mkdir(parents=True, exist_ok=True)
     data = target.content if target.content is not None else target.source.read_bytes()
     fd, temp = tempfile.mkstemp(dir=target.path.parent, prefix=".mortis-", suffix=".tmp")
@@ -203,13 +204,30 @@ def write_item_files(
     session: Session, store: ImageStore, item: Item, config: MovieScrapeConfig
 ) -> WriteReport:
     """写出一个条目的文件并记进 media_files。只 flush，调用方提交。"""
+    targets, skipped = _targets(session, store, item, config)
+    for target in targets:
+        target.owner = item.id
+    report = apply_targets(
+        session, item.library_id, [item.id], targets, config.output.actor_images_folder
+    )
+    report.skipped = skipped
+    return report
+
+
+def apply_targets(
+    session: Session,
+    library_id: int,
+    owners: list[int],
+    targets: list[Target],
+    actor_folder: str | None = None,
+) -> WriteReport:
+    """写出目标文件，记到各自的条目上；owners 名下以前写过、这次不再要的文件删掉。"""
     report = WriteReport()
-    targets, report.skipped = _targets(session, store, item, config)
     tracked = {
         row.path.casefold(): row
         for row in session.scalars(
             select(MediaFile).where(
-                MediaFile.item_id == item.id, MediaFile.file_kind.in_(WRITTEN_KINDS)
+                MediaFile.item_id.in_(owners), MediaFile.file_kind.in_(WRITTEN_KINDS)
             )
         )
     }
@@ -228,8 +246,8 @@ def write_item_files(
         if row is None:
             session.add(
                 MediaFile(
-                    library_id=item.library_id,
-                    item_id=item.id,
+                    library_id=library_id,
+                    item_id=target.owner,
                     path=path,
                     file_kind=target.kind,
                     size=size,
@@ -238,11 +256,12 @@ def write_item_files(
                 )
             )
         elif row.file_kind in WRITTEN_KINDS:
-            if (row.item_id, row.size) != (item.id, size):
-                row.item_id, row.size, row.updated_at = item.id, size, now
+            if (row.item_id, row.size) != (target.owner, size):
+                row.item_id, row.size, row.updated_at = target.owner, size, now
     for row in tracked.values():
         Path(row.path).unlink(missing_ok=True)
-        _remove_empty_dir(Path(row.path).parent, config.output.actor_images_folder)
+        if actor_folder:
+            _remove_empty_dir(Path(row.path).parent, actor_folder)
         report.removed.append(row.path)
         session.delete(row)
     session.flush()
