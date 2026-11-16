@@ -48,6 +48,40 @@ _RELEASE = re.compile(
     r"x264|x265|h\.?264|h\.?265|hevc|avc)(?![0-9a-z])"
 )
 _CN_NUMBER = re.compile(rf"^([{_CN}]{{1,3}})$")
+# 特别篇：SP、OVA、OAD、特典作为独立标记，季号固定为 0。
+# `SP01`/`SP`/`OVA` 后面是分隔符或结尾；`OVA02`/`OAD2`/`OVA 02` 带集号。
+# 后面的数字要排除年份和分辨率，取到的是 1-3 位、且后面不再跟数字字母。
+_SPECIAL_MARK = re.compile(
+    rf"(?i){_START}(?:sp|ova|oad|特典)(?:[ ._-]*([0-9]{{1,3}})(?![0-9a-z]))?(?![a-z])"
+    r"|(?<![0-9a-z])特典"
+)
+# 季号加裸集号：`S01.02`、`S2-13`、`S02 13`；中间必须有分隔符，避免和 `S01E02` 抢。
+_SEASON_BARE = re.compile(
+    rf"(?i){_START}s(?P<season>[0-9]{{1,2}})[ ._-]+(?P<number>[0-9]{{1,3}}){_END}"
+)
+# 字幕组括号里单独的数字：`[01]`、`[06v2]`、`[12END]`。
+_BRACKET_NUMBER = re.compile(
+    r"(?i)(?<=[\[(])(?P<number>[0-9]{1,3})(?:v(?P<version>[0-9]+)|end)?(?=[\])])"
+)
+# ` - 01`：横线两边都是空白。
+_DASH_NUMBER = re.compile(rf"(?i)(?<=\s)-\s*([0-9]{{1,3}}){_END}")
+# 点号裸集号：`漆黑的子弹.01`、`Steins;Gate.01起源…`、`.01][BDRIP]`。
+_DOT_NUMBER = re.compile(r"(?<=\.)([0-9]{1,3})(?![0-9a-z.])")
+# 点号裸集号前不能是这些东西，否则 `.264`、`.10bit` 会被误判。
+_NOT_EPISODE = re.compile(
+    r"(?i)(?:x[ ._-]*$|h[ ._-]*$|x26[45][ ._-]*$|"
+    r"flac[ ._-]*$|aac[ ._-]*$|hevc[ ._-]*$|ddp[ ._-]*$|dts[ ._-]*$|[ ._-]bit[ ._-]*$)"
+)
+_EXTRA_FOLDERS = frozenset(
+    {"extras", "extra", "bonus", "menu", "特典", "映像特典", "cd", "scans", "fonts"}
+)
+# 特别篇目录不是花絮，是第 0 季。
+_SPECIAL_FOLDERS = frozenset({"specials", "special", "sp", "sps", "特别篇"})
+# 花絮：只在独立出现时算，`Edward`、`OPPO` 不算。
+_EXTRA_MARK = re.compile(
+    rf"(?i){_START}(?:(?:nc)?(?:op|ed)[0-9]{{0,2}}|pv[0-9]{{0,3}}|cm[0-9]{{0,2}}|spot[0-9]{{0,2}}"
+    rf"|menu|preview|trailer|teaser|opening){_END}"
+)
 
 
 @dataclass(frozen=True)
@@ -74,7 +108,7 @@ def _cn_number(text: str) -> int | None:
 def season_of_folder(name: str) -> int | None:
     text = unicodedata.normalize("NFKC", name).strip()
     lowered = text.casefold()
-    if lowered in {"specials", "special", "sp", "特别篇"}:
+    if lowered in _SPECIAL_FOLDERS:
         return 0
     match = re.fullmatch(r"(?a)(?:s|season)[ ._-]*([0-9]{1,2})", lowered)
     if match is not None:
@@ -130,10 +164,64 @@ def _sp_episodes(text: str) -> tuple[int, ...] | None:
     # `SP01` 不是 `S` 加季号，所以要先于季集规则之外的松散集号解析。
     if not _SP_ONLY.search(text):
         return None
-    found = list(_SPECIAL.finditer(text))
-    if not found or any(int(match.group(1)) < 1 for match in found):
+    found = [match for match in _SPECIAL.finditer(text) if match.group(0).strip()]
+    numbers = [int(match.group(1)) if match.group(1) else 1 for match in found]
+    if not numbers or any(number < 1 for number in numbers):
         return None
-    return tuple(int(match.group(1)) for match in found)
+    return tuple(numbers)
+
+
+def _special_episodes(text: str) -> tuple[int, ...] | None:
+    """`SP`、`OVA`、`OAD`、`特典` 作为独立标记时为特别篇，季号是 0。"""
+    numbers: list[int] = []
+    for match in _SPECIAL_MARK.finditer(text):
+        number = match.group(1)
+        if number is None:
+            numbers.append(1)
+            continue
+        if _is_not_episode(text, match.start(1), match.end(1)):
+            numbers.append(1)
+            continue
+        numbers.append(int(number))
+    if not numbers or any(number < 1 for number in numbers):
+        return None
+    return tuple(numbers)
+
+
+def _is_not_episode(text: str, start: int, end: int) -> bool:
+    """点号裸集号前紧挨着编码、音轨、分辨率等标记时不是集号。"""
+    if _is_release(text, start, end):
+        return True
+    return _NOT_EPISODE.search(text[:start]) is not None
+
+
+def _dot_not_episode(text: str, start: int, end: int) -> bool:
+    """`.01` 是小数（版本号 `1.5`）时不是集号。"""
+    if text[start - 2 : start - 1].isdigit():
+        return True
+    head = text[: start - 1]
+    return _NOT_EPISODE.search(head) is not None or head.casefold() in {"x", "h"}
+
+
+def _bracket_number(match: re.Match[str]) -> int | None:
+    """`[06v2]` 取 6。"""
+    return int(match.group("number"))
+
+
+def _bare_episodes(text: str) -> tuple[int, ...] | None:
+    """只有集号：`[01]`、` - 05`、`.01`。"""
+    found = [_bracket_number(match) for match in _BRACKET_NUMBER.finditer(text)]
+    numbers = [number for number in found if number is not None]
+    if numbers:
+        return tuple(numbers) if all(number >= 1 for number in numbers) else None
+    for pattern, check in ((_DASH_NUMBER, _is_not_episode), (_DOT_NUMBER, _dot_not_episode)):
+        for match in pattern.finditer(text):
+            if check(text, match.start(1), match.end(1)):
+                continue
+            number = int(match.group(1))
+            if number >= 1:
+                return (number,)
+    return None
 
 
 def _loose_episodes(text: str) -> tuple[int, ...] | None:
@@ -156,14 +244,46 @@ def _loose_episodes(text: str) -> tuple[int, ...] | None:
     ]
     if found and chinese:
         return None
-    return tuple(found) if found else tuple(chinese) or None
+    if found:
+        return tuple(found)
+    if chinese:
+        return tuple(chinese)
+    return _bare_episodes(text)
+
+
+def _season_bare(text: str) -> tuple[int, tuple[int, ...]] | None:
+    for match in _SEASON_BARE.finditer(text):
+        if _is_not_episode(text, match.start("number"), match.end("number")):
+            continue
+        number = int(match.group("number"))
+        if number < 1:
+            continue
+        return int(match.group("season")), (number,)
+    return None
+
+
+def is_extra(stem: str, folder: str | None) -> bool:
+    """OP、ED、PV、菜单这类花絮。带 `S01E02` 的是正片，集标题里有 Opening 也不算。"""
+    if folder is not None:
+        if unicodedata.normalize("NFKC", folder).strip().casefold() in _EXTRA_FOLDERS:
+            return True
+    text = unicodedata.normalize("NFKC", stem)
+    return _seasonal(text) is None and _EXTRA_MARK.search(text) is not None
 
 
 def parse_episode(stem: str, season_folder: str | None) -> EpisodeNumber | None:
+    if is_extra(stem, season_folder):
+        return None
     text = unicodedata.normalize("NFKC", stem)
     seasonal = _seasonal(text)
     if seasonal is not None:
         return EpisodeNumber(seasonal[0], seasonal[1])
+    bare = _season_bare(text)
+    if bare is not None:
+        return EpisodeNumber(bare[0], bare[1])
+    specials = _special_episodes(text)
+    if specials is not None:
+        return EpisodeNumber(0, specials)
     folder_season = season_of_folder(season_folder) if season_folder is not None else None
     episodes = _loose_episodes(text)
     if episodes is None:
