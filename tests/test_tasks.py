@@ -272,10 +272,30 @@ def test_list_roots_with_child_stats(factory: Factory) -> None:
         rows, total = repo.list_roots(session, status=None, limit=50, offset=0)
         assert total == 2 and [row.id for row in rows] == [other.id, root.id]
         assert repo.child_stats(session, [root.id])[root.id] == {"failed": 1, "queued": 1}
+        assert repo.direct_stats(session, [root.id, other.id]) == {
+            root.id: {"failed": 1, "queued": 1},
+            other.id: {},
+        }
         active, _ = repo.list_roots(session, status="active", limit=50, offset=0)
         assert [row.id for row in active] == [root.id]
         failed, _ = repo.list_roots(session, status="failed", limit=50, offset=0)
         assert {row.id for row in failed} == {root.id, other.id}
+
+
+def test_direct_stats_groups_by_parent(factory: Factory) -> None:
+    with factory() as session:
+        root = Task(task_type="organize", status="succeeded", created_at=utc_now())
+        session.add(root)
+        session.flush()
+        middle = repo.enqueue(session, "scrape", {}, parent=root)
+        repo.enqueue(session, "arrange", {}, parent=middle)
+        repo.enqueue(session, "arrange", {}, parent=middle)
+        session.commit()
+        assert repo.direct_stats(session, [root.id, middle.id]) == {
+            root.id: {"queued": 1},
+            middle.id: {"queued": 2},
+        }
+        assert repo.direct_stats(session, [root.id, 999]) == {root.id: {"queued": 1}, 999: {}}
 
 
 def test_find_queued_matches_type_and_payload(factory: Factory) -> None:
@@ -285,6 +305,69 @@ def test_find_queued_matches_type_and_payload(factory: Factory) -> None:
         assert found is not None and found.id == first
         assert repo.find_queued(session, "organize", "library_id", 2) is None
         assert repo.find_queued(session, "scrape", "library_id", 1) is None
+
+
+def test_runner_pause_stops_claiming(factory: Factory, services: Services) -> None:
+    done = threading.Event()
+
+    def echo(payload: dict, ctx: TaskContext) -> TaskResult:
+        done.set()
+        return TaskResult()
+
+    runner = _runner(factory, services, {"echo": echo})
+    task_id = _add(factory)
+    runner.pause()
+    assert runner.paused is True
+    assert runner.run_once() is False
+    assert _get(factory, task_id).status == repo.QUEUED
+    runner.resume()
+    assert runner.paused is False
+    assert runner.run_once() is True
+    assert done.is_set()
+    assert _get(factory, task_id).status == repo.SUCCEEDED
+
+
+def test_bulk_repo_actions(factory: Factory, tmp_path: Path) -> None:
+    with factory() as session:
+        good = Task(task_type="echo", status="succeeded", created_at=utc_now())
+        bad = Task(task_type="echo", status="failed", created_at=utc_now())
+        session.add_all([good, bad])
+        session.flush()
+        failed_child = repo.enqueue(session, "echo", {}, parent=good)
+        failed_child.status = "failed"
+        queued_child = repo.enqueue(session, "echo", {}, parent=bad)
+        session.commit()
+        good_id, bad_id = good.id, bad.id
+        log = task_log_path(tmp_path, good_id)
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("x", encoding="utf-8")
+        assert repo.clear_succeeded(session, data_dir=tmp_path) == []
+        assert session.get(Task, good_id) is not None
+        assert repo.clear_failed(session, data_dir=tmp_path) == [failed_child.id]
+        session.expire_all()
+        assert session.get(Task, failed_child.id) is None
+        assert session.get(Task, bad_id) is not None
+        assert session.get(Task, queued_child.id) is not None
+        queued_child.status = "succeeded"
+        session.commit()
+        assert repo.clear_failed(session, data_dir=tmp_path) == [bad_id]
+
+
+def test_bulk_cancel_active_and_retry_failed(factory: Factory) -> None:
+    with factory() as session:
+        queued = Task(task_type="echo", status="queued", created_at=utc_now())
+        running = Task(task_type="echo", status="running", created_at=utc_now())
+        failed = Task(task_type="echo", status="failed", created_at=utc_now(), payload="{}")
+        session.add_all([queued, running, failed])
+        session.commit()
+        queued_id, running_id, failed_id = queued.id, running.id, failed.id
+        assert repo.cancel_active(session) == (2, [running_id])
+        assert session.get(Task, queued_id).status == repo.CANCELLED
+    with factory() as session:
+        created = repo.retry_failed(session)
+        assert len(created) == 1
+        assert session.get(Task, created[0]).status == repo.QUEUED
+        assert session.get(Task, failed_id).status == repo.FAILED
 
 
 def test_threaded_runner_picks_up_new_task(factory: Factory, services: Services) -> None:

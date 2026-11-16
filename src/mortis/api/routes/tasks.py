@@ -36,12 +36,22 @@ class TaskOut(BaseModel):
     finished_at: str | None
     child_count: int
     child_status: dict[str, int]
+    tree_status: dict[str, int]
+    priority: int
+    parent_task_id: int | None
+    root_task_id: int | None
     progress: dict[str, Any] | None
+
+
+class TaskItem(BaseModel):
+    id: int
+    title: str
 
 
 class TaskDetail(TaskOut):
     payload: dict[str, Any]
     result: dict[str, Any] | None
+    item: TaskItem | None
 
 
 class TaskPage(BaseModel):
@@ -51,6 +61,16 @@ class TaskPage(BaseModel):
 
 class LogOut(BaseModel):
     lines: list[str]
+
+
+class WorkerState(BaseModel):
+    paused: bool
+
+
+class BulkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["cancel_active", "retry_failed", "clear_succeeded", "clear_failed"]
 
 
 class BatchRequest(BaseModel):
@@ -74,7 +94,13 @@ def _title(session: Session, payload: dict[str, Any]) -> str:
     return ""
 
 
-def _out(session: Session, task: Task, stats: dict[str, int], runner: TaskRunner) -> dict[str, Any]:
+def _out(
+    session: Session,
+    task: Task,
+    direct: dict[str, int],
+    tree: dict[str, int],
+    runner: TaskRunner,
+) -> dict[str, Any]:
     payload = json.loads(task.payload or "{}")
     return {
         "id": task.id,
@@ -86,10 +112,38 @@ def _out(session: Session, task: Task, stats: dict[str, int], runner: TaskRunner
         "created_at": task.created_at,
         "started_at": task.started_at,
         "finished_at": task.finished_at,
-        "child_count": sum(stats.values()),
-        "child_status": stats,
+        "child_count": sum(direct.values()),
+        "child_status": direct,
+        "tree_status": tree,
+        "priority": task.priority,
+        "parent_task_id": task.parent_task_id,
+        "root_task_id": task.root_task_id,
         "progress": runner.progress_of(task.id) if task.status == repo.RUNNING else None,
     }
+
+
+def _outs(session: Session, tasks: list[Task], runner: TaskRunner) -> list[dict[str, Any]]:
+    """直接子任务每个都有；整棵树的统计只有根任务才查。"""
+    direct = repo.direct_stats(session, [task.id for task in tasks])
+    roots = [task.id for task in tasks if task.root_task_id is None]
+    tree = repo.child_stats(session, roots)
+    return [
+        _out(session, task, direct[task.id], tree.get(task.id, direct[task.id]), runner)
+        for task in tasks
+    ]
+
+
+def _item(
+    session: Session, payload: dict[str, Any], result: dict[str, Any] | None
+) -> TaskItem | None:
+    """先看结果里指向的条目，再看参数；条目已经删掉就给 None。"""
+    item_id = (result or {}).get("item_id")
+    if item_id is None:
+        item_id = payload.get("item_id")
+    if item_id is None:
+        return None
+    item = session.get(Item, item_id)
+    return TaskItem(id=item.id, title=item.title) if item is not None else None
 
 
 @router.get("", response_model=TaskPage)
@@ -102,8 +156,38 @@ def list_tasks(
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
     rows, total = repo.list_roots(session, status=status, limit=limit, offset=offset)
-    stats = repo.child_stats(session, [row.id for row in rows])
-    return {"items": [_out(session, row, stats[row.id], runner) for row in rows], "total": total}
+    return {"items": _outs(session, list(rows), runner), "total": total}
+
+
+@router.get("/worker", response_model=WorkerState)
+def read_worker(runner: RunnerDep) -> WorkerState:
+    return WorkerState(paused=runner.paused)
+
+
+@router.put("/worker", response_model=WorkerState)
+def set_worker(body: WorkerState, runner: RunnerDep) -> WorkerState:
+    if body.paused:
+        runner.pause()
+    else:
+        runner.resume()
+    return WorkerState(paused=runner.paused)
+
+
+@router.post("/bulk", response_model=Affected)
+def bulk(
+    body: BulkRequest, session: SessionDep, runner: RunnerDep, services: ServicesDep
+) -> Affected:
+    if body.action == "cancel_active":
+        affected, running = repo.cancel_active(session)
+        runner.request_cancel(running)
+    elif body.action == "retry_failed":
+        affected = len(repo.retry_failed(session))
+        runner.wake()
+    elif body.action == "clear_succeeded":
+        affected = len(repo.clear_succeeded(session, data_dir=services.data_dir))
+    else:
+        affected = len(repo.clear_failed(session, data_dir=services.data_dir))
+    return Affected(affected=affected)
 
 
 def _get(session: Session, task_id: int) -> Task:
@@ -116,18 +200,16 @@ def _get(session: Session, task_id: int) -> Task:
 @router.get("/{task_id}", response_model=TaskDetail)
 def read_task(task_id: int, session: SessionDep, runner: RunnerDep) -> dict[str, Any]:
     task = _get(session, task_id)
-    stats = repo.child_stats(session, [task.id])[task.id] if task.root_task_id is None else {}
-    return {
-        **_out(session, task, stats, runner),
-        "payload": json.loads(task.payload or "{}"),
-        "result": json.loads(task.result) if task.result else None,
-    }
+    payload = json.loads(task.payload or "{}")
+    result = json.loads(task.result) if task.result else None
+    out = _outs(session, [task], runner)[0]
+    return {**out, "payload": payload, "result": result, "item": _item(session, payload, result)}
 
 
 @router.get("/{task_id}/children", response_model=list[TaskOut])
 def read_children(task_id: int, session: SessionDep, runner: RunnerDep) -> list[dict[str, Any]]:
     _get(session, task_id)
-    return [_out(session, child, {}, runner) for child in repo.children(session, task_id)]
+    return _outs(session, repo.children(session, task_id), runner)
 
 
 @router.get("/{task_id}/log", response_model=LogOut)
@@ -155,8 +237,3 @@ def batch(
         return Affected(affected=len(created))
     removed = repo.delete_finished(session, body.task_ids, data_dir=services.data_dir)
     return Affected(affected=len(removed))
-
-
-@router.post("/clear-finished", response_model=Affected)
-def clear_finished(session: SessionDep, services: ServicesDep) -> Affected:
-    return Affected(affected=len(repo.clear_finished(session, data_dir=services.data_dir)))

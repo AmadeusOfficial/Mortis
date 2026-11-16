@@ -35,6 +35,7 @@ class TaskRunner:
         self._running: set[int] = set()
         self._cancel_requested: set[int] = set()
         self._progress: dict[int, dict[str, Any]] = {}
+        self._paused = False
 
     def register(self, task_type: str, handler: Handler) -> None:
         self._handlers[task_type] = handler
@@ -60,6 +61,21 @@ class TaskRunner:
     def wake(self) -> None:
         self._wake.set()
 
+    def pause(self) -> None:
+        """暂停只让线程不再领新任务，已经在跑的照常跑完。"""
+        with self._lock:
+            self._paused = True
+
+    def resume(self) -> None:
+        with self._lock:
+            self._paused = False
+        self._wake.set()
+
+    @property
+    def paused(self) -> bool:
+        with self._lock:
+            return self._paused
+
     def _loop(self) -> None:
         while not self._stop.is_set():
             if not self.run_once():
@@ -69,6 +85,8 @@ class TaskRunner:
                     self._wake.clear()
 
     def run_once(self) -> bool:
+        if self.paused:
+            return False
         with self.session_factory() as session:
             task = repo.claim_next(session)
             if task is None:

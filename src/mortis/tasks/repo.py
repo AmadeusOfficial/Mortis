@@ -157,31 +157,55 @@ def retry(session: Session, task_ids: Sequence[int]) -> list[int]:
     return created
 
 
+def cancel_active(session: Session) -> tuple[int, list[int]]:
+    """取消所有排队中和运行中的任务。"""
+    ids = list(session.scalars(select(Task.id).where(Task.status.in_(ACTIVE))))
+    return cancel(session, ids)
+
+
+def retry_failed(session: Session) -> list[int]:
+    """所有失败的任务各按原样排一个新的根任务。"""
+    ids = list(session.scalars(select(Task.id).where(Task.status == FAILED)))
+    return retry(session, ids)
+
+
 def _no_active_descendant() -> ColumnElement[bool]:
     descendant = aliased(Task)
     return ~exists().where(descendant.root_task_id == Task.id, descendant.status.in_(ACTIVE))
 
 
+def _active_with_ancestors(session: Session) -> set[int]:
+    """还在跑的任务和它们往上每一层的祖先，这些都不能删。"""
+    rows = session.execute(select(Task.id, Task.status, Task.parent_task_id)).all()
+    parents = {row.id: row.parent_task_id for row in rows}
+    blocked = {row.id for row in rows if row.status in ACTIVE}
+    for task_id in list(blocked):
+        parent = parents.get(task_id)
+        while parent is not None and parent not in blocked:
+            blocked.add(parent)
+            parent = parents.get(parent)
+    return blocked
+
+
 def _delete(session: Session, query: Select[tuple[int]], data_dir: Path | None) -> list[int]:
-    """删掉查到的任务；子孙顺着 parent_task_id 级联。返回查到的编号。"""
+    """删掉查到的任务和它们的子孙；日志一并删掉。返回查到的编号。"""
     targets = list(session.scalars(query))
     if not targets:
         return []
-    removed = list(
-        session.scalars(
-            select(Task.id).where(
-                or_(
-                    Task.id.in_(targets),
-                    Task.root_task_id.in_(targets),
-                    Task.parent_task_id.in_(targets),
-                )
-            )
-        )
-    )
-    session.execute(delete(Task).where(Task.id.in_(targets)))
+    children: dict[int | None, list[int]] = {}
+    for row in session.execute(select(Task.id, Task.parent_task_id)):
+        children.setdefault(row.parent_task_id, []).append(row.id)
+    doomed: set[int] = set()
+    pending = list(targets)
+    while pending:
+        task_id = pending.pop()
+        if task_id not in doomed:
+            doomed.add(task_id)
+            pending.extend(children.get(task_id, []))
+    session.execute(delete(Task).where(Task.id.in_(list(doomed))))
     session.commit()
     if data_dir is not None:
-        remove_logs(data_dir, removed)
+        remove_logs(data_dir, doomed)
     return targets
 
 
@@ -195,11 +219,26 @@ def delete_finished(
     return _delete(session, query, data_dir)
 
 
-def clear_finished(session: Session, *, data_dir: Path | None = None) -> list[int]:
+def clear_succeeded(session: Session, *, data_dir: Path | None = None) -> list[int]:
+    """删除整棵树既没有失败也没有还在跑的已完成根任务。"""
+    descendant = aliased(Task)
     query = select(Task.id).where(
-        Task.parent_task_id.is_(None), Task.status.in_(FINISHED), _no_active_descendant()
+        Task.parent_task_id.is_(None),
+        Task.status == SUCCEEDED,
+        ~exists().where(
+            descendant.root_task_id == Task.id, descendant.status.in_((*ACTIVE, FAILED))
+        ),
     )
     return _delete(session, query, data_dir)
+
+
+def clear_failed(session: Session, *, data_dir: Path | None = None) -> list[int]:
+    """删除所有失败、也没有还在跑的子孙的任务，子孙一并删掉。"""
+    blocked = _active_with_ancestors(session)
+    conditions = [Task.status == FAILED]
+    if blocked:
+        conditions.append(Task.id.not_in(list(blocked)))
+    return _delete(session, select(Task.id).where(*conditions), data_dir)
 
 
 def recover_running(session: Session) -> int:
@@ -265,3 +304,18 @@ def children(session: Session, task_id: int) -> list[Task]:
     return list(
         session.scalars(select(Task).where(Task.parent_task_id == task_id).order_by(Task.id))
     )
+
+
+def direct_stats(session: Session, ids: Sequence[int]) -> dict[int, dict[str, int]]:
+    """按 parent_task_id 统计直接子任务的状态，每个编号都有键。"""
+    stats: dict[int, dict[str, int]] = {task_id: {} for task_id in ids}
+    if not stats:
+        return stats
+    rows = session.execute(
+        select(Task.parent_task_id, Task.status, func.count())
+        .where(Task.parent_task_id.in_(list(ids)))
+        .group_by(Task.parent_task_id, Task.status)
+    ).all()
+    for parent, status, count in rows:
+        stats[parent][status] = count
+    return stats
