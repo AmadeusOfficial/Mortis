@@ -47,6 +47,7 @@ class WallItem(BaseModel):
     year: int | None
     poster_url: str | None
     is_scraped: bool
+    issue: str | None
 
 
 class FieldOut(BaseModel):

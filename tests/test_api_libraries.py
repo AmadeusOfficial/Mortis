@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from mortis.api.app import create_app
-from mortis.db.models import Item, MediaFile, utc_now
+from mortis.db.models import Item, ItemSourceRecord, MediaFile, Task, utc_now
 from mortis.settings import Settings
 
 LOCAL = "http://127.0.0.1"  # TestClient 默认的 testserver 不在主机白名单里
@@ -220,6 +221,99 @@ def test_toggle_auto_scrape(client: TestClient, dirs: dict[str, Path]) -> None:
     body = client.patch(f"/api/libraries/{library['id']}", json={"is_auto_scrape": False}).json()
     assert body["is_auto_scrape"] is False
     assert body["paths"] == library["paths"]
+
+
+def test_stats_scraped_issues_and_sample_posters(client: TestClient, dirs: dict[str, Path]) -> None:
+    library = _create(client, [str(dirs["a"])]).json()
+    factory = client.app.state.session_factory
+    with factory() as session:
+        now = utc_now()
+        scraped = Item(
+            library_id=library["id"],
+            data_type_id="movie",
+            kind="work",
+            title="已刮削",
+            poster_path="aa/早期.jpg",
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at=now,
+        )
+        failed = Item(
+            library_id=library["id"],
+            data_type_id="movie",
+            kind="work",
+            title="失败",
+            poster_path="bb/较新.jpg",
+            created_at="2026-01-02T00:00:00+00:00",
+            updated_at=now,
+        )
+        recovered = Item(
+            library_id=library["id"],
+            data_type_id="movie",
+            kind="work",
+            title="失败后成功",
+            created_at="2026-01-03T00:00:00+00:00",
+            updated_at=now,
+        )
+        session.add_all([scraped, failed, recovered])
+        session.flush()
+        session.add(ItemSourceRecord(item_id=scraped.id, source="tmdb", fetched_at=now, raw="{}"))
+        session.add_all(
+            [
+                Task(
+                    task_type="scrape",
+                    status="failed",
+                    payload=json.dumps({"item_id": failed.id, "force": False}),
+                    error="连接 TMDB 失败",
+                    created_at=now,
+                ),
+                Task(
+                    task_type="scrape",
+                    status="failed",
+                    payload=json.dumps({"item_id": recovered.id, "force": False}),
+                    error="连接 TMDB 失败",
+                    created_at=now,
+                ),
+                Task(
+                    task_type="scrape",
+                    status="succeeded",
+                    payload=json.dumps({"item_id": recovered.id, "force": False}),
+                    created_at=now,
+                ),
+            ]
+        )
+        session.commit()
+        ids = {"scraped": scraped.id, "failed": failed.id, "recovered": recovered.id}
+    assert ids["recovered"] > ids["failed"] > ids["scraped"]
+    body = client.get(f"/api/libraries/{library['id']}").json()
+    assert body["item_count"] == 3
+    assert body["scraped_count"] == 1
+    assert body["issue_count"] == 1
+    assert body["sample_posters"] == ["/api/images/bb/较新.jpg", "/api/images/aa/早期.jpg"]
+    assert client.get("/api/libraries").json() == [body]
+
+
+def test_sample_posters_keeps_latest_eight(client: TestClient, dirs: dict[str, Path]) -> None:
+    library = _create(client, [str(dirs["a"])]).json()
+    factory = client.app.state.session_factory
+    with factory() as session:
+        now = utc_now()
+        session.add_all(
+            [
+                Item(
+                    library_id=library["id"],
+                    data_type_id="movie",
+                    kind="work",
+                    title=f"第 {index} 部",
+                    poster_path=None if index == 9 else f"c{index}/海报.jpg",
+                    created_at=f"2026-02-{index + 1:02d}T00:00:00+00:00",
+                    updated_at=now,
+                )
+                for index in range(10)
+            ]
+        )
+        session.commit()
+    body = client.get(f"/api/libraries/{library['id']}").json()
+    assert body["sample_posters"] == [f"/api/images/c{index}/海报.jpg" for index in range(8, 0, -1)]
 
 
 def test_libraries_survive_restart(data_dir: Path, dirs: dict[str, Path]) -> None:

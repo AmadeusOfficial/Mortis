@@ -1,12 +1,25 @@
 import os
+from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from mortis.db.models import DataType, Item, Library, LibraryPath, MediaFile, utc_now
+from mortis.db.models import (
+    DataType,
+    Item,
+    ItemSourceRecord,
+    Library,
+    LibraryPath,
+    MediaFile,
+    utc_now,
+)
 from mortis.errors import UserError
+from mortis.items.detail import image_url
+from mortis.tasks import repo as task_repo
 
 MAX_NAME_LENGTH = 50
+SAMPLE_POSTERS = 8
 
 
 class LibraryError(UserError):
@@ -102,6 +115,95 @@ def library_counts(session: Session, library_ids: list[int]) -> dict[int, tuple[
         )
     }
     return {lid: (items.get(lid, 0), files.get(lid, 0)) for lid in library_ids}
+
+
+@dataclass(frozen=True)
+class LibraryStats:
+    item_count: int = 0
+    file_count: int = 0
+    scraped_count: int = 0
+    issue_count: int = 0
+    sample_posters: list[str] = field(default_factory=list)
+
+
+def _scraped_counts(session: Session, library_ids: list[int]) -> dict[int, int]:
+    """有来源快照的作品数。判定和海报墙的 is_scraped 一样：有一条 item_source_records 就算。"""
+    return {
+        library_id: count
+        for library_id, count in session.execute(
+            select(Item.library_id, func.count(func.distinct(Item.id)))
+            .join(ItemSourceRecord, ItemSourceRecord.item_id == Item.id)
+            .where(Item.library_id.in_(library_ids), Item.kind == "work")
+            .group_by(Item.library_id)
+        )
+    }
+
+
+def _issue_counts(session: Session, works: list[Any]) -> dict[int, int]:
+    """最近一次 scrape 任务失败的作品数，按库分组。"""
+    latest = task_repo.latest_scrape_tasks(session, [row.id for row in works])
+    result: dict[int, int] = {}
+    for row in works:
+        task = latest.get(row.id)
+        if task is not None and task.status == task_repo.FAILED:
+            result[row.library_id] = result.get(row.library_id, 0) + 1
+    return result
+
+
+def _sample_posters(session: Session, library_ids: list[int]) -> dict[int, list[str]]:
+    """每个库最新的几个作品主图，跳过没有主图的。"""
+    ranked = (
+        select(
+            Item.library_id.label("library_id"),
+            Item.poster_path.label("poster_path"),
+            func.row_number()
+            .over(
+                partition_by=Item.library_id,
+                order_by=(Item.created_at.desc(), Item.id.desc()),
+            )
+            .label("rank"),
+        )
+        .where(
+            Item.library_id.in_(library_ids),
+            Item.kind == "work",
+            Item.poster_path.is_not(None),
+            Item.poster_path != "",
+        )
+        .subquery()
+    )
+    result: dict[int, list[str]] = {}
+    for library_id, path in session.execute(
+        select(ranked.c.library_id, ranked.c.poster_path)
+        .where(ranked.c.rank <= SAMPLE_POSTERS)
+        .order_by(ranked.c.library_id, ranked.c.rank)
+    ):
+        url = image_url(path)
+        if url is not None:
+            result.setdefault(library_id, []).append(url)
+    return result
+
+
+def library_stats(session: Session, library_ids: list[int]) -> dict[int, LibraryStats]:
+    """每个库的作品、文件、已刮削、有问题的数量和最新的几张贴图。固定几条查询算完。"""
+    counts = library_counts(session, library_ids)
+    scraped = _scraped_counts(session, library_ids)
+    works = session.execute(
+        select(Item.id, Item.library_id).where(
+            Item.library_id.in_(library_ids), Item.kind == "work"
+        )
+    ).all()
+    issues = _issue_counts(session, list(works))
+    posters = _sample_posters(session, library_ids)
+    return {
+        library_id: LibraryStats(
+            item_count=counts[library_id][0],
+            file_count=counts[library_id][1],
+            scraped_count=scraped.get(library_id, 0),
+            issue_count=issues.get(library_id, 0),
+            sample_posters=posters.get(library_id, []),
+        )
+        for library_id in library_ids
+    }
 
 
 def create_library(session: Session, *, name: str, data_type_id: str, paths: list[str]) -> Library:

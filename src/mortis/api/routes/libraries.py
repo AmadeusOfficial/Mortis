@@ -19,6 +19,9 @@ class LibraryOut(BaseModel):
     paths: list[str]
     item_count: int
     file_count: int
+    scraped_count: int
+    issue_count: int
+    sample_posters: list[str]
     created_at: str
     updated_at: str
 
@@ -37,7 +40,7 @@ class LibraryUpdate(BaseModel):
     is_auto_scrape: bool | None = None
 
 
-def _out(library: Library, counts: tuple[int, int]) -> LibraryOut:
+def _out(library: Library, stats: libraries.LibraryStats) -> LibraryOut:
     return LibraryOut(
         id=library.id,
         name=library.name,
@@ -46,22 +49,25 @@ def _out(library: Library, counts: tuple[int, int]) -> LibraryOut:
         automation=library.automation,
         is_auto_scrape=bool(library.is_auto_scrape),
         paths=[row.path for row in library.paths],
-        item_count=counts[0],
-        file_count=counts[1],
+        item_count=stats.item_count,
+        file_count=stats.file_count,
+        scraped_count=stats.scraped_count,
+        issue_count=stats.issue_count,
+        sample_posters=stats.sample_posters,
         created_at=library.created_at,
         updated_at=library.updated_at,
     )
 
 
 def _one(session: SessionDep, library: Library) -> LibraryOut:
-    return _out(library, libraries.library_counts(session, [library.id])[library.id])
+    return _out(library, libraries.library_stats(session, [library.id])[library.id])
 
 
 @router.get("", response_model=list[LibraryOut])
 def list_libraries(session: SessionDep) -> list[LibraryOut]:
     rows = libraries.list_libraries(session)
-    counts = libraries.library_counts(session, [library.id for library in rows])
-    return [_out(library, counts[library.id]) for library in rows]
+    stats = libraries.library_stats(session, [library.id for library in rows])
+    return [_out(library, stats[library.id]) for library in rows]
 
 
 @router.post("", response_model=LibraryOut, status_code=201)

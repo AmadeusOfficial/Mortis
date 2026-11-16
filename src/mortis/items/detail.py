@@ -18,12 +18,15 @@ from mortis.db.models import (
     MediaFile,
     Person,
     Tag,
+    Task,
     TypeField,
 )
 from mortis.organize.episodes import parse_episode
 from mortis.scrape.apply import level_fields
+from mortis.tasks import repo as task_repo
 
 EDITABLE_TYPES = frozenset({"text", "longtext", "number", "date", "url"})
+ISSUE_LENGTH = 40
 
 
 def image_url(rel: str | None) -> str | None:
@@ -116,11 +119,20 @@ def read_value(session: Session, item: Item, field: TypeField) -> Any:
     return None
 
 
+def issue_text(error: str | None) -> str | None:
+    """失败原因的第一行，超过 40 个字截断。"""
+    line = next((row.strip() for row in (error or "").splitlines() if row.strip()), "")
+    if not line:
+        return None
+    return line if len(line) <= ISSUE_LENGTH else line[:ISSUE_LENGTH] + "…"
+
+
 def wall_rows(session: Session, items: list[Item]) -> list[dict[str, Any]]:
     ids = [item.id for item in items]
     scraped = set(
         session.scalars(select(ItemSourceRecord.item_id).where(ItemSourceRecord.item_id.in_(ids)))
     )
+    latest = task_repo.latest_scrape_tasks(session, ids)
     return [
         {
             "id": item.id,
@@ -129,9 +141,16 @@ def wall_rows(session: Session, items: list[Item]) -> list[dict[str, Any]]:
             "year": year_of(item.release_date),
             "poster_url": image_url(item.poster_path),
             "is_scraped": item.id in scraped,
+            "issue": _issue_of(latest.get(item.id)),
         }
         for item in items
     ]
+
+
+def _issue_of(task: Task | None) -> str | None:
+    if task is None or task.status != task_repo.FAILED:
+        return None
+    return issue_text(task.error)
 
 
 def _first_images(session: Session, ids: list[int], kind: str) -> dict[int, str]:

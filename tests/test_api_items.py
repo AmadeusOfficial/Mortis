@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
-from mortis.db.models import Item, Library, MediaFile, utc_now
+from mortis.db.models import Item, Library, MediaFile, Task, utc_now
 from mortis.items.identity import MovieRef, find_or_create_movie
 from mortis.settings import Settings
 from tests.fakes import FakeTmdb, load_fixture
@@ -84,6 +85,7 @@ def test_wall_lists_works_with_posters(client: TestClient, scraped: dict[str, in
     assert matrix["subtitle"] == "The Matrix" and matrix["year"] == 1999
     assert matrix["poster_url"].startswith("/api/images/") and matrix["is_scraped"] is True
     assert wall[0]["poster_url"] is None and wall[0]["is_scraped"] is False
+    assert [row["issue"] for row in wall] == [None, None]
     poster = client.get(matrix["poster_url"])
     assert poster.status_code == 200 and poster.content.startswith(b"img:")
     by_date = client.get(
@@ -94,6 +96,29 @@ def test_wall_lists_works_with_posters(client: TestClient, scraped: dict[str, in
     found = client.get(f"/api/libraries/{scraped['library']}/items", params={"q": "matrix"}).json()
     assert [row["title"] for row in found] == ["黑客帝国"]
     assert client.get("/api/libraries/999/items").status_code == 404
+
+
+def test_wall_issue_comes_from_latest_failed_scrape(
+    client: TestClient, app: FastAPI, scraped: dict[str, int]
+) -> None:
+    long_error = "刮削失败：连接 TMDB 时请求超时，请检查网络或代理设置后重试一次，日志里有详细原因"
+    with app.state.session_factory() as session:
+        now = utc_now()
+        session.add(
+            Task(
+                task_type="scrape",
+                status="failed",
+                payload=json.dumps({"item_id": scraped["heat"], "force": False}),
+                error=long_error + "\nTraceback (most recent call last): ...",
+                created_at=now,
+            )
+        )
+        session.commit()
+    wall = client.get(f"/api/libraries/{scraped['library']}/items").json()
+    assert [row["issue"] for row in wall] == [long_error[:40] + "…", None]
+    collection_id = client.get(f"/api/items/{scraped['matrix']}").json()["collection"]["id"]
+    parts = client.get(f"/api/items/{collection_id}").json()["parts"]
+    assert [(part["title"], part["issue"]) for part in parts] == [("黑客帝国", None)]
 
 
 def test_detail_sections_sources_and_collection(

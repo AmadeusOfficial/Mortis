@@ -13,6 +13,7 @@ from mortis.db.models import Task, utc_now
 from mortis.tasks.base import TaskResult
 from mortis.tasks.logs import remove_logs
 
+SCRAPE = "scrape"
 QUEUED = "queued"
 RUNNING = "running"
 SUCCEEDED = "succeeded"
@@ -51,6 +52,24 @@ def enqueue(
     session.add(task)
     session.flush()
     return task
+
+
+def latest_scrape_tasks(session: Session, item_ids: Sequence[int]) -> dict[int, Task]:
+    """每个条目最近一次 scrape 任务（id 最大的那条），按 item_id 索引；没有任务的不在结果里。"""
+    ids = list(item_ids)
+    if not ids:
+        return {}
+    item_key = func.json_extract(Task.payload, "$.item_id")
+    latest = (
+        select(item_key.label("item_id"), func.max(Task.id).label("task_id"))
+        .where(Task.task_type == SCRAPE, item_key.in_(ids))
+        .group_by(item_key)
+        .subquery()
+    )
+    rows = session.execute(
+        select(latest.c.item_id, Task).join(latest, Task.id == latest.c.task_id)
+    ).all()
+    return {int(item_id): task for item_id, task in rows}
 
 
 def find_queued(session: Session, task_type: str, key: str, value: Any) -> Task | None:
