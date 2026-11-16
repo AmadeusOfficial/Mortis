@@ -89,7 +89,7 @@ def test_nfo_follows_emby_layout(app: FastAPI, video: Path) -> None:
     item_id = _add_movie(app, video)
     with app.state.session_factory() as session:
         item = session.get(Item, item_id)
-        raw = build_movie_nfo(session, item, certification_country="US")
+        raw = build_movie_nfo(session, item, _config(app))
     text = raw.decode("utf-8")
     assert text.startswith(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<!--created on'
@@ -136,12 +136,20 @@ def test_nfo_follows_emby_layout(app: FastAPI, video: Path) -> None:
         "true",
         "10",
     )
-    actor = root.find("actor")
-    assert actor.findtext("name") and actor.findtext("tmdbid")
+    actors = root.findall("actor")
+    assert [child.tag for child in actors[0]] == ["name", "role", "thumb", "profile", "tmdbid"]
+    assert actors[0].findtext("thumb") == "https://image.tmdb.org/t/p/h632/keanu.jpg"
+    assert actors[1].find("thumb") is None
+    producers = {p.findtext("name"): p for p in root.findall("producer")}
+    assert {p.findtext("role") for p in producers.values()} == {"Producer", "Executive Producer"}
+    assert any(p.findtext("thumb", "").endswith("/joel.jpg") for p in producers.values())
+    posters = [t for t in root.findall("thumb") if t.get("aspect") == "poster"]
+    assert len(posters) == 1 and posters[0].text.startswith("https://image.tmdb.org/t/p/")
+    assert tags.index("thumb") > tags.index("runtime")
     assert root.findtext("trailer", "").startswith("plugin://plugin.video.youtube/")
     assert root.find("lockdata") is None
     assert tags.index("writer") > tags.index("fileinfo")
-    assert build_movie_nfo(session, item, certification_country="US") == raw
+    assert build_movie_nfo(session, item, _config(app)) == raw
 
 
 def test_writer_writes_nfo_images_and_actors(app: FastAPI, video: Path) -> None:

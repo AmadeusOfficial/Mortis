@@ -113,13 +113,7 @@ def _targets(
     )
     groups = _video_groups(videos)
     shared = _shared_folders(session, item, {folder for folder, _ in groups})
-    nfo = build_movie_nfo(
-        session,
-        item,
-        certification_country=config.certification_country,
-        write_lockdata=output.nfo_write_lockdata,
-        single_studio=output.nfo_single_studio,
-    )
+    nfo = build_movie_nfo(session, item, config)
     images: dict[str, str] = {**_first_images(session, item.id)}
     if item.poster_path:
         images["poster"] = item.poster_path

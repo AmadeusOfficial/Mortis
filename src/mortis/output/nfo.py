@@ -3,6 +3,7 @@
 import json
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -10,18 +11,23 @@ from urllib.parse import parse_qs, urlparse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from mortis.config.models import MovieScrapeConfig
 from mortis.db.models import (
     Item,
     ItemExternalId,
     ItemImage,
     ItemPerson,
     ItemRating,
+    ItemSourceRecord,
     ItemTag,
     Person,
     PersonExternalId,
     Tag,
 )
+from mortis.sources.tmdb.client import TmdbClient
+from mortis.sources.tmdb.movie import SOURCE, movie_candidates
 
+NFO_PROFILE_SIZE = "h632"
 RATING_NAMES = {"tmdb": "themoviedb"}
 _EMPTY = re.compile(r"<([A-Za-z_][\w.-]*(?: [^<>]*?)?) />")
 THUMB_ASPECTS = {
@@ -103,27 +109,65 @@ def _text(parent: ET.Element, tag: str, value: Any = None, **attrs: str) -> ET.E
     return element
 
 
-def _person(parent: ET.Element, tag: str, person: Person, role: str | None, tmdb_id: str | None):
-    element = _text(parent, tag)
+@dataclass
+class _Snapshot:
+    """从 TMDB 快照里取库里不存的网址和职务。"""
+
+    photos: dict[str, str]
+    jobs: dict[str, str]
+    poster: str | None
+
+
+def _snapshot(session: Session, item: Item, config: MovieScrapeConfig) -> _Snapshot:
+    record = session.get(ItemSourceRecord, (item.id, SOURCE))
+    raw: dict[str, Any] = json.loads(record.raw) if record is not None else {}
+    credits = raw.get("credits") or {}
+    photos: dict[str, str] = {}
+    jobs: dict[str, str] = {}
+    for entry in (credits.get("cast") or []) + (credits.get("crew") or []):
+        if entry.get("id") is None:
+            continue
+        key = str(entry["id"])
+        if entry.get("profile_path"):
+            photos.setdefault(key, TmdbClient.image_url(entry["profile_path"], NFO_PROFILE_SIZE))
+        if entry.get("department") == "Production" and "Producer" in (entry.get("job") or ""):
+            jobs.setdefault(key, entry["job"])
+    poster = None
+    if raw and item.poster_path and json.loads(item.field_sources).get("poster") == SOURCE:
+        posters = movie_candidates(raw, config).get("poster") or []
+        poster = posters[0]["url"] if posters else None
+    return _Snapshot(photos, jobs, poster)
+
+
+def _person(
+    parent: ET.Element,
+    tag: str,
+    person: Person,
+    role: str | None,
+    tmdb_id: str | None,
+    photo: str | None,
+    *,
+    with_id: bool = True,
+) -> ET.Element:
+    element = _text(parent, tag, **({} if with_id or not tmdb_id else {"tmdbid": tmdb_id}))
     _text(element, "name", person.name)
     if role:
         _text(element, "role", role)
+    if photo:
+        _text(element, "thumb", photo)
     if tmdb_id:
         _text(element, "profile", f"https://www.themoviedb.org/person/{tmdb_id}")
-        _text(element, "tmdbid", tmdb_id)
+        if with_id:
+            _text(element, "tmdbid", tmdb_id)
+    return element
 
 
-def build_movie_nfo(
-    session: Session,
-    item: Item,
-    *,
-    certification_country: str,
-    write_lockdata: bool = False,
-    single_studio: bool = False,
-) -> bytes:
+def build_movie_nfo(session: Session, item: Item, config: MovieScrapeConfig) -> bytes:
+    output = config.output
     extra = json.loads(item.fields)
     ids = _external_ids(session, item)
     images = _image_urls(session, item)
+    snapshot = _snapshot(session, item, config)
     parent = session.get(Item, item.parent_id) if item.parent_id else None
     collection_id = _external_ids(session, parent).get("tmdb") if parent is not None else None
     # 用条目的修改时间，内容没变时重写出来的字节也不变。
@@ -167,6 +211,8 @@ def build_movie_nfo(
     _text(root, "outline", item.overview)
     _text(root, "tagline", extra.get("tagline"))
     _text(root, "runtime", extra.get("runtime"))
+    if snapshot.poster:
+        _text(root, "thumb", snapshot.poster, aspect="poster")
     for kind, aspect in THUMB_ASPECTS.items():
         for url in images.get(kind, [])[:1]:
             _text(root, "thumb", url, aspect=aspect)
@@ -177,8 +223,8 @@ def build_movie_nfo(
             _text(element, "thumb", url)
     certification = extra.get("certification")
     if certification:
-        _text(root, "mpaa", f"{certification_country}:{certification}")
-        _text(root, "certification", f"{certification_country}:{certification}")
+        _text(root, "mpaa", f"{config.certification_country}:{certification}")
+        _text(root, "certification", f"{config.certification_country}:{certification}")
     if "imdb" in ids:
         _text(root, "id", ids["imdb"])
     if "tmdb" in ids:
@@ -205,7 +251,7 @@ def build_movie_nfo(
     for genre in _tags(session, item, "genre"):
         _text(root, "genre", genre)
     studios = _tags(session, item, "studio")
-    for studio in studios[:1] if single_studio else studios:
+    for studio in studios[:1] if output.nfo_single_studio else studios:
         _text(root, "studio", studio)
     writers = _people(session, item, "writer")
     for person, _role, tmdb_id in writers:
@@ -215,18 +261,17 @@ def build_movie_nfo(
     for keyword in _tags(session, item, "keyword"):
         _text(root, "tag", keyword)
     for person, character, tmdb_id in _people(session, item, "actor"):
-        _person(root, "actor", person, character, tmdb_id)
+        photo = snapshot.photos.get(tmdb_id) if tmdb_id else None
+        _person(root, "actor", person, character, tmdb_id, photo)
     for person, _role, tmdb_id in _people(session, item, "producer"):
-        element = _text(root, "producer", **({"tmdbid": tmdb_id} if tmdb_id else {}))
-        _text(element, "name", person.name)
-        _text(element, "role", "Producer")
-        if tmdb_id:
-            _text(element, "profile", f"https://www.themoviedb.org/person/{tmdb_id}")
+        job = snapshot.jobs.get(tmdb_id, "Producer") if tmdb_id else "Producer"
+        photo = snapshot.photos.get(tmdb_id) if tmdb_id else None
+        _person(root, "producer", person, job, tmdb_id, photo, with_id=False)
     _text(root, "trailer", kodi_trailer(extra.get("trailer")))
     languages = _tags(session, item, "language")
     _text(root, "languages", ", ".join(languages) or None)
     _text(root, "dateadded", _local_time(item.created_at))
-    if write_lockdata:
+    if output.nfo_write_lockdata:
         _text(root, "lockdata", "true")
     video = ET.SubElement(ET.SubElement(_text(root, "fileinfo"), "streamdetails"), "video")
     for tag, value in (("codec", None), ("aspect", "0.00"), ("width", 0), ("height", 0)):
