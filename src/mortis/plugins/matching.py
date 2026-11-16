@@ -6,6 +6,7 @@ from mortis.plugin_api import Hit, Host, SourcePlugin
 from mortis.sources.tmdb.search import similarity
 
 MATCH_THRESHOLD = 0.75
+"""各类型设置里 match_threshold 的默认值。实际用哪个阈值由调用方从类型设置里读。"""
 RESULTS_PER_QUERY = 10
 EARLY_STOP = 0.95
 

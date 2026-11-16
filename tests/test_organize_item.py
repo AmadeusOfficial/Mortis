@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from mortis.api.app import create_app
+from mortis.config.models import PluginTypeConfig
 from mortis.db.models import Item, ItemExternalId, ItemSourceRecord, MediaFile, Task
 from mortis.settings import Settings
 from mortis.tasks import repo
@@ -205,6 +206,44 @@ def test_add_source_keeps_primary_and_is_not_used_for_dedupe(
 
 def test_search_unknown_source_is_404(client: TestClient) -> None:
     assert client.get("/api/sources/nope/search", params={"query": "x"}).status_code == 404
+
+
+def _save_type_section(app: FastAPI, **values: object) -> None:
+    app.state.config_store.save_section("types.doujin", PluginTypeConfig(**values))
+
+
+def test_type_threshold_decides_auto_match(
+    app: FastAPI, client: TestClient, games: Path, sites: FakeSites
+) -> None:
+    """0.6 分的候选默认（0.75）认不出，把类型阈值调到 0.5 就能自动认出。"""
+    sites.hits["alpha"] = [{"external_id": "a2", "title": "星之梦外传序章"}]
+    sites.hits["beta"] = []
+    library_id = _library(client, games)
+    assert _organize(app, library_id).status == "succeeded"
+    with app.state.session_factory() as session:
+        assert session.scalars(select(MediaFile).where(MediaFile.item_id.is_not(None))).all() == []
+
+    _save_type_section(app, match_threshold=0.5)
+    assert _organize(app, library_id).status == "succeeded"
+    with app.state.session_factory() as session:
+        files = session.scalars(select(MediaFile).order_by(MediaFile.path)).all()
+        assert [Path(row.path).name for row in files] == [
+            "[KOMMIT] 星之梦 v1.02 汉化硬盘版",
+            "没人认识的游戏",
+        ]
+        assert files[0].item_id is not None
+        assert session.get(Item, files[0].item_id).title == "星之梦外传序章"
+        assert files[1].item_id is None
+
+
+def test_type_skip_folders_are_not_scanned(app: FastAPI, client: TestClient, games: Path) -> None:
+    (games / "备份目录").mkdir()
+    _save_type_section(app, skip_folders=["备份目录"])
+    library_id = _library(client, games)
+    assert _organize(app, library_id).status == "succeeded"
+    with app.state.session_factory() as session:
+        names = [Path(row.path).name for row in session.scalars(select(MediaFile))]
+        assert names == ["[KOMMIT] 星之梦 v1.02 汉化硬盘版", "没人认识的游戏"]
 
 
 def test_bind_with_source_of_other_type_rejected(client: TestClient, games: Path) -> None:

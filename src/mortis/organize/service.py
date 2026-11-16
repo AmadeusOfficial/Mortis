@@ -17,7 +17,7 @@ from mortis.organize.names import ParsedName
 from mortis.organize.scan import scan_folders, scan_paths, scan_shows
 from mortis.plugin_api import SourceError, SourcePlugin
 from mortis.plugins.host import open_host
-from mortis.plugins.matching import MATCH_THRESHOLD, SourceMatch, best_hit
+from mortis.plugins.matching import SourceMatch, best_hit
 from mortis.scrape.apply import field_orders
 from mortis.sources.tmdb.client import TmdbAuthError, TmdbError, open_tmdb
 from mortis.sources.tmdb.search import find_best
@@ -91,7 +91,12 @@ def organize_library(
                     continue
                 if match is None or match.score < settings.match_threshold:
                     unmatched += 1
-                    best = f"，最高匹配度 {match.score:.2f}（{match.hit.title}）" if match else ""
+                    best = (
+                        f"，最高匹配度 {match.score:.2f}，低于 {settings.match_threshold:.2f}"
+                        f"（{match.hit.title}）"
+                        if match
+                        else ""
+                    )
                     ctx.log(f"未识别：{group.movie.name}{best}")
                     continue
                 with services.locks.hold("catalog-write"):
@@ -144,7 +149,7 @@ def organize_library(
 
 
 def _identify(
-    ctx: TaskContext, sources: list[SourcePlugin], parsed: ParsedName
+    ctx: TaskContext, sources: list[SourcePlugin], parsed: ParsedName, threshold: float
 ) -> SourceMatch | None:
     """按整体来源顺序逐个搜，第一个过阈值的来源决定条目；都不过时返回最高分。"""
     best: SourceMatch | None = None
@@ -159,7 +164,7 @@ def _identify(
                 continue
         if match is None:
             continue
-        if match.score >= MATCH_THRESHOLD:
+        if match.score >= threshold:
             return match
         if best is None or match.score > best.score:
             best = match
@@ -178,9 +183,10 @@ def organize_plugin_library(
     services = ctx.services
     if not data_type.is_enabled:
         raise TaskError(f"{data_type.name} 插件没有启用，不能扫描")
+    settings = type_config(services.config_store.load_config(), data_type.id)
     roots = [row.path for row in library.paths]
     ctx.log(f"扫描「{library.name}」的 {len(roots)} 个目录")
-    scanned = scan_folders(roots, skip_folders=())
+    scanned = scan_folders(roots, skip_folders=settings.skip_folders)
     for error in scanned.errors:
         ctx.log(error)
     ctx.check_cancelled()
@@ -198,10 +204,15 @@ def organize_plugin_library(
     for index, group in enumerate(pending if sources else [], start=1):
         ctx.check_cancelled()
         ctx.progress(index, len(pending), group.movie.name)
-        match = _identify(ctx, sources, group.movie.parsed)
-        if match is None or match.score < MATCH_THRESHOLD:
+        match = _identify(ctx, sources, group.movie.parsed, settings.match_threshold)
+        if match is None or match.score < settings.match_threshold:
             unmatched += 1
-            best = f"，最高匹配度 {match.score:.2f}（{match.hit.title}）" if match else ""
+            best = (
+                f"，最高匹配度 {match.score:.2f}，低于 {settings.match_threshold:.2f}"
+                f"（{match.hit.title}）"
+                if match
+                else ""
+            )
             ctx.log(f"未识别：{group.movie.name}{best}")
             continue
         hit = match.hit

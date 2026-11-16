@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from mortis.api.app import create_app
+from mortis.config.models import PluginTypeConfig
 from mortis.db.models import (
     Item,
     ItemExternalId,
@@ -332,6 +333,29 @@ def test_low_score_source_not_bound(app: FastAPI, item_id: int, sites: FakeSites
             )
         )
         assert providers == {"alpha"}
+
+
+def test_type_threshold_decides_binding(app: FastAPI, item_id: int, sites: FakeSites) -> None:
+    """0.6 分的候选默认认不出；把该类型的阈值调到 0.5 后刮削会挂上它。"""
+    sites.hits["beta"] = [{"external_id": "b6", "title": "星之梦外传序章"}]
+    sites.items["beta/item/b6"] = {"values": {"title": "星之梦外传序章"}}
+
+    def providers() -> set[str]:
+        with app.state.session_factory() as session:
+            return set(
+                session.scalars(
+                    select(ItemExternalId.provider).where(ItemExternalId.item_id == item_id)
+                )
+            )
+
+    assert _scrape(app, item_id).status == "succeeded"
+    assert providers() == {"alpha"}
+
+    app.state.config_store.save_section("types.doujin", PluginTypeConfig(match_threshold=0.5))
+    assert _scrape(app, item_id, force=True).status == "succeeded"
+    assert providers() == {"alpha", "beta"}
+    with app.state.session_factory() as session:
+        assert session.get(ItemSourceRecord, (item_id, "beta")) is not None
 
 
 def test_all_sources_failing_fails_task(app: FastAPI, item_id: int, sites: FakeSites) -> None:

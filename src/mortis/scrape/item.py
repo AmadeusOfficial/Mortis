@@ -6,10 +6,11 @@ from typing import Any
 
 from sqlalchemy import select
 
+from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, ItemExternalId, ItemSourceRecord
 from mortis.plugin_api import SourceError, SourcePlugin
 from mortis.plugins.host import open_host
-from mortis.plugins.matching import MATCH_THRESHOLD, best_hit
+from mortis.plugins.matching import best_hit
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
     download_images,
@@ -56,6 +57,7 @@ def _gather(
     titles: list[str],
     year: int | None,
     people_keys: set[str],
+    threshold: float,
 ) -> _Gathered:
     gathered = _Gathered()
     for plugin in sources:
@@ -74,9 +76,10 @@ def _gather(
                     external_id = ids.get(plugin.provider)
                     if external_id is None:
                         match = best_hit(host, plugin, titles, year)
-                        if match is None or match.score < MATCH_THRESHOLD:
+                        if match is None or match.score < threshold:
                             best = (
-                                f"，最高匹配度 {match.score:.2f}（{match.hit.title}）"
+                                f"，最高匹配度 {match.score:.2f}，低于 {threshold:.2f}"
+                                f"（{match.hit.title}）"
                                 if match
                                 else ""
                             )
@@ -141,7 +144,10 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
     if not sources:
         raise TaskError(f"数据类型 {data_type_id} 没有启用的来源插件")
     people_keys = {f.field_key for f in fields if f.value_type == "people"}
-    gathered = _gather(ctx, sources, ids, snapshots, titles, year, people_keys)
+    settings = type_config(services.config_store.load_config(), data_type_id)
+    gathered = _gather(
+        ctx, sources, ids, snapshots, titles, year, people_keys, settings.match_threshold
+    )
     if not gathered.candidates:
         raise TaskError("所有来源都没有拿到结果")
 
