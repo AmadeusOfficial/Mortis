@@ -12,10 +12,11 @@ import {
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { type MovieHit, searchTmdbMovies } from "../api";
+import { type MovieHit, type SearchKind, searchTmdbMovies } from "../api";
 
 export function TmdbSearchModal({
   title,
+  kind = "movie",
   initialQuery,
   initialYear,
   picking,
@@ -24,6 +25,7 @@ export function TmdbSearchModal({
   onClose,
 }: {
   title: string;
+  kind?: SearchKind;
   initialQuery: string;
   initialYear: number | null;
   picking: boolean;
@@ -39,8 +41,8 @@ export function TmdbSearchModal({
   });
   const [picked, setPicked] = useState<number | null>(null);
   const results = useQuery({
-    queryKey: ["tmdb-search", submitted.query, submitted.year],
-    queryFn: () => searchTmdbMovies(submitted.query, submitted.year),
+    queryKey: ["tmdb-search", kind, submitted.query, submitted.year],
+    queryFn: () => searchTmdbMovies(submitted.query, submitted.year, kind),
     enabled: submitted.query.trim() !== "",
   });
   return (
@@ -53,7 +55,7 @@ export function TmdbSearchModal({
       >
         <Group align="flex-end">
           <TextInput
-            label="片名"
+            label={kind === "tv" ? "剧名" : "片名"}
             value={text}
             style={{ flex: 1 }}
             data-autofocus
@@ -117,7 +119,7 @@ export function TmdbSearchModal({
                 onPick(hit);
               }}
             >
-              选这部
+              {kind === "tv" ? "选这部剧" : "选这部"}
             </Button>
           </Group>
         ))}

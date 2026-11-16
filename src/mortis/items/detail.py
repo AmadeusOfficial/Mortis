@@ -277,6 +277,7 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
     return {
         "id": item.id,
         "library_id": item.library_id,
+        "data_type_id": item.data_type_id,
         "library_name": library.name if library else "",
         "kind": item.kind,
         "title": item.title,

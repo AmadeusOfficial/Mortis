@@ -88,6 +88,7 @@ export function UnmatchedPage() {
                   <Table.Td>
                     <Text size="sm" ff="monospace">
                       {name}
+                      {file.data_type_id === "tv" && ` · ${file.video_count} 个视频`}
                     </Text>
                     <Text size="xs" c="dimmed" ff="monospace">
                       {folder}
@@ -127,6 +128,7 @@ export function UnmatchedPage() {
       {binding !== null && (
         <TmdbSearchModal
           title={`匹配 ${splitPath(binding.path)[1]}`}
+          kind={binding.data_type_id === "tv" ? "tv" : "movie"}
           initialQuery={binding.guess_title}
           initialYear={binding.guess_year}
           picking={bind.isPending}

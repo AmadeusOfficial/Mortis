@@ -90,6 +90,7 @@ class SeasonOut(BaseModel):
 class ItemDetail(BaseModel):
     id: int
     library_id: int
+    data_type_id: str
     library_name: str
     kind: str
     title: str
@@ -144,6 +145,7 @@ class UnmatchedFile(BaseModel):
     id: int
     library_id: int
     library_name: str
+    data_type_id: str
     path: str
     size: int | None
     guess_title: str
@@ -268,6 +270,7 @@ def list_unmatched(session: SessionDep, library_id: int | None = None) -> list[U
             id=media_file.id,
             library_id=library.id,
             library_name=library.name,
+            data_type_id=library.data_type_id,
             path=folder or media_file.path,
             size=media_file.size,
             guess_title=parsed.title,
