@@ -1,16 +1,23 @@
-import { Badge, Button, Group, Loader, Modal, Stack, Text } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
-import { type KeyboardEvent, useState } from "react";
+import { Button, Group, Loader, Modal, Stack, Text } from "@mantine/core";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type CSSProperties, type KeyboardEvent, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
+  type Library,
   type TaskAction,
+  type TaskDetail,
   type TaskRow,
+  fetchLibraries,
   fetchTask,
   fetchTaskChildren,
   isTaskBusy,
 } from "../api";
 import { formatDuration } from "../format";
+import { IconChevronDown, IconChevronRight } from "../icons";
+import styles from "../pages/TasksPage.module.css";
 import { TaskResultPanel } from "./TaskResultPanel";
 import { TaskStatusBadge } from "./TaskStatusBadge";
+import { formatElapsed } from "./tasks/NowRunningCard";
 
 export interface TaskNodeActions {
   onCancel: (id: number) => void;
@@ -20,6 +27,7 @@ export interface TaskNodeActions {
 }
 
 const ACTION_LABELS: Record<TaskAction, string> = { cancel: "取消", retry: "重试", delete: "删除" };
+const LIBRARY_TASK_TYPES = new Set(["organize", "scrape_library", "arrange_library"]);
 
 function actionsFor(task: TaskRow): TaskAction[] {
   if (isTaskBusy(task)) {
@@ -64,36 +72,82 @@ function ConfirmDelete({
   );
 }
 
-function SubtreeBadges({ task, depth }: { task: TaskRow; depth: number }) {
-  // 只在根任务上显示整棵子孙里的失败和进行中。
-  if (depth > 0) {
+function CountPills({ task, depth }: { task: TaskRow; depth: number }) {
+  const showSubtree = depth === 0;
+  const failed = showSubtree ? (task.tree_status.failed ?? 0) : 0;
+  const running = showSubtree ? (task.tree_status.running ?? 0) : 0;
+  const queued = showSubtree ? (task.tree_status.queued ?? 0) : 0;
+  const selfFailed = depth > 0 && task.status === "failed";
+  const selfCancelled = depth > 0 && task.status === "cancelled";
+
+  if (
+    task.child_count === 0 &&
+    failed === 0 &&
+    running === 0 &&
+    queued === 0 &&
+    !selfFailed &&
+    !selfCancelled
+  ) {
     return null;
   }
-  const failed = task.tree_status.failed ?? 0;
-  const running = task.tree_status.running ?? 0;
-  const queued = task.tree_status.queued ?? 0;
-  if (failed === 0 && running === 0 && queued === 0) {
-    return null;
-  }
+
   return (
-    <Group gap={4} wrap="nowrap">
-      {failed > 0 && (
-        <Badge size="xs" variant="light" color="red">
-          {failed} 失败
-        </Badge>
-      )}
+    <div className={styles.rowCounts}>
+      {task.child_count > 0 && <span className={styles.countChip}>{task.child_count} 子任务</span>}
       {running > 0 && (
-        <Badge size="xs" variant="light" color="blue">
+        <span className={styles.countChip} data-tone="accent">
           {running} 进行中
-        </Badge>
+        </span>
       )}
-      {queued > 0 && (
-        <Badge size="xs" variant="light" color="gray">
-          {queued} 排队
-        </Badge>
+      {queued > 0 && <span className={styles.countChip}>{queued} 排队</span>}
+      {failed > 0 && (
+        <span className={styles.countChip} data-tone="bad">
+          {failed} 失败
+        </span>
       )}
-    </Group>
+      {selfFailed && (
+        <span className={styles.countChip} data-tone="bad">
+          失败
+        </span>
+      )}
+      {selfCancelled && <span className={styles.countChip}>已取消</span>}
+    </div>
   );
+}
+
+function resolveTargetHref(
+  task: TaskRow,
+  librariesByName: Map<string, Library>,
+  cachedDetail: TaskDetail | undefined,
+): string | null {
+  if (task.title === "") {
+    return null;
+  }
+  if (LIBRARY_TASK_TYPES.has(task.task_type)) {
+    const library = librariesByName.get(task.title);
+    return library !== undefined ? `/libraries/${library.id}` : null;
+  }
+  if (cachedDetail?.item !== null && cachedDetail?.item !== undefined) {
+    return `/items/${cachedDetail.item.id}`;
+  }
+  return null;
+}
+
+function rowDurationText(task: TaskRow, depth: number): string {
+  const finished = formatDuration(task.started_at, task.finished_at);
+  if (finished !== "") {
+    return finished;
+  }
+  if (task.status === "running") {
+    if (depth === 0 && task.started_at !== null) {
+      return formatElapsed(task.started_at, Date.now());
+    }
+    return "进行中";
+  }
+  if (task.status === "queued") {
+    return "排队";
+  }
+  return "";
 }
 
 function NodeRow({
@@ -103,6 +157,7 @@ function NodeRow({
   onToggle,
   actions,
   onDelete,
+  targetHref,
 }: {
   task: TaskRow;
   depth: number;
@@ -110,9 +165,11 @@ function NodeRow({
   onToggle: () => void;
   actions: TaskNodeActions;
   onDelete: () => void;
+  targetHref: string | null;
 }) {
-  const duration = formatDuration(task.started_at, task.finished_at);
+  const duration = rowDurationText(task, depth);
   const buttons = actionsFor(task);
+  const rowStyle = { "--depth": depth } as CSSProperties;
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Enter" || event.key === " ") {
@@ -122,56 +179,52 @@ function NodeRow({
   }
 
   return (
-    <Group
-      gap="xs"
-      wrap="nowrap"
-      align="center"
+    <div
       role="button"
       tabIndex={0}
       aria-label={taskRowLabel(task)}
       aria-expanded={open}
-      style={{ cursor: "pointer", padding: "4px 0" }}
+      className={styles.taskRow}
+      data-depth={Math.min(depth, 4)}
+      data-open={open}
+      style={rowStyle}
       onClick={onToggle}
       onKeyDown={onKeyDown}
     >
-      <Text size="xs" c="dimmed" aria-hidden style={{ width: "0.75rem", flexShrink: 0 }}>
-        {open ? "▾" : "▸"}
-      </Text>
-      <div style={{ flexShrink: 0 }}>
-        <TaskStatusBadge status={task.status} />
+      <span className={styles.rowChevron} aria-hidden>
+        {open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}
+      </span>
+      <span className={styles.rowDotWrap}>
+        <TaskStatusBadge status={task.status} variant="dot" />
+      </span>
+      <div className={styles.rowMain}>
+        <span className={styles.rowKind}>{task.type_label}</span>
+        {task.title !== "" &&
+          (targetHref !== null ? (
+            <Link
+              to={targetHref}
+              className={styles.rowLink}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              {task.title}
+            </Link>
+          ) : (
+            <span className={styles.rowTarget} title={task.title}>
+              {task.title}
+            </span>
+          ))}
+        {!open && task.error !== null && (
+          <span className={styles.rowError} title={task.error}>
+            {task.error}
+          </span>
+        )}
       </div>
-      <Text size="sm" fw={500} style={{ flexShrink: 0 }}>
-        {task.type_label}
-      </Text>
-      {task.title !== "" && (
-        <Text size="sm" truncate style={{ minWidth: 0 }}>
-          {task.title}
-        </Text>
-      )}
-      {task.child_count > 0 && (
-        <Badge size="xs" variant="light" color="gray" tt="none" style={{ flexShrink: 0 }}>
-          {task.child_count} 个子任务
-        </Badge>
-      )}
-      <SubtreeBadges task={task} depth={depth} />
-      {task.error !== null && (
-        <Text size="xs" c="red" truncate title={task.error} style={{ minWidth: 0, flex: 1 }}>
-          {task.error}
-        </Text>
-      )}
-      <div style={{ flex: 1 }} />
-      {duration !== "" && (
-        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-          {duration}
-        </Text>
-      )}
-      <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-        #{task.id}
-      </Text>
-      <Group
-        gap={2}
-        wrap="nowrap"
-        style={{ flexShrink: 0 }}
+      <CountPills task={task} depth={depth} />
+      <span className={`${styles.rowDuration} mo-mono`}>{duration}</span>
+      <span className={`${styles.rowId} mo-mono`}>#{task.id}</span>
+      <div
+        className={styles.rowActions}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
@@ -195,8 +248,8 @@ function NodeRow({
             {ACTION_LABELS[action]}
           </Button>
         ))}
-      </Group>
-    </Group>
+      </div>
+    </div>
   );
 }
 
@@ -206,13 +259,16 @@ function TaskNode({
   opened,
   onToggle,
   actions,
+  librariesByName,
 }: {
   task: TaskRow;
   depth: number;
   opened: ReadonlySet<number>;
   onToggle: (id: number) => void;
   actions: TaskNodeActions;
+  librariesByName: Map<string, Library>;
 }) {
+  const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const open = opened.has(task.id);
   const busy = isTaskBusy(task);
@@ -229,6 +285,10 @@ function TaskNode({
     refetchInterval: busy ? 2000 : false,
   });
 
+  const cachedDetail = detail.data ?? queryClient.getQueryData<TaskDetail>(["task-detail", task.id]);
+  const targetHref = resolveTargetHref(task, librariesByName, cachedDetail);
+  const detailStyle = { "--depth": depth } as CSSProperties;
+
   return (
     <div>
       <NodeRow
@@ -238,6 +298,7 @@ function TaskNode({
         onToggle={() => onToggle(task.id)}
         actions={actions}
         onDelete={() => setConfirming(true)}
+        targetHref={targetHref}
       />
       {confirming && (
         <ConfirmDelete
@@ -251,30 +312,29 @@ function TaskNode({
         />
       )}
       {open && (
-        <div
-          style={{
-            marginLeft: 8,
-            paddingLeft: 12,
-            borderLeft: "1px solid var(--mantine-color-default-border)",
-          }}
-        >
-          {detail.isPending && <Loader size="xs" />}
-          {detail.isError && (
-            <Text size="sm" c="red">
-              读不到任务详情：{detail.error.message}
-            </Text>
-          )}
-          {detail.isSuccess && <TaskResultPanel detail={detail.data} />}
-          {task.child_count > 0 && (
-            <Stack gap={0} mt="sm">
-              <Text size="xs" c="dimmed">
-                子任务 {task.child_count} 个
+        <>
+          <div className={styles.detailPanel} style={detailStyle}>
+            {detail.isPending && <Loader size="xs" />}
+            {detail.isError && (
+              <Text size="sm" c="var(--mo-bad)">
+                读不到任务详情：{detail.error.message}
               </Text>
-              {children.isPending && <Loader size="xs" />}
+            )}
+            {detail.isSuccess && <TaskResultPanel detail={detail.data} />}
+          </div>
+          {task.child_count > 0 && (
+            <div>
+              {children.isPending && (
+                <div className={styles.detailPanel} style={detailStyle}>
+                  <Loader size="xs" />
+                </div>
+              )}
               {children.isError && (
-                <Text size="sm" c="red">
-                  读不到子任务：{children.error.message}
-                </Text>
+                <div className={styles.detailPanel} style={detailStyle}>
+                  <Text size="sm" c="var(--mo-bad)">
+                    读不到子任务：{children.error.message}
+                  </Text>
+                </div>
               )}
               {children.data?.map((child) => (
                 <TaskNode
@@ -284,11 +344,12 @@ function TaskNode({
                   opened={opened}
                   onToggle={onToggle}
                   actions={actions}
+                  librariesByName={librariesByName}
                 />
               ))}
-            </Stack>
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -306,8 +367,25 @@ export function TaskTree({
   onToggle: (id: number) => void;
   actions: TaskNodeActions;
 }) {
+  const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
+  const librariesByName = useMemo(() => {
+    const map = new Map<string, Library>();
+    const duplicates = new Set<string>();
+    for (const lib of libraries.data ?? []) {
+      if (map.has(lib.name)) {
+        duplicates.add(lib.name);
+      } else {
+        map.set(lib.name, lib);
+      }
+    }
+    for (const dup of duplicates) {
+      map.delete(dup);
+    }
+    return map;
+  }, [libraries.data]);
+
   return (
-    <Stack gap={2}>
+    <div className={styles.taskList}>
       {tasks.map((task) => (
         <TaskNode
           key={task.id}
@@ -316,8 +394,9 @@ export function TaskTree({
           opened={opened}
           onToggle={onToggle}
           actions={actions}
+          librariesByName={librariesByName}
         />
       ))}
-    </Stack>
+    </div>
   );
 }

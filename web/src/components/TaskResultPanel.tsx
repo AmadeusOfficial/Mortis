@@ -1,8 +1,6 @@
 import {
   Alert,
   Anchor,
-  Badge,
-  Code,
   Collapse,
   Group,
   Progress,
@@ -12,11 +10,14 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { fetchTaskLog, isTaskBusy, type TaskDetail } from "../api";
 import { formatDuration, formatTime } from "../format";
+import { IconChevronDown, IconChevronRight, IconExternal } from "../icons";
+import styles from "../pages/TasksPage.module.css";
 import { TaskStatusBadge } from "./TaskStatusBadge";
+import { Pill } from "./ui";
 
 /** 刮削结果里每个来源的成败。 */
 type Outcome = "ok" | "cached" | "not_found" | "failed" | "skipped";
@@ -28,13 +29,10 @@ interface SourceOutcome {
   detail: string | null;
 }
 
-const OUTCOME_GROUPS: { outcome: Outcome; label: string; color: string }[] = [
-  { outcome: "ok", label: "成功", color: "green" },
-  { outcome: "cached", label: "用了快照", color: "gray" },
-  { outcome: "not_found", label: "没找到", color: "yellow" },
-  { outcome: "failed", label: "出错", color: "red" },
-  { outcome: "skipped", label: "未启用", color: "gray" },
-];
+const LOG_TIME_RE = /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}|\d{2}:\d{2}:\d{2})\s+(.*)$/;
+const LOG_ERROR_RE =
+  /出错|失败|Traceback|Exception|Error:|Errno|WinError|未达到|已取消|^\s*(File "|at |\^+)/i;
+const LOG_WARN_RE = /警告|warning|\bwarn\b|低于阈值|未识别|没有填|没有启用|跳过|找不到/i;
 
 function count(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -81,31 +79,42 @@ function readSources(value: unknown): SourceOutcome[] {
   return rows;
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
-      <Text size="sm" mt={2}>
-        {children}
-      </Text>
-    </div>
-  );
+function formatSourceText(row: SourceOutcome): string {
+  switch (row.outcome) {
+    case "ok":
+      return `✓ ${row.name}`;
+    case "cached":
+      return `● ${row.name} 缓存`;
+    case "not_found":
+      return `○ ${row.name} 没找到`;
+    case "failed":
+      return `✕ ${row.name} 失败`;
+    case "skipped":
+      return `${row.name} 跳过`;
+  }
+}
+
+function classifyLogLine(body: string): "error" | "warn" | "normal" {
+  if (LOG_ERROR_RE.test(body)) {
+    return "error";
+  }
+  if (LOG_WARN_RE.test(body)) {
+    return "warn";
+  }
+  return "normal";
 }
 
 function CollapsibleJson({ title, value }: { title: string; value: unknown }) {
   const [opened, setOpened] = useState(false);
   return (
     <div>
-      <UnstyledButton onClick={() => setOpened((open) => !open)}>
-        <Text size="sm" c="dimmed" fw={500}>
-          {opened ? "▾" : "▸"} {title}
-        </Text>
+      <UnstyledButton className={styles.jsonToggle} onClick={() => setOpened((open) => !open)}>
+        {opened ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}
+        <span>{title}</span>
       </UnstyledButton>
       <Collapse expanded={opened}>
         <ScrollArea.Autosize mah={220} type="auto" mt={6}>
-          <Code block>{JSON.stringify(value, null, 2)}</Code>
+          <pre className={styles.jsonPre}>{JSON.stringify(value, null, 2)}</pre>
         </ScrollArea.Autosize>
       </Collapse>
     </div>
@@ -117,105 +126,64 @@ function ItemLink({ detail }: { detail: TaskDetail }) {
     return null;
   }
   return (
-    <Group gap={6} wrap="nowrap" align="baseline">
-      <Text size="xs" c="dimmed">
-        条目
-      </Text>
-      <Anchor component={Link} to={`/items/${detail.item.id}`} size="sm" fw={500}>
-        {`查看《${detail.item.title}》`}
-      </Anchor>
-    </Group>
+    <Anchor component={Link} to={`/items/${detail.item.id}`} className={styles.itemLink}>
+      <span>打开条目《{detail.item.title}》</span>
+      <IconExternal size={12} />
+    </Anchor>
   );
 }
 
-function OutcomeSection({ sources }: { sources: SourceOutcome[] }) {
-  const groups = OUTCOME_GROUPS.map((group) => ({
-    ...group,
-    rows: sources.filter((row) => row.outcome === group.outcome),
-  })).filter((group) => group.rows.length > 0);
-  if (groups.length === 0) {
+function OutcomeStrip({ sources }: { sources: SourceOutcome[] }) {
+  if (sources.length === 0) {
     return null;
   }
   return (
-    <Stack gap="xs">
-      {groups.map((group) => (
-        <Stack key={group.outcome} gap={4}>
-          <Group gap={6} wrap="nowrap">
-            <Text size="sm" fw={600}>
-              {group.label}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {group.rows.length}
-            </Text>
-          </Group>
-          {group.outcome === "ok" || group.outcome === "cached" ? (
-            <Group gap={6}>
-              {group.rows.map((row) => (
-                <Badge
-                  key={`${row.outcome}-${row.id}-${row.name}`}
-                  size="sm"
-                  variant="light"
-                  color={group.color}
-                  tt="none"
-                >
-                  {row.name}
-                </Badge>
-              ))}
-            </Group>
-          ) : (
-            <Stack gap={2}>
-              {group.rows.map((row) => (
-                <Text
-                  key={`${row.outcome}-${row.id}-${row.name}`}
-                  size="sm"
-                  c={group.outcome === "failed" ? "red" : undefined}
-                  style={{ wordBreak: "break-word" }}
-                >
-                  {row.detail === null ? row.name : `${row.name}：${row.detail}`}
-                </Text>
-              ))}
-            </Stack>
-          )}
-        </Stack>
+    <div className={styles.sourceStrip}>
+      {sources.map((row) => (
+        <span
+          key={`${row.outcome}-${row.id}-${row.name}`}
+          className={styles.sourceChip}
+          data-outcome={row.outcome}
+          title={row.detail ?? undefined}
+        >
+          {formatSourceText(row)}
+        </span>
       ))}
-    </Stack>
+    </div>
   );
 }
 
-function ResultRows({ detail }: { detail: TaskDetail }) {
+function ResultSummary({ detail }: { detail: TaskDetail }) {
   const result = detail.result;
   if (result === null) {
-    return null;
+    return detail.item !== null ? <ItemLink detail={detail} /> : null;
   }
   const type = detail.task_type;
   if (type === "scrape") {
+    const sources = readSources(result.sources);
+    const images = count(result.images);
     return (
-      <Stack gap="xs">
-        <ItemLink detail={detail} />
-        <OutcomeSection sources={readSources(result.sources)} />
-        <Text size="sm">下载图片 {count(result.images)} 张</Text>
+      <Stack gap={8}>
+        <Group gap="md" wrap="wrap" align="center">
+          <ItemLink detail={detail} />
+          <Text size="xs" c="var(--mo-dim)">
+            下载图片 {images} 张
+          </Text>
+        </Group>
+        <OutcomeStrip sources={sources} />
       </Stack>
     );
   }
   if (type === "organize") {
+    const unmatched = count(result.unmatched);
     return (
-      <Group gap="xs">
-        <Badge variant="light" color="green">
-          找到 {count(result.found)}
-        </Badge>
-        <Badge variant="light" color="blue">
-          新增 {count(result.added)}
-        </Badge>
-        <Badge variant="light" color="gray">
-          移除 {count(result.removed)}
-        </Badge>
-        <Badge variant="light" color="teal">
-          认出 {count(result.matched)}
-        </Badge>
-        <Badge variant="light" color={count(result.unmatched) > 0 ? "yellow" : "gray"}>
-          未识别 {count(result.unmatched)}
-        </Badge>
-        <Text size="sm" c="dimmed">
+      <Group gap="xs" wrap="wrap" align="center">
+        <Pill tone="ok">找到 {count(result.found)}</Pill>
+        <Pill tone="accent">新增 {count(result.added)}</Pill>
+        <Pill tone="neutral">移除 {count(result.removed)}</Pill>
+        <Pill tone="ok">认出 {count(result.matched)}</Pill>
+        <Pill tone={unmatched > 0 ? "warn" : "neutral"}>未识别 {unmatched}</Pill>
+        <Text size="xs" c="var(--mo-dim)">
           排了 {count(result.scrape_queued)} 个刮削任务
         </Text>
       </Group>
@@ -224,29 +192,36 @@ function ResultRows({ detail }: { detail: TaskDetail }) {
   if (type === "arrange" || type === "write_files" || type === "rename") {
     const folder = text(result.folder);
     return (
-      <Stack gap="xs">
-        <ItemLink detail={detail} />
+      <Stack gap={6}>
+        <Group gap="md" wrap="wrap" align="center">
+          <ItemLink detail={detail} />
+          <Text size="xs" c="var(--mo-dim)">
+            写出 {count(result.written)} 个文件
+          </Text>
+        </Group>
         {folder !== null && (
-          <Group gap={6} wrap="nowrap" align="baseline">
-            <Text size="xs" c="dimmed">
-              目录
-            </Text>
-            <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>
-              {folder}
-            </Text>
-          </Group>
+          <Text size="xs" c="var(--mo-dim)" className="mo-mono" style={{ wordBreak: "break-all" }}>
+            目录：{folder}
+          </Text>
         )}
-        <Text size="sm">写出 {count(result.written)} 个文件</Text>
       </Stack>
     );
   }
   if (type === "scrape_library") {
-    return <Text size="sm">排了 {count(result.scrape_queued)} 个刮削任务</Text>;
+    return (
+      <Text size="xs" c="var(--mo-dim)">
+        排了 {count(result.scrape_queued)} 个刮削任务
+      </Text>
+    );
   }
   if (type === "arrange_library") {
-    return <Text size="sm">排了 {count(result.queued)} 个整理任务</Text>;
+    return (
+      <Text size="xs" c="var(--mo-dim)">
+        排了 {count(result.queued)} 个整理任务
+      </Text>
+    );
   }
-  return null;
+  return detail.item !== null ? <ItemLink detail={detail} /> : null;
 }
 
 function TaskLog({ detail }: { detail: TaskDetail }) {
@@ -258,14 +233,24 @@ function TaskLog({ detail }: { detail: TaskDetail }) {
   });
   const lines = log.data?.lines ?? [];
   return (
-    <Stack gap={4}>
-      <Text size="sm" fw={600}>
-        日志
-      </Text>
-      <ScrollArea.Autosize mah={240} type="auto">
-        <Code block>{lines.length > 0 ? lines.join("\n") : "（没有日志）"}</Code>
-      </ScrollArea.Autosize>
-    </Stack>
+    <div className={styles.logBox} aria-label="运行日志">
+      {lines.length === 0 ? (
+        <div className={styles.logEmpty}>（没有日志）</div>
+      ) : (
+        lines.map((raw, index) => {
+          const match = LOG_TIME_RE.exec(raw);
+          const stamp = match ? match[1] : null;
+          const body = match ? match[2] : raw;
+          const level = classifyLogLine(body);
+          return (
+            <div key={index} className={styles.logLine} data-level={level}>
+              {stamp !== null && <span className={styles.logTime}>{stamp}</span>}
+              <span>{body}</span>
+            </div>
+          );
+        })
+      )}
+    </div>
   );
 }
 
@@ -274,24 +259,36 @@ export function TaskResultPanel({ detail }: { detail: TaskDetail }) {
   const duration = formatDuration(detail.started_at, detail.finished_at);
   return (
     <Stack gap="sm">
-      <Group gap="lg" wrap="wrap" align="flex-start">
-        <Fact label="编号">#{detail.id}</Fact>
+      <div className={styles.factsBar}>
+        <TaskStatusBadge status={detail.status} variant="pill" />
+        <span className={styles.factItem}>
+          <span className={styles.factLabel}>编号</span>
+          <span className="mo-mono">#{detail.id}</span>
+        </span>
         {detail.root_task_id !== null && detail.root_task_id !== detail.id && (
-          <Fact label="根任务">#{detail.root_task_id}</Fact>
+          <span className={styles.factItem}>
+            <span className={styles.factLabel}>根任务</span>
+            <span className="mo-mono">#{detail.root_task_id}</span>
+          </span>
         )}
-        <Fact label="优先级">{detail.priority}</Fact>
-        <Fact label="创建">{formatTime(detail.created_at)}</Fact>
-        <Fact label="开始">{formatTime(detail.started_at)}</Fact>
-        <Fact label="耗时">{duration === "" ? "—" : duration}</Fact>
-        <div>
-          <Text size="xs" c="dimmed">
-            状态
-          </Text>
-          <div style={{ marginTop: 2 }}>
-            <TaskStatusBadge status={detail.status} />
-          </div>
-        </div>
-      </Group>
+        <span className={styles.factItem}>
+          <span className={styles.factLabel}>优先级</span>
+          <span className="mo-mono">{detail.priority}</span>
+        </span>
+        <span className={styles.factItem}>
+          <span className={styles.factLabel}>创建</span>
+          <span className="mo-mono">{formatTime(detail.created_at)}</span>
+        </span>
+        <span className={styles.factItem}>
+          <span className={styles.factLabel}>开始</span>
+          <span className="mo-mono">{formatTime(detail.started_at)}</span>
+        </span>
+        <span className={styles.factItem}>
+          <span className={styles.factLabel}>耗时</span>
+          <span className="mo-mono">{duration === "" ? "—" : duration}</span>
+        </span>
+      </div>
+
       {detail.status === "running" && (
         <Stack gap={4}>
           <Progress
@@ -301,14 +298,17 @@ export function TaskResultPanel({ detail }: { detail: TaskDetail }) {
                 : (detail.progress.current / Math.max(detail.progress.total, 1)) * 100
             }
             animated={detail.progress === null || detail.progress.total === 0}
+            size={4}
+            radius="xl"
           />
           {detail.progress !== null && (
-            <Text size="xs" c="dimmed">
+            <Text size="xs" c="var(--mo-dim)">
               {detail.progress.current}/{detail.progress.total} {detail.progress.message}
             </Text>
           )}
         </Stack>
       )}
+
       {detail.status === "failed" && detail.error !== null && (
         <Alert color="red" title="任务失败">
           <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
@@ -316,10 +316,15 @@ export function TaskResultPanel({ detail }: { detail: TaskDetail }) {
           </Text>
         </Alert>
       )}
-      <ResultRows detail={detail} />
-      <CollapsibleJson title="参数" value={detail.payload} />
-      {detail.result !== null && <CollapsibleJson title="结果" value={detail.result} />}
+
+      <ResultSummary detail={detail} />
+
       <TaskLog detail={detail} />
+
+      <Group gap="md" wrap="wrap" align="flex-start">
+        <CollapsibleJson title="参数" value={detail.payload} />
+        {detail.result !== null && <CollapsibleJson title="原始结果" value={detail.result} />}
+      </Group>
     </Stack>
   );
 }
