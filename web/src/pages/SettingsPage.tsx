@@ -9,6 +9,7 @@
   Select,
   Stack,
   Switch,
+  Tabs,
   Text,
   TextInput,
   Textarea,
@@ -16,7 +17,10 @@
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import { PluginsSection } from "../components/PluginsSection";
+import { SourceOrdersSection } from "../components/SourceOrdersSection";
 import {
   type AppConfig,
   type MovieImages,
@@ -39,27 +43,64 @@ import {
 
 export function SettingsPage() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 后端 OAuth 登录成功后跳回 /settings?plugin=<id>&login=ok。
+  const loginPluginId =
+    searchParams.get("login") === "ok" ? searchParams.get("plugin") : null;
+  const [tab, setTab] = useState<string | null>(
+    loginPluginId === null ? "general" : "plugins",
+  );
+  const clearLoginParam = useCallback(() => {
+    setSearchParams(
+      (params) => {
+        params.delete("login");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
   return (
-    <Stack maw={640}>
+    <Stack maw={720}>
       <Title order={2}>设置</Title>
-      {settings.isError && (
-        <Alert color="red" title="读不到设置">
-          {settings.error.message}
-        </Alert>
-      )}
-      {settings.isPending && <Text c="dimmed">正在读取设置…</Text>}
-      {settings.isSuccess && (
-        <>
-          <NetworkSection />
-          <TmdbSection />
-          <MovieSection />
-          <SeriesSection section="tv" label="电视剧" />
-          <SeriesSection section="anime" label="动漫" />
-          <FilesSection />
-          <TasksSection />
-        </>
-      )}
-      <AboutSection />
+      {/* 三个分区都常驻：切换分区时未保存的插件表单和来源顺序不会丢。 */}
+      <Tabs value={tab} onChange={setTab} keepMounted keepMountedMode="display-none">
+        <Tabs.List>
+          <Tabs.Tab value="general">常规</Tabs.Tab>
+          <Tabs.Tab value="plugins">插件</Tabs.Tab>
+          <Tabs.Tab value="orders">来源顺序</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="general" pt="md">
+          <Stack>
+            {settings.isError && (
+              <Alert color="red" title="读不到设置">
+                {settings.error.message}
+              </Alert>
+            )}
+            {settings.isPending && <Text c="dimmed">正在读取设置…</Text>}
+            {settings.isSuccess && (
+              <>
+                <NetworkSection />
+                <TmdbSection />
+                <MovieSection />
+                <SeriesSection section="tv" label="电视剧" />
+                <SeriesSection section="anime" label="动漫" />
+                <FilesSection />
+                <TasksSection />
+              </>
+            )}
+            <AboutSection />
+          </Stack>
+        </Tabs.Panel>
+        <Tabs.Panel value="plugins" pt="md">
+          <PluginsSection loginPluginId={loginPluginId} onLoginHandled={clearLoginParam} />
+        </Tabs.Panel>
+        <Tabs.Panel value="orders" pt="md">
+          <Stack>
+            <SourceOrdersSection />
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }

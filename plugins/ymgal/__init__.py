@@ -7,7 +7,7 @@ import re
 import time
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from mortis.plugin_api import Hit, Host, SourceAuthError, SourceError, SourcePlugin
 
@@ -37,8 +37,10 @@ class Settings(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    client_id: str = PUBLIC_CLIENT_ID
-    client_secret: str = PUBLIC_CLIENT_SECRET
+    client_id: str = Field(
+        PUBLIC_CLIENT_ID, title="client_id", description="默认是月幕的公用客户端"
+    )
+    client_secret: str = Field(PUBLIC_CLIENT_SECRET, title="client_secret")
 
 
 def _text(value: Any) -> str | None:

@@ -3,7 +3,7 @@
 import re
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from mortis.plugin_api import Hit, Host, OAuth, SourceError, SourcePlugin
 
@@ -22,9 +22,13 @@ TAG_LIMIT = 20
 class BangumiSecrets(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    app_id: str = ""
-    app_secret: str = ""
-    access_token: str = ""
+    app_id: str = Field("", title="App ID")
+    app_secret: str = Field("", title="App Secret")
+    access_token: str = Field(
+        "",
+        title="访问令牌",
+        description="登录后自动填写；也可以直接填 next.bgm.tv/demo/access-token 生成的个人令牌",
+    )
     refresh_token: str = ""
     expires_at: int = 0
 
