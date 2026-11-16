@@ -34,10 +34,10 @@ def anime_app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
-    app.state.config_store.save_section("tv", TvScrapeConfig())
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
+    app.state.config_store.save_section("types.tv", TvScrapeConfig())
     app.state.config_store.save_section(
-        "anime", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False))
+        "types.anime", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False))
     )
     return app
 
@@ -95,7 +95,7 @@ def test_anime_uses_its_own_file_template(
 ) -> None:
     _scrape(anime_app, anime_show_id)
     anime_app.state.config_store.save_section(
-        "anime",
+        "types.anime",
         TvScrapeConfig(
             output=TvOutputConfig(
                 organize_after_scrape=False,
@@ -113,7 +113,7 @@ def test_anime_uses_its_own_file_template(
     assert "毒枭：墨西哥.01x01.mp4" in names
     assert "毒枭：墨西哥.02x03.mp4" in names
     # 电视剧的模板没被动漫设置影响
-    tv = anime_app.state.config_store.load_config().tv
+    tv = anime_app.state.config_store.load_config().types.tv
     assert tv.output.file_template == "${showTitle}.S${seasonNr2}E${episodeNr2}.${title}"
     with anime_app.state.session_factory() as session:
         paths = [path for path in session.scalars(select(MediaFile.path)) if path.endswith(".mp4")]

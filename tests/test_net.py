@@ -22,7 +22,7 @@ def test_proxy_url_without_credentials() -> None:
 
 
 def test_proxy_url_quotes_credentials() -> None:
-    secrets = Secrets(proxy_username="a@b", proxy_password="p:w/x")
+    secrets = Secrets(network={"proxy_username": "a@b", "proxy_password": "p:w/x"})
     assert proxy_url(NetworkConfig(proxy_port=1080), secrets) == (
         "http://a%40b:p%3Aw%2Fx@127.0.0.1:1080"
     )

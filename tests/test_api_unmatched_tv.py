@@ -34,9 +34,9 @@ def app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     app.state.config_store.save_section(
-        "tv", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False))
+        "types.tv", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False))
     )
     return app
 

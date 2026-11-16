@@ -67,7 +67,7 @@ def search_show(
     cleaned = query.strip()
     if not cleaned:
         raise HTTPException(status_code=422, detail="搜索词不能为空")
-    with open_tmdb(services) as tmdb:
+    with open_tmdb(services, "tv") as tmdb:
         return _hits(search_tv(tmdb, cleaned, year))
 
 

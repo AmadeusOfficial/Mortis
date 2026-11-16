@@ -26,14 +26,14 @@ _next_slot: dict[str, float] = {}
 
 def plugin_settings(config: AppConfig, plugin: SourcePlugin) -> BaseModel:
     try:
-        return plugin.Settings.model_validate(config.plugins.get(plugin.id, {}))
+        return plugin.Settings.model_validate(config.sources.get(plugin.id, {}))
     except ValidationError:
         return plugin.Settings()
 
 
 def plugin_secrets(secrets: Secrets, plugin: SourcePlugin) -> BaseModel:
     try:
-        return plugin.Secrets.model_validate(secrets.plugins.get(plugin.id, {}))
+        return plugin.Secrets.model_validate(secrets.sources.get(plugin.id, {}))
     except ValidationError:
         return plugin.Secrets()
 
@@ -130,7 +130,7 @@ class PluginHost:
         return self._send("GET", url, params=params, headers=headers).text
 
     def access_token(self) -> str | None:
-        values = self.store.load_secrets().plugins.get(self.plugin.id, {})
+        values = self.store.load_secrets().sources.get(self.plugin.id, {})
         token = str(values.get("access_token") or "")
         oauth = self.plugin.oauth
         if oauth is None or not values.get("refresh_token"):

@@ -42,7 +42,7 @@ def app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     return app
 
 
@@ -152,7 +152,7 @@ def test_disabled_image_kinds_are_not_downloaded(
     app: FastAPI, item_id: int, fake: FakeTmdb
 ) -> None:
     app.state.config_store.save_section(
-        "movie", MovieScrapeConfig(images=MovieImages(clearlogo=False, actor_images=False))
+        "types.movie", MovieScrapeConfig(images=MovieImages(clearlogo=False, actor_images=False))
     )
     _scrape(app, item_id)
     assert not any("logo" in path for path in fake.paths())

@@ -16,9 +16,9 @@ def proxy_url(network: NetworkConfig, secrets: Secrets) -> str | None:
     if not network.proxy_host:
         return None
     auth = ""
-    if secrets.proxy_username:
-        user = quote(secrets.proxy_username, safe="")
-        password = quote(secrets.proxy_password, safe="")
+    if secrets.network.proxy_username:
+        user = quote(secrets.network.proxy_username, safe="")
+        password = quote(secrets.network.proxy_password, safe="")
         auth = f"{user}:{password}@"
     return f"http://{auth}{network.proxy_host}:{network.proxy_port}"
 

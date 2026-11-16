@@ -93,11 +93,16 @@ def test_config_roundtrip(tmp_path: Path) -> None:
 def test_secrets_live_in_their_own_file(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path)
     store.save_config(AppConfig())
-    store.save_secrets(Secrets(tmdb_api_key="k-123", proxy_password="p@ss"))
+    store.save_secrets(
+        Secrets(sources={"tmdb": {"api_key": "k-123"}}, network={"proxy_password": "p@ss"})
+    )
     assert store.load_secrets().tmdb_api_key == "k-123"
     assert "k-123" not in store.config_path.read_text(encoding="utf-8")
     assert store.secrets_path.name == "secrets.toml"
     assert store.config_path.name == "config.toml"
+    raw = tomllib.loads(store.secrets_path.read_text(encoding="utf-8"))
+    assert raw["sources"]["tmdb"] == {"api_key": "k-123"}
+    assert raw["network"] == {"proxy_username": "", "proxy_password": "p@ss"}
 
 
 def test_broken_toml_names_the_file(tmp_path: Path) -> None:
@@ -130,8 +135,9 @@ def test_examples_match_defaults() -> None:
     config = tomllib.loads((REPO_ROOT / "config.example.toml").read_text(encoding="utf-8"))
     secrets = tomllib.loads((REPO_ROOT / "secrets.example.toml").read_text(encoding="utf-8"))
     assert AppConfig.model_validate(config) == AppConfig()
-    assert Secrets.model_validate(secrets) == Secrets()
-    assert set(secrets) == set(SECRET_KEYS)
+    assert "api_key" in secrets["sources"]["tmdb"]
+    assert set(secrets) == {"network", "sources"}
+    assert set(secrets["network"]) == {"proxy_username", "proxy_password"}
 
 
 def test_non_utf8_file_becomes_config_error(tmp_path: Path) -> None:
@@ -157,7 +163,7 @@ def test_unreadable_file_becomes_config_error(
 
 def test_validation_error_does_not_leak_values(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path)
-    store.secrets_path.write_text("proxy_password = 123456789\n", encoding="utf-8")
+    store.secrets_path.write_text("[network]\nproxy_password = 123456789\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="secrets.toml") as info:
         store.load_secrets()
     message = str(info.value)
@@ -188,7 +194,7 @@ def test_new_sections_default_to_local_tmm() -> None:
     assert ".mkv" in config.files.video_extensions
     assert ".iso" in config.files.video_extensions
     assert ".srt" in config.files.subtitle_extensions
-    movie = config.movie
+    movie = config.types.movie
     assert (movie.language, movie.certification_country) == ("zh-CN", "US")
     assert movie.include_adult is True
     assert movie.match_threshold == 0.75
@@ -243,15 +249,179 @@ def test_save_section_keeps_other_sections_and_unknown_keys(tmp_path: Path) -> N
     store.config_path.write_text(
         "[network]\nproxy_port = 1080\nfuture = 1\n[later]\nx = 2\n", encoding="utf-8"
     )
-    saved = store.save_section("movie", MovieScrapeConfig(language="en-US"))
-    assert saved.movie.language == "en-US"
+    saved = store.save_section("types.movie", MovieScrapeConfig(language="en-US"))
+    assert saved.types.movie.language == "en-US"
     assert saved.network.proxy_port == 1080
     raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
     assert raw["network"] == {"proxy_port": 1080, "future": 1}
     assert raw["later"] == {"x": 2}
-    assert raw["movie"]["language"] == "en-US"
+    assert raw["types"]["movie"]["language"] == "en-US"
 
 
 def test_save_section_rejects_unknown_name(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         ConfigStore(tmp_path).save_section("nope", TasksConfig())
+    with pytest.raises(ValueError):
+        ConfigStore(tmp_path).save_section("types.", MovieScrapeConfig())
+
+
+OLD_CONFIG = """\
+disabled_plugins = ["ymgal"]
+
+[network]
+proxy_host = "10.0.0.2"
+proxy_port = 1080
+
+[files]
+video_extensions = [".mkv"]
+subtitle_extensions = [".srt"]
+
+[movie]
+language = "en-US"
+
+[tv]
+language = "ja-JP"
+
+[anime]
+match_threshold = 0.6
+
+[tasks]
+concurrency = 2
+
+[plugins.bangumi]
+limit = 7
+
+[plugins.ymgal]
+token_url = "https://ymgal.test/token"
+
+[later]
+x = 2
+"""
+
+OLD_SECRETS = """\
+tmdb_api_key = "k-old"
+proxy_username = "me"
+proxy_password = "p@ss"
+
+[plugins.bangumi]
+access_token = "at-old"
+refresh_token = "rt-old"
+expires_at = 1700000000
+"""
+
+
+def test_old_config_is_migrated_and_backed_up(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text(OLD_CONFIG, encoding="utf-8")
+
+    config = store.load_config()
+
+    assert config.types.movie.language == "en-US"
+    assert config.types.tv.language == "ja-JP"
+    assert config.types.anime.match_threshold == 0.6
+    assert config.sources["bangumi"]["limit"] == 7
+    assert config.sources["ymgal"]["token_url"] == "https://ymgal.test/token"
+    assert config.plugins.disabled == ["ymgal"]
+    assert (config.network.proxy_host, config.network.proxy_port) == ("10.0.0.2", 1080)
+    assert config.files.video_extensions == [".mkv"]
+    assert config.tasks.concurrency == 2
+
+    assert (tmp_path / "config.toml.bak").read_text(encoding="utf-8") == OLD_CONFIG
+    raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
+    for old_key in ("movie", "tv", "anime", "disabled_plugins"):
+        assert old_key not in raw
+    assert raw["types"]["movie"]["language"] == "en-US"
+    assert raw["types"]["tv"]["language"] == "ja-JP"
+    assert raw["types"]["anime"]["match_threshold"] == 0.6
+    assert raw["sources"]["bangumi"] == {"limit": 7}
+    assert raw["sources"]["ymgal"] == {"token_url": "https://ymgal.test/token"}
+    assert raw["plugins"] == {"disabled": ["ymgal"]}
+    assert raw["later"] == {"x": 2}
+
+
+def test_old_secrets_are_migrated_and_backed_up(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.secrets_path.write_text(OLD_SECRETS, encoding="utf-8")
+
+    secrets = store.load_secrets()
+
+    assert secrets.tmdb_api_key == "k-old"
+    assert secrets.network.proxy_username == "me"
+    assert secrets.network.proxy_password == "p@ss"
+    assert secrets.sources["bangumi"] == {
+        "access_token": "at-old",
+        "refresh_token": "rt-old",
+        "expires_at": 1700000000,
+    }
+
+    assert (tmp_path / "secrets.toml.bak").read_text(encoding="utf-8") == OLD_SECRETS
+    raw = tomllib.loads(store.secrets_path.read_text(encoding="utf-8"))
+    for old_key in ("tmdb_api_key", "proxy_username", "proxy_password", "plugins"):
+        assert old_key not in raw
+    assert raw["sources"]["tmdb"] == {"api_key": "k-old"}
+    assert raw["network"] == {"proxy_username": "me", "proxy_password": "p@ss"}
+
+
+def test_migration_runs_only_once(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text(OLD_CONFIG, encoding="utf-8")
+    store.secrets_path.write_text(OLD_SECRETS, encoding="utf-8")
+
+    store.load_config()
+    store.load_secrets()
+    config_after = store.config_path.read_bytes()
+    secrets_after = store.secrets_path.read_bytes()
+    config_mtime = store.config_path.stat().st_mtime_ns
+    secrets_mtime = store.secrets_path.stat().st_mtime_ns
+
+    assert store.load_config().types.movie.language == "en-US"
+    assert store.load_secrets().tmdb_api_key == "k-old"
+
+    assert store.config_path.read_bytes() == config_after
+    assert store.secrets_path.read_bytes() == secrets_after
+    assert store.config_path.stat().st_mtime_ns == config_mtime
+    assert store.secrets_path.stat().st_mtime_ns == secrets_mtime
+
+
+def test_new_format_follows_no_write(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.secrets_path.write_text('[sources.tmdb]\napi_key = "k"\n', encoding="utf-8")
+    mtime = store.secrets_path.stat().st_mtime_ns
+    assert store.load_secrets().tmdb_api_key == "k"
+    assert store.secrets_path.stat().st_mtime_ns == mtime
+    assert not (tmp_path / "secrets.toml.bak").exists()
+
+
+def test_backup_is_not_overwritten(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text(OLD_CONFIG, encoding="utf-8")
+    (tmp_path / "config.toml.bak").write_text("第一次的备份", encoding="utf-8")
+    store.load_config()
+    assert (tmp_path / "config.toml.bak").read_text(encoding="utf-8") == "第一次的备份"
+
+
+def test_new_keys_win_over_old(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text(
+        '[movie]\nlanguage = "en-US"\n[types.movie]\nlanguage = "ja-JP"\n',
+        encoding="utf-8",
+    )
+    assert store.load_config().types.movie.language == "ja-JP"
+
+    store.secrets_path.write_text(
+        'tmdb_api_key = "old"\n[sources.tmdb]\napi_key = "new"\n', encoding="utf-8"
+    )
+    assert store.load_secrets().tmdb_api_key == "new"
+    raw = tomllib.loads(store.secrets_path.read_text(encoding="utf-8"))
+    assert "tmdb_api_key" not in raw and raw["sources"]["tmdb"]["api_key"] == "new"
+
+
+def test_migration_does_not_leak_secrets_in_errors(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.secrets_path.write_text(
+        'tmdb_api_key = "k-old"\n[network]\nproxy_password = 123456789\n', encoding="utf-8"
+    )
+    with pytest.raises(ConfigError, match="secrets.toml") as info:
+        store.load_secrets()
+    assert "k-old" not in str(info.value)
+    assert "123456789" not in str(info.value)

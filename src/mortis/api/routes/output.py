@@ -9,11 +9,11 @@ from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.api.routes.items import Enqueued, get_item
 from mortis.config.models import TvScrapeConfig
-from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile
 from mortis.items.edit import ItemError
 from mortis.output.service import (
     ArrangeConfig,
+    arrange_config,
     arrange_steps,
     arrangeable_items,
     config_for,
@@ -120,7 +120,7 @@ def preview_library(
     library_id: int, session: SessionDep, services: ServicesDep
 ) -> LibraryArrangePreview:
     library = libraries.get_library(session, library_id)
-    config = type_config(services.config_store.load_config(), library.data_type_id)
+    config = arrange_config(services.config_store.load_config(), library.data_type_id)
     ids = arrangeable_items(session, library.id)
     rename, write = arrange_steps(session, -1, config, {})
     previews = []

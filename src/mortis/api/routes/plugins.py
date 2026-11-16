@@ -74,7 +74,7 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
         return out
     store = services.config_store
     secrets = store.load_secrets()
-    values = secrets.plugins.get(plugin.id, {})
+    values = secrets.sources.get(plugin.id, {})
     keys = _secret_keys(plugin)
     schema = plugin.Secrets.model_json_schema()
     schema["properties"] = {
@@ -99,7 +99,7 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
 
 
 def _reload(services: Services, request: Request) -> None:
-    services.plugins.load(services.config_store.load_config().disabled_plugins)
+    services.plugins.load(services.config_store.load_config().plugins.disabled)
     with services.locks.hold("catalog-write"), request.app.state.session_factory() as session:
         services.plugins.sync_catalog(session)
         session.commit()
@@ -171,7 +171,7 @@ def oauth_login(plugin_id: str, services: ServicesDep, request: Request) -> Redi
     plugin = _source(services, plugin_id)
     if plugin.oauth is None:
         raise UserError(f"{plugin.name} 不需要登录")
-    values = services.config_store.load_secrets().plugins.get(plugin.id, {})
+    values = services.config_store.load_secrets().sources.get(plugin.id, {})
     client_id, client_secret = client_values(plugin, values)
     if not client_id or not client_secret:
         raise UserError(f"先在设置页填 {plugin.name} 的 App ID 和 App Secret")

@@ -72,7 +72,7 @@ def exchange_code(host: PluginHost, code: str, redirect_uri: str) -> dict[str, A
     oauth = plugin.oauth
     if oauth is None:
         raise SourceError(f"{plugin.name} 不需要登录")
-    values = host.store.load_secrets().plugins.get(plugin.id, {})
+    values = host.store.load_secrets().sources.get(plugin.id, {})
     client_id, client_secret = client_values(plugin, values)
     payload = host.post_json(
         oauth.token_url,

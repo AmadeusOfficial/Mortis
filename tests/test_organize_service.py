@@ -28,7 +28,7 @@ def app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     return app
 
 
@@ -156,7 +156,7 @@ def test_rejected_key_fails_task(tmp_path: Path, movies: Path) -> None:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=reject, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     library_id = _library(app, movies)
     task = _task(app, _organize(app, library_id))
     assert (task.status, task.error) == ("failed", "TMDB 拒绝了这个 API Key")

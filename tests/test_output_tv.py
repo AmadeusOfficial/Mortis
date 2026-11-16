@@ -22,7 +22,7 @@ def _write(app: FastAPI, show_id: int):
             session,
             ImageStore(app.state.settings.data_dir),
             show,
-            app.state.config_store.load_config().tv,
+            app.state.config_store.load_config().types.tv,
         )
         session.commit()
         return report

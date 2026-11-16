@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from mortis.config.models import (
     AppConfig,
     MovieOutputConfig,
     MovieScrapeConfig,
+    PluginTypeConfig,
     TvImages,
     TvOutputConfig,
     TvScrapeConfig,
@@ -118,8 +120,8 @@ def test_output_roundtrip_through_store(tmp_path: Path) -> None:
             nfo_single_studio=True,
         )
     )
-    store.save_section("movie", movie)
-    loaded = store.load_config().movie.output
+    store.save_section("types.movie", movie)
+    loaded = store.load_config().types.movie.output
     assert loaded == movie.output
     assert loaded.organize_rename is True
     assert loaded.nfo_names == ["filename"]
@@ -187,12 +189,12 @@ def test_tv_roundtrip_through_store(tmp_path: Path) -> None:
         images=TvImages(actor_images=True, episode_thumb=False),
         output=TvOutputConfig(organize_rename=False, season_template="第 ${seasonNr} 季"),
     )
-    store.save_section("tv", tv)
-    assert store.load_config().tv == tv
+    store.save_section("types.tv", tv)
+    assert store.load_config().types.tv == tv
 
 
 def test_anime_defaults_equal_tv() -> None:
-    assert AppConfig().anime == TvScrapeConfig()
+    assert AppConfig().types.anime == TvScrapeConfig()
 
 
 def test_anime_roundtrip_through_store_keeps_tv_apart(tmp_path: Path) -> None:
@@ -208,19 +210,45 @@ def test_anime_roundtrip_through_store_keeps_tv_apart(tmp_path: Path) -> None:
         ),
     )
     store.save_section(
-        "tv", TvScrapeConfig(output=TvOutputConfig(season_template="第 ${seasonNr} 季"))
+        "types.tv", TvScrapeConfig(output=TvOutputConfig(season_template="第 ${seasonNr} 季"))
     )
-    store.save_section("anime", anime)
+    store.save_section("types.anime", anime)
     config = store.load_config()
-    assert config.anime == anime
-    assert config.tv == TvScrapeConfig(output=TvOutputConfig(season_template="第 ${seasonNr} 季"))
-    assert config.anime != config.tv
+    assert config.types.anime == anime
+    assert config.types.tv == TvScrapeConfig(
+        output=TvOutputConfig(season_template="第 ${seasonNr} 季")
+    )
+    assert config.types.anime != config.types.tv
 
 
 def test_type_config_returns_anime_section(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path / "data")
-    store.save_section("anime", TvScrapeConfig(language="ja-JP"))
+    store.save_section("types.anime", TvScrapeConfig(language="ja-JP"))
     config = store.load_config()
-    assert type_config(config, "anime") is config.anime
-    assert type_config(config, "tv") is config.tv
-    assert type_config(config, "movie") is config.movie
+    assert type_config(config, "anime") is config.types.anime
+    assert type_config(config, "tv") is config.types.tv
+    assert type_config(config, "movie") is config.types.movie
+
+
+def test_type_config_defaults_for_plugin_type() -> None:
+    plugin_type = type_config(AppConfig(), "galgame")
+    assert isinstance(plugin_type, PluginTypeConfig)
+    assert plugin_type.match_threshold == 0.75
+    assert plugin_type.skip_folders == []
+
+
+def test_type_config_reads_plugin_type_section(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path / "data")
+    store.save_section("types.galgame", PluginTypeConfig(match_threshold=0.5, skip_folders=["x"]))
+    plugin_type = type_config(store.load_config(), "galgame")
+    assert plugin_type.match_threshold == 0.5
+    assert plugin_type.skip_folders == ["x"]
+
+
+def test_plugin_type_section_is_flat_in_toml(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path / "data")
+    store.save_section("types.galgame", PluginTypeConfig(match_threshold=0.5))
+    raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
+    assert raw["types"]["galgame"] == {"match_threshold": 0.5, "skip_folders": []}
+    assert store.load_config().types.plugin("galgame").match_threshold == 0.5
+    assert store.load_config().types.plugin("nope") == PluginTypeConfig()

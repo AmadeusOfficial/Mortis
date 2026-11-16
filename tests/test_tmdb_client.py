@@ -80,7 +80,7 @@ def test_open_tmdb_needs_a_key(tmp_path: Path) -> None:
     services = Services(tmp_path, ConfigStore(tmp_path))
     with pytest.raises(TmdbNoKey):
         open_tmdb(services)
-    services.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    services.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     with open_tmdb(services) as tmdb:
         assert tmdb.image_url("/a.jpg", "w500") == "https://image.tmdb.org/t/p/w500/a.jpg"
 

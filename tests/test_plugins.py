@@ -280,7 +280,7 @@ def test_oauth_login_and_callback(client: TestClient, site: FakeSite) -> None:
 
     alpha = client.put("/api/plugins/alpha", json={}).json()
     assert alpha["logged_in"] is True and alpha["notice"] is None
-    secrets = client.app.state.config_store.load_secrets().plugins["alpha"]
+    secrets = client.app.state.config_store.load_secrets().sources["alpha"]
     assert secrets["access_token"] == "tok-1" and secrets["refresh_token"] == "ref-1"
 
     reused = client.get(
@@ -323,7 +323,7 @@ def test_pasted_token_drops_refresh(client: TestClient) -> None:
     )
     alpha = client.put("/api/plugins/alpha", json={"secrets": {"access_token": " mine "}}).json()
     assert alpha["logged_in"] is True and alpha["expires_at"] is None
-    saved = store.load_secrets().plugins["alpha"]
+    saved = store.load_secrets().sources["alpha"]
     assert saved["access_token"] == "mine" and not saved.get("refresh_token")
 
 
@@ -357,7 +357,7 @@ def test_token_refreshed_before_expiry(client: TestClient, site: FakeSite) -> No
         assert host.access_token() == "new"
     form = parse_qs(site.requests[-1].content.decode())
     assert form["grant_type"] == ["refresh_token"] and form["refresh_token"] == ["ref-1"]
-    assert store.load_secrets().plugins["alpha"]["refresh_token"] == "ref-2"
+    assert store.load_secrets().sources["alpha"]["refresh_token"] == "ref-2"
     assert not any("ref-1" in line or "new" in line.split() for line in logs)
 
 

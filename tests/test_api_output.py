@@ -23,7 +23,7 @@ def app(tmp_path: Path) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
     return app
 
 
@@ -63,10 +63,10 @@ def _setup(app: FastAPI, root: Path) -> tuple[int, int]:
 
 
 def _configure(app: FastAPI, **switches: bool) -> None:
-    config = app.state.config_store.load_config().movie
+    config = app.state.config_store.load_config().types.movie
     for key, value in switches.items():
         setattr(config.output, key, value)
-    app.state.config_store.save_section("movie", config)
+    app.state.config_store.save_section("types.movie", config)
 
 
 def _scrape(app: FastAPI, item_id: int) -> None:

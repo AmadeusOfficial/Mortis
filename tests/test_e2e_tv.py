@@ -47,8 +47,10 @@ def base_url(tmp_path: Path) -> Iterator[str]:
     fake.add("/3/tv/80968/season/3", load_fixture("tv_80968_season_3.json"))
     data_dir = tmp_path / "data"
     store = ConfigStore(data_dir)
-    store.save_secrets(Secrets(tmdb_api_key="e2e-key"))
-    store.save_section("tv", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False)))
+    store.save_secrets(Secrets(sources={"tmdb": {"api_key": "e2e-key"}}))
+    store.save_section(
+        "types.tv", TvScrapeConfig(output=TvOutputConfig(organize_after_scrape=False))
+    )
     app = create_app(Settings(data_dir=data_dir, web_dist=WEB_DIST), http_transport=fake.transport)
     with serve(app) as url:
         yield url

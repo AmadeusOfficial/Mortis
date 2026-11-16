@@ -1,8 +1,5 @@
 # 莫提斯普通设置示例。真实文件是数据目录下的 config.toml，由设置页写入，不进 git。
 
-# 停用的插件 id；插件自己的设置写在 [plugins.<id>]
-disabled_plugins = []
-
 [network]
 # 代理主机，留空表示不用代理
 proxy_host = "127.0.0.1"
@@ -25,7 +22,13 @@ subtitle_extensions = [
     ".srt", ".ssa", ".ssf", ".sub", ".sup", ".svcd", ".ttxt", ".usf", ".vtt",
 ]
 
-[movie]
+[tasks]
+# 任务并发数，改了重启后生效
+concurrency = 3
+# 已结束的任务保留多少天
+keep_days = 30
+
+[types.movie]
 # 刮削语言，TMDB 的语言代码
 language = "zh-CN"
 # 分级取哪个国家的
@@ -40,7 +43,7 @@ fanart_size = "original"
 # 同人画优先选没有文字的
 prefer_textless_fanart = true
 
-[movie.images]
+[types.movie.images]
 # 刮削时抓哪些图
 poster = true
 fanart = true
@@ -50,7 +53,7 @@ collection_poster = true
 collection_fanart = true
 actor_images = true
 
-[movie.output]
+[types.movie.output]
 # 刮削后自动整理
 organize_after_scrape = true
 # 整理时按模板重命名目录和文件
@@ -82,7 +85,7 @@ nfo_write_lockdata = false
 # NFO 只写一个制片公司
 nfo_single_studio = false
 
-[tv]
+[types.tv]
 # 刮削语言，TMDB 的语言代码
 language = "zh-CN"
 # 分级取哪个国家的
@@ -103,7 +106,7 @@ show_missing_episodes = true
 # 显示缺少的特别篇
 show_missing_specials = true
 
-[tv.images]
+[types.tv.images]
 # 刮削时抓哪些图
 poster = true
 fanart = true
@@ -114,7 +117,7 @@ episode_thumb = true
 # 演员头像不写
 actor_images = false
 
-[tv.output]
+[types.tv.output]
 # 刮削后自动整理
 organize_after_scrape = true
 # 整理时按模板重命名目录和文件
@@ -142,7 +145,7 @@ nfo_write_lockdata = false
 # NFO 只写一个制片公司
 nfo_single_studio = false
 
-[anime]
+[types.anime]
 # 刮削语言，TMDB 的语言代码
 language = "zh-CN"
 # 分级取哪个国家的
@@ -163,7 +166,7 @@ show_missing_episodes = true
 # 显示缺少的特别篇
 show_missing_specials = true
 
-[anime.images]
+[types.anime.images]
 # 刮削时抓哪些图
 poster = true
 fanart = true
@@ -174,7 +177,7 @@ episode_thumb = true
 # 演员头像不写
 actor_images = false
 
-[anime.output]
+[types.anime.output]
 # 刮削后自动整理
 organize_after_scrape = true
 # 整理时按模板重命名目录和文件
@@ -202,8 +205,15 @@ nfo_write_lockdata = false
 # NFO 只写一个制片公司
 nfo_single_studio = false
 
-[tasks]
-# 任务并发数，改了重启后生效
-concurrency = 3
-# 已结束的任务保留多少天
-keep_days = 30
+# 插件类型的设置也写在 types 下，例如 Galgame：
+# [types.galgame]
+# match_threshold = 0.75
+# skip_folders = []
+
+# 来源插件自己的设置写在 [sources.<id>]，例如 Bangumi：
+# [sources.bangumi]
+# limit = 10
+
+[plugins]
+# 停用的插件 id
+disabled = []

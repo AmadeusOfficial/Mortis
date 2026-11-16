@@ -51,8 +51,8 @@ def app(tmp_path: Path, fake: FakeTmdb) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
-    app.state.config_store.save_section("tv", _config())
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
+    app.state.config_store.save_section("types.tv", _config())
     return app
 
 
@@ -249,7 +249,7 @@ def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -
 
 
 def test_without_missing_episodes_only_local_ones(app: FastAPI, show_id: int) -> None:
-    app.state.config_store.save_section("tv", _config(show_missing_episodes=False))
+    app.state.config_store.save_section("types.tv", _config(show_missing_episodes=False))
     _scrape(app, show_id)
     assert {n: sorted(e) for n, e in _tree(app, show_id).items()} == {1: [1, 2, 3], 2: [1, 2, 3]}
 
@@ -268,7 +268,7 @@ def test_locked_episode_title_and_disabled_thumbs(
         episode.title = "我的集名"
         episode.locked_fields = json.dumps(["title"])
         session.commit()
-    app.state.config_store.save_section("tv", _config(images=TvImages(episode_thumb=False)))
+    app.state.config_store.save_section("types.tv", _config(images=TvImages(episode_thumb=False)))
     before = len(fake.paths())
     _scrape(app, show_id, force=True)
     assert _tree(app, show_id)[1][1] == "我的集名"
@@ -309,7 +309,7 @@ def test_multi_episode_file_covers_every_episode(app: FastAPI, show_id: int, roo
     with app.state.session_factory() as session:
         library = session.scalars(select(Item.library_id).where(Item.id == show_id)).one()
     assert _run(app, "organize", {"library_id": library}).status == "succeeded"
-    app.state.config_store.save_section("tv", _config(show_missing_episodes=False))
+    app.state.config_store.save_section("types.tv", _config(show_missing_episodes=False))
     _scrape(app, show_id)
     assert sorted(_tree(app, show_id)[1]) == [1, 2, 3, 4, 5]
     with TestClient(app, base_url="http://127.0.0.1") as client:

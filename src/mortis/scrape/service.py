@@ -6,7 +6,6 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import Session, aliased
 
 from mortis.config.models import MovieScrapeConfig
-from mortis.config.types import type_config
 from mortis.db.models import (
     DataType,
     Item,
@@ -16,7 +15,7 @@ from mortis.db.models import (
 )
 from mortis.items.identity import find_by_tmdb
 from mortis.organize.service import unscraped_work_ids
-from mortis.output.service import after_scrape, has_video
+from mortis.output.service import after_scrape, arrange_config, has_video
 from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
 from mortis.scrape.common import (
     download_images,
@@ -68,7 +67,7 @@ class _Collection:
 
 def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any]:
     services = ctx.services
-    config: MovieScrapeConfig = services.config_store.load_config().movie
+    config: MovieScrapeConfig = services.config_store.load_config().types.movie
     store = ImageStore(services.data_dir)
 
     with ctx.session_factory() as session:
@@ -86,7 +85,7 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
 
     # 请求和下载不持锁；写库时再进锁，按当时的锁定集合选值。
     sources: list[dict[str, Any]] = []
-    with open_tmdb(services) as tmdb:
+    with open_tmdb(services, data_type_id) as tmdb:
         fetched = raw is None
         if raw is None:
             ctx.log(f"请求 TMDB 电影 {tmdb_id}")
@@ -216,7 +215,7 @@ def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
         result = scrape_show(ctx, item_id, force=force)
     else:
         result = scrape_movie(ctx, item_id, force=force)
-    config_section = type_config(config, data_type_id)
+    config_section = arrange_config(config, data_type_id)
     with ctx.session_factory() as session:
         followups = after_scrape(config_section, item_id)
         if not has_video(session, item_id):

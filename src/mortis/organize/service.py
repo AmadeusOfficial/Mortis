@@ -77,7 +77,7 @@ def organize_library(
     if not identified:
         ctx.log("没有填 TMDB API Key，只扫描不识别")
     elif pending:
-        with open_tmdb(services) as tmdb:
+        with open_tmdb(services, library.data_type_id) as tmdb:
             for index, group in enumerate(pending, start=1):
                 ctx.check_cancelled()
                 ctx.progress(index, len(pending), group.movie.name)

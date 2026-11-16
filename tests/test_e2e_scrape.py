@@ -45,7 +45,7 @@ def base_url(tmp_path: Path) -> Iterator[str]:
     }
     fake.add("/3/movie/949", heat)
     data_dir = tmp_path / "data"
-    ConfigStore(data_dir).save_secrets(Secrets(tmdb_api_key="e2e-key"))
+    ConfigStore(data_dir).save_secrets(Secrets(sources={"tmdb": {"api_key": "e2e-key"}}))
     app = create_app(Settings(data_dir=data_dir, web_dist=WEB_DIST), http_transport=fake.transport)
     with serve(app) as url:
         yield url
@@ -142,9 +142,9 @@ def test_arrange_writes_files_and_renames(
     expect(page.get_by_text(".actors")).to_have_count(0)
 
     store = ConfigStore(tmp_path / "data")
-    movie = store.load_config().movie
+    movie = store.load_config().types.movie
     movie.output.organize_rename = True
-    store.save_section("movie", movie)
+    store.save_section("types.movie", movie)
 
     page.get_by_role("button", name="整理", exact=True).click()
     dialog = page.get_by_role("dialog")

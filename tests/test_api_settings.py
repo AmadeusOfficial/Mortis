@@ -77,7 +77,8 @@ def test_secrets_status_never_returns_values(client: TestClient, data_dir: Path)
     }
     assert "k-123" not in response.text
     assert "k-123" not in client.get("/api/secrets").text
-    assert 'tmdb_api_key = "k-123"' in (data_dir / "secrets.toml").read_text(encoding="utf-8")
+    assert 'api_key = "k-123"' in (data_dir / "secrets.toml").read_text(encoding="utf-8")
+    assert "[sources.tmdb]" in (data_dir / "secrets.toml").read_text(encoding="utf-8")
     assert not (data_dir / "config.toml").exists()
 
 
@@ -143,8 +144,8 @@ def test_each_section_saves_alone(client: TestClient) -> None:
         "/api/settings/network",
         json={"proxy_host": "", "proxy_port": 1080, "ignore_cert_errors": False},
     )
-    body = client.put("/api/settings/movie", json={"language": "en-US"}).json()
-    assert body["movie"]["language"] == "en-US"
+    body = client.put("/api/settings/types/movie", json={"language": "en-US"}).json()
+    assert body["types"]["movie"]["language"] == "en-US"
     assert body["network"]["proxy_port"] == 1080
     body = client.put(
         "/api/settings/files", json={"video_extensions": ["mkv"], "subtitle_extensions": ["srt"]}
@@ -156,13 +157,45 @@ def test_each_section_saves_alone(client: TestClient) -> None:
 
 
 def test_section_validation_rejects_bad_threshold(client: TestClient) -> None:
-    assert client.put("/api/settings/movie", json={"match_threshold": 5}).status_code == 422
+    assert client.put("/api/settings/types/movie", json={"match_threshold": 5}).status_code == 422
 
 
 def test_tv_and_anime_sections_save_separately(client: TestClient) -> None:
     config = client.get("/api/settings").json()
-    anime = {**config["anime"], "language": "ja-JP"}
-    saved = client.put("/api/settings/anime", json=anime).json()
-    assert (saved["anime"]["language"], saved["tv"]["language"]) == ("ja-JP", "zh-CN")
-    tv = {**saved["tv"], "match_threshold": 0.6}
-    assert client.put("/api/settings/tv", json=tv).json()["tv"]["match_threshold"] == 0.6
+    anime = {**config["types"]["anime"], "language": "ja-JP"}
+    saved = client.put("/api/settings/types/anime", json=anime).json()
+    assert (saved["types"]["anime"]["language"], saved["types"]["tv"]["language"]) == (
+        "ja-JP",
+        "zh-CN",
+    )
+    tv = {**saved["types"]["tv"], "match_threshold": 0.6}
+    assert client.put("/api/settings/types/tv", json=tv).json()["types"]["tv"][
+        "match_threshold"
+    ] == (0.6)
+
+
+def test_old_type_routes_are_gone(client: TestClient) -> None:
+    for name in ("movie", "tv", "anime"):
+        assert client.put(f"/api/settings/{name}", json={}).status_code in (404, 405)
+
+
+def test_unknown_type_is_404(client: TestClient) -> None:
+    assert client.put("/api/settings/types/nope", json={}).status_code == 404
+
+
+def test_plugin_type_settings_save_flat(client: TestClient, data_dir: Path) -> None:
+    # galgame 是自带的插件类型，启动时已经装进 data_types 表，接口据此判断类型存在。
+    types = client.get("/api/settings").json()["types"]
+    assert "galgame" not in types or types["galgame"] == {}
+    saved = client.put("/api/settings/types/galgame", json={"match_threshold": 0.5}).json()
+    assert saved["types"]["galgame"]["match_threshold"] == 0.5
+    assert client.get("/api/settings").json()["types"]["galgame"]["match_threshold"] == 0.5
+    text = (data_dir / "config.toml").read_text(encoding="utf-8")
+    assert "[types.galgame]" in text
+    assert "match_threshold = 0.5" in text
+
+
+def test_plugin_type_settings_reject_bad_values(client: TestClient) -> None:
+    response = client.put("/api/settings/types/galgame", json={"match_threshold": 5})
+    assert response.status_code == 422
+    assert "设置不合法" in response.json()["detail"]

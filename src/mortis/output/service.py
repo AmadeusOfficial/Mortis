@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from mortis.config.models import MovieScrapeConfig, TvScrapeConfig
+from mortis.config.models import AppConfig, MovieScrapeConfig, TvScrapeConfig
 from mortis.config.types import type_config
 from mortis.db.models import Item, ItemSourceRecord, Library, MediaFile
 from mortis.items.identity import work_of
@@ -29,8 +29,16 @@ if TYPE_CHECKING:
 type ArrangeConfig = MovieScrapeConfig | TvScrapeConfig
 
 
+def arrange_config(config: AppConfig, data_type_id: str) -> ArrangeConfig:
+    """插件类型不写 NFO、不重命名；预览按电影模板算，界面上不给它们整理。"""
+    section = type_config(config, data_type_id)
+    if isinstance(section, MovieScrapeConfig | TvScrapeConfig):
+        return section
+    return config.types.movie
+
+
 def config_for(services: Services, item: Item) -> ArrangeConfig:
-    return type_config(services.config_store.load_config(), item.data_type_id)
+    return arrange_config(services.config_store.load_config(), item.data_type_id)
 
 
 def plan_for(session: Session, item: Item, config: ArrangeConfig) -> RenamePlan:

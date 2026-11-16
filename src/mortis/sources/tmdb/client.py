@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx2 as httpx
 
+from mortis.config.models import MovieScrapeConfig, TvScrapeConfig
+from mortis.config.types import type_config
 from mortis.errors import UserError
 from mortis.services import Services
 from mortis.sources.tmdb.check import TMDB_API, tmdb_auth
@@ -99,14 +101,18 @@ class TmdbClient:
         return f"{IMAGE_BASE}/{size}{file_path}"
 
 
-def open_tmdb(services: Services) -> TmdbClient:
+def open_tmdb(services: Services, data_type_id: str = "movie") -> TmdbClient:
+    """按调用方的数据类型取搜索语言和成人内容开关；内置三种各有自己的一节。"""
     config = services.config_store.load_config()
     secrets = services.config_store.load_secrets()
     if not secrets.tmdb_api_key.strip():
         raise TmdbNoKey
+    section = type_config(config, data_type_id)
+    if not isinstance(section, MovieScrapeConfig | TvScrapeConfig):
+        section = config.types.movie
     return TmdbClient(
         services.http_client(),
         secrets.tmdb_api_key,
-        language=config.movie.language,
-        include_adult=config.movie.include_adult,
+        language=section.language,
+        include_adult=section.include_adult,
     )

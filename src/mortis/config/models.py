@@ -2,7 +2,7 @@ import re
 from ipaddress import AddressValueError, IPv6Address
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from mortis.rename.template import render
@@ -203,6 +203,14 @@ def _clean_skip_folders(value: list[str]) -> list[str]:
     return cleaned
 
 
+def validation_problems(error: ValidationError) -> str:
+    """只列字段位置和原因，不带输入值，免得密钥写进错误消息。"""
+    return "；".join(
+        f"{'.'.join(str(part) for part in item['loc'])}：{item['msg']}"
+        for item in error.errors(include_input=False, include_url=False)
+    )
+
+
 class MovieOutputConfig(BaseModel):
     """整理：按模板改名，并把 NFO 和图片写到视频旁边。"""
 
@@ -379,37 +387,146 @@ class TasksConfig(BaseModel):
     keep_days: int = Field(default=30, ge=1, le=3650)
 
 
+class PluginTypeConfig(BaseModel):
+    """插件数据类型的类型级设置：识别阈值和扫描时跳过的目录。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    match_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    skip_folders: list[str] = Field(default_factory=list)
+
+    @field_validator("skip_folders")
+    @classmethod
+    def _clean_skip_folders(cls, value: list[str]) -> list[str]:
+        return _clean_skip_folders(value)
+
+
+type BuiltinTypeSection = MovieScrapeConfig | TvScrapeConfig
+type TypeSection = BuiltinTypeSection | PluginTypeConfig
+
+BUILTIN_TYPE_SECTIONS: dict[str, type[BuiltinTypeSection]] = {
+    "movie": MovieScrapeConfig,
+    "tv": TvScrapeConfig,
+    "anime": TvScrapeConfig,
+}
+"""内置数据类型各用哪种设置结构。其余类型都是插件类型，用 PluginTypeConfig。"""
+
+
+class TypesConfig(BaseModel):
+    """每种数据类型一节：内置三种是固定字段，插件类型的额外键按 PluginTypeConfig 校验。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    movie: MovieScrapeConfig = Field(default_factory=MovieScrapeConfig)
+    tv: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
+    anime: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plugin_sections(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        cleaned = dict(data)
+        for key, value in cleaned.items():
+            if key in cls.model_fields or isinstance(value, PluginTypeConfig):
+                continue
+            try:
+                cleaned[key] = PluginTypeConfig.model_validate(value)
+            except ValidationError as error:
+                raise PydanticCustomError(
+                    "plugin_type_section",
+                    "{name} 的设置不合法：{problems}",
+                    {"name": key, "problems": validation_problems(error)},
+                ) from None
+        return cleaned
+
+    def plugin(self, data_type_id: str) -> PluginTypeConfig:
+        """插件类型的设置；没写过时是全默认值。"""
+        value = (self.model_extra or {}).get(data_type_id)
+        return value if isinstance(value, PluginTypeConfig) else PluginTypeConfig()
+
+
+class PluginsConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    disabled: list[str] = []
+
+
 class AppConfig(BaseModel):
+    """普通设置。每种数据类型的设置在 types 下，插件自己的设置和密钥都在 sources 下。"""
+
     model_config = ConfigDict(extra="ignore")
 
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     files: FilesConfig = Field(default_factory=FilesConfig)
-    movie: MovieScrapeConfig = Field(default_factory=MovieScrapeConfig)
-    tv: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
-    anime: TvScrapeConfig = Field(default_factory=TvScrapeConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
-    disabled_plugins: list[str] = []
-    plugins: dict[str, dict[str, Any]] = {}
-    """每个插件一节，按插件自己的 Settings 模型校验。"""
+    types: TypesConfig = Field(default_factory=TypesConfig)
+    sources: dict[str, dict[str, Any]] = {}
+    """每个来源或插件一节，按插件自己的 Settings 模型校验。"""
+    plugins: PluginsConfig = Field(default_factory=PluginsConfig)
 
 
 CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
     "network": NetworkConfig,
     "files": FilesConfig,
-    "movie": MovieScrapeConfig,
-    "tv": TvScrapeConfig,
-    "anime": TvScrapeConfig,
     "tasks": TasksConfig,
 }
 
+TYPES_PREFIX = "types."
+"""save_section 里代表 types 下一节的键名前缀，例如 types.galgame。"""
 
-class Secrets(BaseModel):
+TMDB_SOURCE = "tmdb"
+
+
+class NetworkSecrets(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    tmdb_api_key: str = ""
     proxy_username: str = ""
     proxy_password: str = ""
-    plugins: dict[str, dict[str, Any]] = {}
 
 
-SECRET_KEYS: tuple[str, ...] = tuple(key for key in Secrets.model_fields if key != "plugins")
+class Secrets(BaseModel):
+    """密钥。代理凭据在 network 下，来源和插件的密钥在 sources.<id> 下。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    network: NetworkSecrets = Field(default_factory=NetworkSecrets)
+    sources: dict[str, dict[str, Any]] = {}
+
+    @property
+    def tmdb_api_key(self) -> str:
+        values = self.sources.get(TMDB_SOURCE)
+        key = values.get("api_key") if isinstance(values, dict) else None
+        return key if isinstance(key, str) else ""
+
+
+SECRET_KEYS: tuple[str, ...] = ("tmdb_api_key", "proxy_username", "proxy_password")
+"""设置页能改的三个密钥，形状固定；它们分别存在 network 和 sources.tmdb 下。"""
+
+
+def secret_value(secrets: Secrets, key: str) -> str:
+    """按设置页的键名读密钥，不关心存在哪一节。"""
+    if key == "tmdb_api_key":
+        return secrets.tmdb_api_key
+    if key == "proxy_username":
+        return secrets.network.proxy_username
+    if key == "proxy_password":
+        return secrets.network.proxy_password
+    raise KeyError(key)
+
+
+def set_secret(secrets: Secrets, key: str, value: str) -> None:
+    """按设置页的键名写密钥，保留同一节里其他插件的键。"""
+    if key == "tmdb_api_key":
+        section = secrets.sources.get(TMDB_SOURCE)
+        values = dict(section) if isinstance(section, dict) else {}
+        values["api_key"] = value
+        secrets.sources[TMDB_SOURCE] = values
+        return
+    if key == "proxy_username":
+        secrets.network.proxy_username = value
+        return
+    if key == "proxy_password":
+        secrets.network.proxy_password = value
+        return
+    raise KeyError(key)

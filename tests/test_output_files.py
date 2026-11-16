@@ -26,10 +26,10 @@ def app(tmp_path: Path) -> FastAPI:
     app = create_app(
         Settings(data_dir=tmp_path / "data"), http_transport=fake.transport, start_worker=False
     )
-    app.state.config_store.save_secrets(Secrets(tmdb_api_key="k"))
-    config = app.state.config_store.load_config().movie
+    app.state.config_store.save_secrets(Secrets(sources={"tmdb": {"api_key": "k"}}))
+    config = app.state.config_store.load_config().types.movie
     config.output.organize_after_scrape = False
-    app.state.config_store.save_section("movie", config)
+    app.state.config_store.save_section("types.movie", config)
     return app
 
 
@@ -72,7 +72,7 @@ def _add_movie(app: FastAPI, video: Path, extra_video: Path | None = None) -> in
 
 
 def _config(app: FastAPI) -> MovieScrapeConfig:
-    return app.state.config_store.load_config().movie
+    return app.state.config_store.load_config().types.movie
 
 
 def _write(app: FastAPI, item_id: int, config: MovieScrapeConfig | None = None):

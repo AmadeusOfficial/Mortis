@@ -222,7 +222,8 @@ def _show_config(ctx: TaskContext, item_id: int) -> TvScrapeConfig:
     config = ctx.services.config_store.load_config()
     with ctx.session_factory() as session:
         data_type_id = session.scalar(select(Item.data_type_id).where(Item.id == item_id))
-    return type_config(config, data_type_id or "")
+    section = type_config(config, data_type_id or "")
+    return section if isinstance(section, TvScrapeConfig) else config.types.tv
 
 
 def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any]:
@@ -252,7 +253,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         episode_fields = level_fields(session, data_type_id, "episode")
 
     sources: list[dict[str, Any]] = []
-    with open_tmdb(services) as tmdb:
+    with open_tmdb(services, data_type_id) as tmdb:
         show_fetched = show_raw is None
         if show_raw is None:
             ctx.log(f"请求 TMDB 剧 {tmdb_id}")

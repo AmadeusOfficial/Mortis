@@ -62,7 +62,7 @@ def create_app(
     config_store = ConfigStore(resolved.data_dir)
     startup_config = _startup_config(config_store)
     plugins = PluginRegistry(plugin_folders(resolved))
-    plugins.load(startup_config.disabled_plugins)
+    plugins.load(startup_config.plugins.disabled)
     with session_factory() as session:
         ensure_builtin_types(session)
         plugins.sync_catalog(session)
