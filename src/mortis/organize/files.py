@@ -23,6 +23,8 @@ class SyncReport:
     groups: list[FoundGroup]
     added: int
     removed: int
+    grown: set[int]
+    """这次扫描新挂上视频的条目。"""
 
 
 def _size(path: str) -> int | None:
@@ -49,6 +51,7 @@ def sync_media_files(
     seen: set[str] = set()
     groups: list[FoundGroup] = []
     added = 0
+    grown: set[int] = set()
     now = utc_now()
     for movie in movies:
         bound = next(
@@ -81,6 +84,8 @@ def sync_media_files(
                     )
                     session.add(row)
                     added += 1
+                    if kind == "video" and bound is not None:
+                        grown.add(bound)
                 else:
                     if row.size != size:
                         row.size = size
@@ -96,4 +101,4 @@ def sync_media_files(
             session.delete(row)
             removed += 1
     session.flush()
-    return SyncReport(groups, added, removed)
+    return SyncReport(groups, added, removed, grown)

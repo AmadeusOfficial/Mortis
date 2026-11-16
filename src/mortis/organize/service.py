@@ -106,10 +106,17 @@ def organize_library(
     should_scrape = bool(library.is_auto_scrape) if scrape is None else scrape
     followups: list[Followup] = []
     if should_scrape:
-        followups = [
-            Followup("scrape", {"item_id": item_id, "force": False})
-            for item_id in unscraped_work_ids(session, library.id)
-        ]
+        ids = unscraped_work_ids(session, library.id)
+        if is_series and report.grown:
+            ids += session.scalars(
+                select(ItemExternalId.item_id)
+                .where(
+                    ItemExternalId.item_id.in_(report.grown - set(ids)),
+                    ItemExternalId.provider == "tmdb",
+                )
+                .order_by(ItemExternalId.item_id)
+            ).all()
+        followups = [Followup("scrape", {"item_id": item_id, "force": False}) for item_id in ids]
         ctx.log(f"排了 {len(followups)} 个刮削任务")
     result: dict[str, Any] = {
         "found": len(scanned.movies),

@@ -9,7 +9,15 @@ from sqlalchemy import select
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets, TvImages, TvOutputConfig, TvScrapeConfig
-from mortis.db.models import Item, ItemExternalId, ItemImage, ItemSourceRecord, MediaFile, Task
+from mortis.db.models import (
+    Item,
+    ItemExternalId,
+    ItemImage,
+    ItemSourceRecord,
+    Library,
+    MediaFile,
+    Task,
+)
 from mortis.libraries import create_library
 from mortis.settings import Settings
 from mortis.tasks import repo
@@ -248,3 +256,32 @@ def test_locked_episode_title_and_disabled_thumbs(
     _scrape(app, show_id, force=True)
     assert _tree(app, show_id)[1][1] == "我的集名"
     assert not any("/w300/" in path for path in fake.paths()[before:])
+
+
+def test_forced_rescrape_reuses_downloaded_images(
+    app: FastAPI, show_id: int, fake: FakeTmdb
+) -> None:
+    _scrape(app, show_id)
+    assert any("/t/p/" in path for path in fake.paths())
+    before = len(fake.paths())
+    _scrape(app, show_id, force=True)
+    assert [p for p in fake.paths()[before:] if "/t/p/" in p] == []
+    with app.state.session_factory() as session:
+        assert session.scalar(select(Item.poster_path).where(Item.id == show_id))
+
+
+def test_scan_scrapes_show_that_got_new_episodes(
+    app: FastAPI, show_id: int, root: Path, fake: FakeTmdb
+) -> None:
+    _scrape(app, show_id)
+    new = root / "毒枭：墨西哥" / "S03" / "Narcos.Mexico.S03E01.1080p.mp4"
+    new.parent.mkdir()
+    new.write_bytes(b"x")
+    with app.state.session_factory() as session:
+        library = session.scalars(select(Item.library_id).where(Item.id == show_id)).one()
+        session.get(Library, library).is_auto_scrape = 1
+        session.commit()
+    before = len(fake.paths())
+    assert _run(app, "organize", {"library_id": library}).status == "succeeded"
+    assert _owners(app)["Narcos.Mexico.S03E01.1080p.mp4"] == ("episode", 1)
+    assert not any(path.startswith("/3/tv/") for path in fake.paths()[before:])

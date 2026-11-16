@@ -212,3 +212,24 @@ def test_scrape_endpoints(client: TestClient, item_id: int) -> None:
         "电影",
         {"library_id": library_id, "force": False},
     )
+
+
+def test_forced_rescrape_downloads_only_missing_images(
+    app: FastAPI, item_id: int, fake: FakeTmdb
+) -> None:
+    assert _scrape(app, item_id).status == "succeeded"
+    before = len(fake.paths())
+    assert _scrape(app, item_id, force=True).status == "succeeded"
+    assert [p for p in fake.paths()[before:] if "/t/p/" in p] == []
+
+    store = ImageStore(app.state.settings.data_dir)
+    with app.state.session_factory() as session:
+        item = session.get(Item, item_id)
+        assert item is not None
+        poster = store.resolve(item.poster_path)
+    assert poster is not None
+    poster.unlink()
+    before = len(fake.paths())
+    assert _scrape(app, item_id, force=True).status == "succeeded"
+    assert len([p for p in fake.paths()[before:] if "/t/p/" in p]) == 1
+    assert store.resolve(item.poster_path) is not None

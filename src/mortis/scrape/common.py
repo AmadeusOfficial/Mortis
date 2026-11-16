@@ -76,8 +76,13 @@ def save_external_ids(session: Session, item_id: int, ids: dict[str, str]) -> No
 def download_images(
     store: ImageStore, tmdb: TmdbClient, urls: list[str], ctx: TaskContext
 ) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for url in dict.fromkeys(urls):
+    wanted = list(dict.fromkeys(urls))
+    files = {url: rel for url in wanted if (rel := store.cached(url)) is not None}
+    if files:
+        ctx.log(f"库里已有 {len(files)} 张图片，不再下载")
+    for url in wanted:
+        if url in files:
+            continue
         ctx.check_cancelled()
         try:
             files[url] = store.download(tmdb.http, url)
