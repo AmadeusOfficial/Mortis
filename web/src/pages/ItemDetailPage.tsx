@@ -26,7 +26,9 @@ import {
   arrangeItem,
   fetchItem,
   fetchItemArrangePreview,
+  fetchSources,
   rematchItem,
+  rematchItemToSource,
   scrapeItem,
   updateItemFields,
   updateItemLocks,
@@ -36,8 +38,9 @@ import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonList } from "../components/SeasonList";
+import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
-import { isSeriesType, useDataTypes } from "../dataTypes";
+import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import { useTaskWatcher } from "../useTaskWatcher";
 
@@ -50,11 +53,27 @@ function externalLink(provider: string, id: string, kind: string): string | null
   if (provider === "imdb") {
     return `https://www.imdb.com/title/${id}/`;
   }
+  if (provider === "bangumi") {
+    return `https://bgm.tv/subject/${id}`;
+  }
+  if (provider === "vndb") {
+    return `https://vndb.org/${id}`;
+  }
+  if (provider === "ymgal") {
+    return `https://www.ymgal.games/ga${id}`;
+  }
+  if (provider === "cngal") {
+    return `https://www.cngal.org/entries/index/${id}`;
+  }
   return null;
 }
 
-// 只列视频和字幕；写出的 NFO、图片、演员头像不在这里显示。
-const FILE_KIND_LABELS: Record<string, string> = { video: "视频", subtitle: "字幕" };
+// 只列视频、字幕和游戏文件夹；写出的 NFO、图片、演员头像不在这里显示。
+const FILE_KIND_LABELS: Record<string, string> = {
+  video: "视频",
+  subtitle: "字幕",
+  game: "游戏文件夹",
+};
 
 export function ItemDetailPage() {
   const id = Number(useParams().itemId);
@@ -102,12 +121,22 @@ export function ItemDetailPage() {
     onError: () => setArranging(false),
   });
   const rematch = useMutation({
-    mutationFn: (hit: MovieHit) => rematchItem(id, hit.tmdb_id),
+    mutationFn: (target: { tmdbId: number } | { source: string; externalId: string }) =>
+      "tmdbId" in target
+        ? rematchItem(id, target.tmdbId)
+        : rematchItemToSource(id, target.source, target.externalId),
     onSuccess: ({ task_id }) => {
       setRematching(false);
       watcher.watch(task_id);
-      notifications.show({ message: "已换成新的电影，正在刮削" });
+      notifications.show({ message: "已换成新的条目，正在刮削" });
     },
+  });
+  const dataTypeId = item.data?.data_type_id ?? "";
+  const pluginType = isPluginType(dataTypes.data, dataTypeId);
+  const sources = useQuery({
+    queryKey: ["sources", dataTypeId],
+    queryFn: () => fetchSources(dataTypeId),
+    enabled: pluginType,
   });
   const edit = useMutation({
     mutationFn: ({ key, value }: { key: string; value: unknown }) =>
@@ -304,7 +333,9 @@ export function ItemDetailPage() {
                         variant="light"
                         color={field.source === "manual" ? "orange" : "blue"}
                       >
-                        {SOURCE_LABELS[field.source] ?? field.source}
+                        {SOURCE_LABELS[field.source] ??
+                          sources.data?.find((source) => source.id === field.source)?.name ??
+                          field.source}
                       </Badge>
                     )}
                   </Table.Td>
@@ -372,7 +403,18 @@ export function ItemDetailPage() {
           onClose={() => setEditing(null)}
         />
       )}
-      {rematching && (
+      {rematching && pluginType && (
+        <SourceSearchModal
+          title="重新匹配"
+          dataType={detail.data_type_id}
+          initialQuery={detail.title}
+          picking={rematch.isPending}
+          error={rematch.isError ? rematch.error.message : null}
+          onPick={(source, hit) => rematch.mutate({ source, externalId: hit.external_id })}
+          onClose={() => setRematching(false)}
+        />
+      )}
+      {rematching && !pluginType && (
         <TmdbSearchModal
           title="重新匹配"
           kind={isSeriesType(dataTypes.data, detail.data_type_id) ? "tv" : "movie"}
@@ -380,7 +422,7 @@ export function ItemDetailPage() {
           initialYear={detail.year}
           picking={rematch.isPending}
           error={rematch.isError ? rematch.error.message : null}
-          onPick={(hit) => rematch.mutate(hit)}
+          onPick={(hit: MovieHit) => rematch.mutate({ tmdbId: hit.tmdb_id })}
           onClose={() => setRematching(false)}
         />
       )}

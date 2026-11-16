@@ -26,7 +26,7 @@ import {
   fetchLibraries,
   updateLibrary,
 } from "../api";
-import { itemUnit, useDataTypes } from "../dataTypes";
+import { fileUnit, itemUnit, useDataTypes } from "../dataTypes";
 import { LibraryActions } from "../libraryActions";
 
 const AUTOMATION_LABELS: Record<string, string> = {
@@ -62,6 +62,7 @@ export function LibrariesPage() {
             key={library.id}
             library={library}
             itemUnit={itemUnit(dataTypes.data, library.data_type_id)}
+            fileUnit={fileUnit(dataTypes.data, library.data_type_id)}
             onEdit={() => setEditing(library)}
             onDelete={() => setDeleting(library)}
           />
@@ -76,6 +77,7 @@ export function LibrariesPage() {
         <DeleteLibraryModal
           library={deleting}
           itemUnit={itemUnit(dataTypes.data, deleting.data_type_id)}
+          fileUnit={fileUnit(dataTypes.data, deleting.data_type_id)}
           onClose={() => setDeleting(null)}
         />
       )}
@@ -86,11 +88,13 @@ export function LibrariesPage() {
 function LibraryCard({
   library,
   itemUnit,
+  fileUnit,
   onEdit,
   onDelete,
 }: {
   library: Library;
   itemUnit: string;
+  fileUnit: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -117,7 +121,7 @@ function LibraryCard({
             <Badge variant="light">{library.data_type_name}</Badge>
           </Group>
           <Text size="sm" c="dimmed">
-            {library.item_count} {itemUnit} · {library.file_count} 个视频
+            {library.item_count} {itemUnit} · {library.file_count} {fileUnit}
           </Text>
           {library.paths.map((path) => (
             <Text key={path} size="sm" ff="monospace">
@@ -244,10 +248,12 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
 function DeleteLibraryModal({
   library,
   itemUnit,
+  fileUnit,
   onClose,
 }: {
   library: Library;
   itemUnit: string;
+  fileUnit: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -265,7 +271,7 @@ function DeleteLibraryModal({
       <Stack>
         <Text>
           删除媒体库「{library.name}」？库里的 {library.item_count} {itemUnit}和{" "}
-          {library.file_count} 个视频的记录会一起删除，硬盘上的文件不动。
+          {library.file_count} {fileUnit}的记录会一起删除，硬盘上的文件不动。
         </Text>
         {remove.isError && (
           <Alert color="red" title="删除失败">

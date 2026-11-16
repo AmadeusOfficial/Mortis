@@ -11,10 +11,27 @@ export function isSeriesType(types: DataType[] | undefined, dataTypeId: string):
   return types?.find((type) => type.id === dataTypeId)?.structure === "series";
 }
 
-// 条目数量的单位按数据结构：剧集类写「部剧」或「部动漫」，其余写「部电影」。
+// 插件提供的数据类型：用来源插件匹配，不走 TMDB，不写 NFO、不整理。
+export function isPluginType(types: DataType[] | undefined, dataTypeId: string): boolean {
+  const pluginId = types?.find((type) => type.id === dataTypeId)?.plugin_id;
+  return pluginId !== undefined && pluginId !== null;
+}
+
+// 条目数量的单位：剧集类写「部剧」或「部动漫」，Galgame 写「款游戏」，其余写「部电影」。
 export function itemUnit(types: DataType[] | undefined, dataTypeId: string): string {
+  if (dataTypeId === "galgame") {
+    return "款游戏";
+  }
+  if (isPluginType(types, dataTypeId)) {
+    return "个条目";
+  }
   if (!isSeriesType(types, dataTypeId)) {
     return "部电影";
   }
   return dataTypeId === "anime" ? "部动漫" : "部剧";
+}
+
+// 插件类型的库按文件夹认条目，文件数量是文件夹数。
+export function fileUnit(types: DataType[] | undefined, dataTypeId: string): string {
+  return isPluginType(types, dataTypeId) ? "个文件夹" : "个视频";
 }

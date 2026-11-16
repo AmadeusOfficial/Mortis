@@ -11,13 +11,14 @@ import {
   scrapeLibrary,
 } from "./api";
 import { ArrangePreviewModal } from "./components/ArrangePreviewModal";
+import { isPluginType, useDataTypes } from "./dataTypes";
 import { useTaskWatcher } from "./useTaskWatcher";
 
 type Kind = "organize" | "scrape" | "arrange";
 
 const START_MESSAGES: Record<Kind, string> = {
   organize: "已开始扫描",
-  scrape: "已开始刮削还没刮削过的电影",
+  scrape: "已开始刮削还没刮削过的条目",
   arrange: "已开始整理整库",
 };
 
@@ -27,7 +28,7 @@ const DONE_LABELS: Record<string, string> = {
   arrange_library: "整理",
 };
 
-function summary(task: TaskDetail): string {
+function summary(task: TaskDetail, pluginType: boolean): string {
   if (task.status !== "succeeded") {
     return task.error ?? "任务没有完成";
   }
@@ -38,7 +39,9 @@ function summary(task: TaskDetail): string {
       parts.push(`${String(result.unmatched)} 部没认出，可在「未识别」里手动匹配`);
     }
     if (result.identified === false) {
-      parts.push("没有填 TMDB API Key，只扫描了文件");
+      parts.push(
+        pluginType ? "没有启用的来源插件，只扫描了文件" : "没有填 TMDB API Key，只扫描了文件",
+      );
     }
     return parts.join("，");
   }
@@ -53,6 +56,9 @@ export function LibraryActions({ library }: { library: Library }) {
   const queryClient = useQueryClient();
   const [running, setRunning] = useState<Kind | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const dataTypes = useDataTypes();
+  // 插件类型不写 NFO、不重命名，没有整理。
+  const canArrange = !isPluginType(dataTypes.data, library.data_type_id);
   const watcher = useTaskWatcher((task) => {
     setRunning(null);
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
@@ -66,8 +72,8 @@ export function LibraryActions({ library }: { library: Library }) {
       title: `「${library.name}」${DONE_LABELS[task.task_type] ?? task.type_label}结束`,
       message:
         failed > 0
-          ? `${summary(task)}；有 ${String(failed)} 部失败，详情看任务页`
-          : summary(task),
+          ? `${summary(task, !canArrange)}；有 ${String(failed)} 部失败，详情看任务页`
+          : summary(task, !canArrange),
     });
   });
   const start = useMutation({
@@ -128,19 +134,23 @@ export function LibraryActions({ library }: { library: Library }) {
         >
           刮削未刮削的
         </Button>
-        <Divider orientation="vertical" />
-        <Button
-          size="xs"
-          variant="light"
-          loading={running === "arrange"}
-          disabled={running !== null}
-          onClick={() => {
-            start.reset();
-            setPreviewing(true);
-          }}
-        >
-          整理整库
-        </Button>
+        {canArrange && (
+          <>
+            <Divider orientation="vertical" />
+            <Button
+              size="xs"
+              variant="light"
+              loading={running === "arrange"}
+              disabled={running !== null}
+              onClick={() => {
+                start.reset();
+                setPreviewing(true);
+              }}
+            >
+              整理整库
+            </Button>
+          </>
+        )}
       </Group>
       <ArrangePreviewModal
         opened={previewing}

@@ -4,13 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   type MovieHit,
+  type SourceHit,
   type UnmatchedFile,
   bindMediaFile,
+  bindMediaFileToSource,
   fetchLibraries,
   fetchUnmatched,
 } from "../api";
+import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
-import { isSeriesType, useDataTypes } from "../dataTypes";
+import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize } from "../format";
 
 function splitPath(path: string): [string, string] {
@@ -30,8 +33,18 @@ export function UnmatchedPage() {
   });
   const [binding, setBinding] = useState<UnmatchedFile | null>(null);
   const bind = useMutation({
-    mutationFn: ({ file, hit }: { file: UnmatchedFile; hit: MovieHit }) =>
-      bindMediaFile(file.id, hit),
+    mutationFn: ({
+      file,
+      hit,
+      source,
+    }: {
+      file: UnmatchedFile;
+      hit: MovieHit | SourceHit;
+      source?: string;
+    }) =>
+      source !== undefined && "external_id" in hit
+        ? bindMediaFileToSource(file.id, source, hit)
+        : bindMediaFile(file.id, hit as MovieHit),
     onSuccess: (_result, { file, hit }) => {
       setBinding(null);
       void queryClient.invalidateQueries({ queryKey: ["unmatched"] });
@@ -59,8 +72,8 @@ export function UnmatchedPage() {
         />
       </Group>
       <Text size="sm" c="dimmed">
-        扫描时没能自动认出的视频。点「匹配」在 TMDB
-        上搜索并选定一部，同目录的分段和字幕会一起归到这部电影。
+        扫描时没能自动认出的视频和游戏文件夹。点「匹配」搜索并选定一个条目：电影和剧在 TMDB
+        上搜，同目录的分段和字幕会一起归过去；Galgame 等插件类型在它的来源里搜。
       </Text>
       {files.isPending && <Loader size="sm" />}
       {files.isError && (
@@ -128,7 +141,18 @@ export function UnmatchedPage() {
           </Table.Tbody>
         </Table>
       )}
-      {binding !== null && (
+      {binding !== null && isPluginType(dataTypes.data, binding.data_type_id) && (
+        <SourceSearchModal
+          title={`匹配 ${splitPath(binding.path)[1]}`}
+          dataType={binding.data_type_id}
+          initialQuery={binding.guess_title}
+          picking={bind.isPending}
+          error={bind.isError ? bind.error.message : null}
+          onPick={(source, hit) => bind.mutate({ file: binding, hit, source })}
+          onClose={() => setBinding(null)}
+        />
+      )}
+      {binding !== null && !isPluginType(dataTypes.data, binding.data_type_id) && (
         <TmdbSearchModal
           title={`匹配 ${splitPath(binding.path)[1]}`}
           kind={isSeriesType(dataTypes.data, binding.data_type_id) ? "tv" : "movie"}

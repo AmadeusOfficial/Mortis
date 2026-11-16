@@ -185,6 +185,82 @@ export interface DataType {
   id: string;
   name: string;
   structure: string;
+  // 插件数据类型的插件 id；内置类型为 null。
+  plugin_id: string | null;
+}
+
+// 插件设置和密钥的表单由后端给的 JSON Schema 生成。
+export interface JsonSchemaProperty {
+  type?: string;
+  title?: string;
+  description?: string;
+  default?: unknown;
+  enum?: string[];
+}
+
+export interface JsonSchema {
+  properties?: Record<string, JsonSchemaProperty>;
+}
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  kind: "data_type" | "source";
+  origin: "builtin" | "user";
+  enabled: boolean;
+  error: string | null;
+  data_type: string | null;
+  settings_schema: JsonSchema | null;
+  settings: Record<string, unknown> | null;
+  secrets_schema: JsonSchema | null;
+  // 每个密钥是否已填，不含原文。
+  secrets: Record<string, boolean> | null;
+  oauth: boolean;
+  logged_in: boolean;
+  // Unix 秒
+  expires_at: number | null;
+  notice: string | null;
+}
+
+export interface PluginUpdate {
+  enabled?: boolean;
+  settings?: Record<string, unknown>;
+  secrets?: Record<string, string>;
+}
+
+export interface SourceRef {
+  id: string;
+  name: string;
+}
+
+export interface OrderEntry {
+  source: string;
+  excluded: boolean;
+}
+
+export interface FieldOrder {
+  key: string;
+  label: string;
+  // false 表示跟着整体顺序。
+  custom: boolean;
+  order: OrderEntry[];
+}
+
+export interface SourceOrders {
+  sources: SourceRef[];
+  whole: OrderEntry[];
+  fields: FieldOrder[];
+}
+
+// 来源插件的搜索结果。
+export interface SourceHit {
+  external_id: string;
+  title: string;
+  original_title: string | null;
+  year: number | null;
+  overview: string | null;
+  poster_url: string | null;
 }
 
 export interface Library {
@@ -446,6 +522,37 @@ export const bindMediaFile = (fileId: number, hit: MovieHit) =>
     release_date: hit.release_date,
   });
 
+export const bindMediaFileToSource = (fileId: number, source: string, hit: SourceHit) =>
+  request<{ item_id: number; task_id: number }>("POST", `/api/media-files/${fileId}/bind`, {
+    source,
+    external_id: hit.external_id,
+    title: hit.title,
+    original_title: hit.original_title,
+  });
+
+export const fetchPlugins = () => request<PluginInfo[]>("GET", "/api/plugins");
+export const reloadPlugins = () => request<PluginInfo[]>("POST", "/api/plugins/reload");
+export const updatePlugin = (id: string, body: PluginUpdate) =>
+  request<PluginInfo>("PUT", `/api/plugins/${id}`, body);
+export const logoutPlugin = (id: string) => request<PluginInfo>("DELETE", `/api/plugins/${id}/oauth`);
+// 浏览器整页跳过去，登录完由后端跳回设置页。
+export const pluginLoginUrl = (id: string) => `/api/plugins/${id}/oauth/login`;
+
+export const fetchSources = (dataType: string) =>
+  request<SourceRef[]>("GET", `/api/sources?data_type=${encodeURIComponent(dataType)}`);
+export const searchSource = (source: string, query: string) =>
+  request<SourceHit[]>(
+    "GET",
+    `/api/sources/${source}/search?query=${encodeURIComponent(query)}`,
+  );
+
+export const fetchSourceOrders = (dataType: string) =>
+  request<SourceOrders>("GET", `/api/data-types/${dataType}/source-orders`);
+export const saveSourceOrders = (dataType: string, orders: Record<string, OrderEntry[] | null>) =>
+  request<SourceOrders>("PUT", `/api/data-types/${dataType}/source-orders`, { orders });
+export const resetSourceOrders = (dataType: string) =>
+  request<SourceOrders>("POST", `/api/data-types/${dataType}/source-orders/reset`);
+
 export const fetchWall = (libraryId: number, q: string, sort: WallSort, order: SortOrder) => {
   const params = new URLSearchParams({ sort, order });
   if (q.trim() !== "") {
@@ -462,6 +569,8 @@ export const scrapeItem = (id: number, force = true) =>
   request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
 export const rematchItem = (id: number, tmdbId: number) =>
   request<Enqueued>("POST", `/api/items/${id}/rematch`, { tmdb_id: tmdbId });
+export const rematchItemToSource = (id: number, source: string, externalId: string) =>
+  request<Enqueued>("POST", `/api/items/${id}/rematch`, { source, external_id: externalId });
 export const fetchItemArrangePreview = (id: number) =>
   request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
 export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);
