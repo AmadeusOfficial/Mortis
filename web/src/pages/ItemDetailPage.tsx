@@ -51,6 +51,9 @@ function externalLink(provider: string, id: string, kind: string): string | null
   return null;
 }
 
+// 只列视频和字幕；写出的 NFO、图片、演员头像不在这里显示。
+const FILE_KIND_LABELS: Record<string, string> = { video: "视频", subtitle: "字幕" };
+
 export function ItemDetailPage() {
   const id = Number(useParams().itemId);
   const queryClient = useQueryClient();
@@ -149,6 +152,7 @@ export function ItemDetailPage() {
     );
   const busy = watcher.watching || scrape.isPending;
   const hasVideo = detail.files.some((file) => file.file_kind === "video");
+  const sourceFiles = detail.files.filter((file) => file.file_kind in FILE_KIND_LABELS);
   const canOutput = detail.kind === "work" && hasVideo;
 
   const header = (
@@ -325,15 +329,15 @@ export function ItemDetailPage() {
           </Table>
         </Paper>
       ))}
-      {detail.files.length > 0 && (
+      {sourceFiles.length > 0 && (
         <Paper withBorder p="md">
           <Title order={4} mb="sm">
             文件
           </Title>
-          {detail.files.map((file) => (
+          {sourceFiles.map((file) => (
             <Group key={file.id} gap="xs">
               <Badge size="sm" variant="outline">
-                {file.file_kind === "video" ? "视频" : "字幕"}
+                {FILE_KIND_LABELS[file.file_kind]}
               </Badge>
               <Text size="sm" ff="monospace">
                 {file.path}

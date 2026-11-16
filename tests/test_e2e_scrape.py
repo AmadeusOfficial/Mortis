@@ -119,7 +119,14 @@ def test_written_files_and_rename_preview(page: Page, base_url: str, movies: Pat
     page.get_by_role("link", name="打开").click()
     page.get_by_role("link", name="黑客帝国").first.click()
     expect(page.get_by_role("heading", name="黑客帝国")).to_be_visible()
-    expect(page.get_by_text(str(old / "movie.nfo"))).to_be_visible(timeout=SLOW)
+    expect(page.get_by_text(str(old / "The.Matrix.1999.mkv"))).to_be_visible(timeout=SLOW)
+    for _ in range(40):
+        if (old / "movie.nfo").is_file():
+            break
+        page.wait_for_timeout(500)
+    assert (old / "movie.nfo").is_file()
+    expect(page.get_by_text("movie.nfo")).to_have_count(0)
+    expect(page.get_by_text(".actors")).to_have_count(0)
 
     page.get_by_role("button", name="重命名", exact=True).click()
     dialog = page.get_by_role("dialog")
