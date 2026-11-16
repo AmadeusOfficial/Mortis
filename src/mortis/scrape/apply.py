@@ -20,6 +20,7 @@ from mortis.db.models import (
     utc_now,
 )
 from mortis.items.subtitle import refresh_subtitle
+from mortis.scrape.common import person_key
 
 EMPTY: tuple[Any, ...] = (None, "", [], {})
 DEFAULT_ORDER = ["tmdb"]
@@ -54,22 +55,51 @@ def source_order(session: Session, data_type_id: str) -> list[str]:
     return list(rows) or list(DEFAULT_ORDER)
 
 
+def field_orders(session: Session, data_type_id: str, sources: list[str]) -> dict[str, list[str]]:
+    """每个字段的来源顺序，键 "" 是整体顺序。
+
+    没写进顺序的已启用来源排在最后；字段行里排除的来源这个字段不用。
+    """
+    rows = session.scalars(
+        select(SourceOrder)
+        .where(SourceOrder.data_type_id == data_type_id)
+        .order_by(SourceOrder.field_key, SourceOrder.position)
+    ).all()
+    grouped: dict[str, list[SourceOrder]] = {}
+    for row in rows:
+        grouped.setdefault(row.field_key, []).append(row)
+    whole_rows = grouped.pop("", [])
+    whole = [row.source for row in whole_rows if not row.is_excluded]
+    dropped = {row.source for row in whole_rows if row.is_excluded}
+    whole += [source for source in sources if source not in whole and source not in dropped]
+    orders = {"": whole}
+    for key, field_rows in grouped.items():
+        listed = [row.source for row in field_rows if not row.is_excluded]
+        excluded = {row.source for row in field_rows if row.is_excluded}
+        orders[key] = listed + [s for s in whole if s not in listed and s not in excluded]
+    return orders
+
+
 def plan_values(
     fields: Iterable[TypeField],
     candidates: Mapping[str, Mapping[str, Any]],
-    order: list[str],
+    order: list[str] | Mapping[str, list[str]],
     skip: set[str],
 ) -> dict[str, Pick | None]:
-    """跳过的字段不出现；各来源都没值的字段是 None，表示要清空。"""
+    """跳过的字段不出现；各来源都没值的字段是 None，表示要清空。
+
+    order 是整体顺序，或 field_orders 给出的按字段顺序。
+    """
     plan: dict[str, Pick | None] = {}
     for field in fields:
         key = field.field_key
         if key in skip:
             continue
+        sources = order if isinstance(order, list) else order.get(key, order[""])
         plan[key] = next(
             (
                 Pick(source, candidates[source][key])
-                for source in order
+                for source in sources
                 if candidates.get(source, {}).get(key) not in EMPTY
             ),
             None,
@@ -110,12 +140,13 @@ def write_tags(session: Session, item: Item, tag_kind: str, names: list[str]) ->
 
 def _person_for(session: Session, entry: Mapping[str, Any], files: Mapping[str, str]) -> Person:
     now = utc_now()
+    provider, external_id = person_key(dict(entry))
     person = session.scalar(
         select(Person)
         .join(PersonExternalId, PersonExternalId.person_id == Person.id)
         .where(
-            PersonExternalId.provider == "tmdb",
-            PersonExternalId.external_id == str(entry["tmdb_id"]),
+            PersonExternalId.provider == provider,
+            PersonExternalId.external_id == external_id,
         )
     )
     if person is None:
@@ -128,9 +159,7 @@ def _person_for(session: Session, entry: Mapping[str, Any], files: Mapping[str, 
         session.add(person)
         session.flush()
         session.add(
-            PersonExternalId(
-                person_id=person.id, provider="tmdb", external_id=str(entry["tmdb_id"])
-            )
+            PersonExternalId(person_id=person.id, provider=provider, external_id=external_id)
         )
     elif (person.name, person.original_name) != (entry["name"], entry.get("original_name")):
         person.name = entry["name"]

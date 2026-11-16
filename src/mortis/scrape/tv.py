@@ -305,7 +305,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         if config.images.actor_images:
             with ctx.session_factory() as session:
                 urls += missing_photos(session, people)
-        files = download_images(store, tmdb, urls, ctx)
+        files = download_images(store, tmdb.http, urls, ctx)
 
     ctx.check_cancelled()
     with services.locks.hold("catalog-write"), ctx.session_factory() as session:

@@ -3,6 +3,7 @@
 import json
 from typing import Any
 
+import httpx2 as httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,7 +16,6 @@ from mortis.db.models import (
     utc_now,
 )
 from mortis.scrape.images import ImageError, ImageStore
-from mortis.sources.tmdb.client import TmdbClient
 from mortis.tasks.base import TaskContext
 
 SOURCE = "tmdb"
@@ -43,22 +43,26 @@ def tmdb_id_of(session: Session, item_id: int) -> int | None:
     return int(value) if value and value.isdigit() else None
 
 
-def save_snapshot(session: Session, item_id: int, raw: dict[str, Any]) -> None:
-    record = session.get(ItemSourceRecord, (item_id, SOURCE))
+def save_snapshot(
+    session: Session, item_id: int, raw: dict[str, Any], source: str = SOURCE
+) -> None:
+    record = session.get(ItemSourceRecord, (item_id, source))
     text = json.dumps(raw, ensure_ascii=False)
     if record is None:
         session.add(
-            ItemSourceRecord(item_id=item_id, source=SOURCE, fetched_at=utc_now(), raw=text)
+            ItemSourceRecord(item_id=item_id, source=source, fetched_at=utc_now(), raw=text)
         )
     else:
         record.raw = text
         record.fetched_at = utc_now()
 
 
-def load_snapshot(session: Session, item_id: int | None, force: bool) -> dict[str, Any] | None:
+def load_snapshot(
+    session: Session, item_id: int | None, force: bool, source: str = SOURCE
+) -> dict[str, Any] | None:
     if item_id is None or force:
         return None
-    record = session.get(ItemSourceRecord, (item_id, SOURCE))
+    record = session.get(ItemSourceRecord, (item_id, source))
     return json.loads(record.raw) if record is not None else None
 
 
@@ -74,7 +78,7 @@ def save_external_ids(session: Session, item_id: int, ids: dict[str, str]) -> No
 
 
 def download_images(
-    store: ImageStore, tmdb: TmdbClient, urls: list[str], ctx: TaskContext
+    store: ImageStore, http: httpx.Client, urls: list[str], ctx: TaskContext
 ) -> dict[str, str]:
     wanted = list(dict.fromkeys(urls))
     files = {url: rel for url in wanted if (rel := store.cached(url)) is not None}
@@ -85,27 +89,35 @@ def download_images(
             continue
         ctx.check_cancelled()
         try:
-            files[url] = store.download(tmdb.http, url)
+            files[url] = store.download(http, url)
         except ImageError as error:
             ctx.log(f"图片下载失败：{url}（{error}）")
     return files
 
 
+def person_key(entry: dict[str, Any]) -> tuple[str, str]:
+    """人物在来源里的编号。TMDB 的候选值用 tmdb_id，插件的用 provider 和 external_id。"""
+    if "tmdb_id" in entry:
+        return SOURCE, str(entry["tmdb_id"])
+    return str(entry["provider"]), str(entry["external_id"])
+
+
 def missing_photos(session: Session, actors: list[dict[str, Any]]) -> list[str]:
-    ids = [str(actor["tmdb_id"]) for actor in actors if actor.get("photo_url")]
-    has_photo = set(
-        session.scalars(
-            select(PersonExternalId.external_id)
-            .join(Person, Person.id == PersonExternalId.person_id)
+    """还没有头像的人物的头像地址。"""
+    urls: list[str] = []
+    for actor in actors:
+        if not actor.get("photo_url"):
+            continue
+        provider, external_id = person_key(actor)
+        has_photo = session.scalar(
+            select(Person.id)
+            .join(PersonExternalId, PersonExternalId.person_id == Person.id)
             .where(
-                PersonExternalId.provider == "tmdb",
-                PersonExternalId.external_id.in_(ids),
+                PersonExternalId.provider == provider,
+                PersonExternalId.external_id == external_id,
                 Person.photo_path.is_not(None),
             )
         )
-    )
-    return [
-        actor["photo_url"]
-        for actor in actors
-        if actor.get("photo_url") and str(actor["tmdb_id"]) not in has_photo
-    ]
+        if has_photo is None:
+            urls.append(actor["photo_url"])
+    return urls

@@ -14,19 +14,18 @@ from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
 
 
 def unscraped_work_ids(session: Session, library_id: int) -> list[int]:
+    """TMDB 类型：有 TMDB 编号、没有 TMDB 快照。插件类型：有任一外部编号、没有任何快照。"""
+    library = session.get(Library, library_id)
+    data_type = session.get(DataType, library.data_type_id) if library is not None else None
+    has_id = exists().where(ItemExternalId.item_id == Item.id)
+    has_record = exists().where(ItemSourceRecord.item_id == Item.id)
+    if data_type is None or data_type.plugin_id is None:
+        has_id = has_id.where(ItemExternalId.provider == "tmdb")
+        has_record = has_record.where(ItemSourceRecord.source == "tmdb")
     return list(
         session.scalars(
             select(Item.id)
-            .where(
-                Item.library_id == library_id,
-                Item.kind == "work",
-                exists().where(
-                    ItemExternalId.item_id == Item.id, ItemExternalId.provider == "tmdb"
-                ),
-                ~exists().where(
-                    ItemSourceRecord.item_id == Item.id, ItemSourceRecord.source == "tmdb"
-                ),
-            )
+            .where(Item.library_id == library_id, Item.kind == "work", has_id, ~has_record)
             .order_by(Item.id)
         )
     )

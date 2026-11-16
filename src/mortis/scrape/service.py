@@ -28,6 +28,7 @@ from mortis.scrape.common import (
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
+from mortis.scrape.item import scrape_item
 from mortis.scrape.tv import scrape_show
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.common import SOURCE
@@ -112,7 +113,7 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
             collection = _Collection(
                 collection_id, collection_raw, collection_fetched, collection_values
             )
-        files = download_images(store, tmdb, urls, ctx)
+        files = download_images(store, tmdb.http, urls, ctx)
 
     ctx.check_cancelled()
     with services.locks.hold("catalog-write"), ctx.session_factory() as session:
@@ -185,12 +186,15 @@ def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     force = bool(payload.get("force"))
     with ctx.session_factory() as session:
         row = session.execute(
-            select(DataType.structure, Item.data_type_id)
+            select(DataType.structure, DataType.plugin_id, Item.data_type_id)
             .join(Item, Item.data_type_id == DataType.id)
             .where(Item.id == item_id)
         ).first()
     structure = row.structure if row is not None else None
     data_type_id = row.data_type_id if row is not None else ""
+    if row is not None and row.plugin_id is not None:
+        # 插件类型不写 NFO、不整理
+        return TaskResult(result=scrape_item(ctx, item_id, force=force))
     config = ctx.services.config_store.load_config()
     if structure == "series":
         result = scrape_show(ctx, item_id, force=force)
@@ -208,19 +212,19 @@ def handle_scrape_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResu
     library_id = int(payload["library_id"])
     force = bool(payload.get("force"))
     with ctx.session_factory() as session:
-        if session.get(Library, library_id) is None:
+        library = session.get(Library, library_id)
+        if library is None:
             raise TaskError("媒体库不存在，可能已被删除")
+        data_type = session.get(DataType, library.data_type_id)
+        by_plugin = data_type is not None and data_type.plugin_id is not None
         if force:
+            has_id = exists().where(ItemExternalId.item_id == Item.id)
+            if not by_plugin:
+                has_id = has_id.where(ItemExternalId.provider == "tmdb")
             ids = list(
                 session.scalars(
                     select(Item.id)
-                    .where(
-                        Item.library_id == library_id,
-                        Item.kind == "work",
-                        exists().where(
-                            ItemExternalId.item_id == Item.id, ItemExternalId.provider == "tmdb"
-                        ),
-                    )
+                    .where(Item.library_id == library_id, Item.kind == "work", has_id)
                     .order_by(Item.id)
                 )
             )
