@@ -1,3 +1,4 @@
+import re
 import textwrap
 from collections.abc import Iterator
 from pathlib import Path
@@ -200,7 +201,7 @@ def test_episode_play_icon(page: Page, world: tuple[World, str]) -> None:
 
     page.goto(f"{url}/items/{show}")
     expect(page.get_by_role("button", name="播放", exact=True)).to_have_count(0)
-    page.get_by_text("第 1 季 · 1 集").click()
+    page.get_by_role("link", name=re.compile("开端")).hover()
     page.get_by_role("button", name="播放第 1 集 开端").click()
     expect(page.get_by_text("已用 假播放器 打开 某剧.S01E01.mkv")).to_be_visible()
     assert state.played() == [str(video)]

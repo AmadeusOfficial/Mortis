@@ -105,9 +105,11 @@ def test_anime_sequel_folder_lands_in_its_season(page: Page, base_url: str, root
 
     page.get_by_role("link", name=re.compile(r"^进入媒体库")).first.click()
     page.get_by_role("link", name="赌博默示录").first.click()
-    expect(page.get_by_role("heading", name="赌博默示录")).to_be_visible()
-    expect(page.get_by_text("赌博破戒录 · 26 集 · 有文件 3")).to_be_visible(timeout=SLOW)
-    expect(page.get_by_text("赌博默示录 · 26 集 · 有文件 0")).to_be_visible()
+    expect(page.get_by_role("heading", name="赌博默示录", level=1)).to_be_visible()
+    second = page.get_by_role("region", name="赌博破戒录", exact=True)
+    expect(second.get_by_text("26 集 · 有文件 3")).to_be_visible(timeout=SLOW)
+    first = page.get_by_role("region", name="赌博默示录", exact=True)
+    expect(first.get_by_text("26 集 · 有文件 0")).to_be_visible()
 
     page.get_by_role("button", name="整理", exact=True).click()
     dialog = page.get_by_role("dialog")

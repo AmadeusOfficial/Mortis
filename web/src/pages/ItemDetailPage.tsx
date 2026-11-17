@@ -1,4 +1,14 @@
-import { Alert, Avatar, Button, Loader, Paper, SimpleGrid, Tabs, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Alert,
+  Avatar,
+  Button,
+  Loader,
+  Paper,
+  SimpleGrid,
+  Tabs,
+  Text,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
@@ -27,7 +37,7 @@ import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
-import { SeasonList } from "../components/SeasonList";
+import { SeasonRails } from "../components/episodes/SeasonRail";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { Pill, ratingText, sourceLabel } from "../components/ui";
@@ -52,7 +62,12 @@ import {
 import { useTaskWatcher } from "../useTaskWatcher";
 import classes from "./ItemDetailPage.module.css";
 
-function externalLink(provider: string, id: string, kind: string, series: boolean): string | null {
+function externalLink(
+  provider: string,
+  id: string,
+  kind: string,
+  series: boolean,
+): string | null {
   if (provider === "tmdb") {
     const path = kind === "collection" ? "collection" : series ? "tv" : "movie";
     return `https://www.themoviedb.org/${path}/${id}`;
@@ -103,7 +118,11 @@ function TagsValue({ tags }: { tags: string[] }) {
         <Pill key={tag}>{tag}</Pill>
       ))}
       {tags.length > TAGS_SHOWN && (
-        <button type="button" className={classes.tagsMore} onClick={() => setAll(!all)}>
+        <button
+          type="button"
+          className={classes.tagsMore}
+          onClick={() => setAll(!all)}
+        >
           {all ? "收起" : `等 ${tags.length} 个`}
         </button>
       )}
@@ -112,14 +131,22 @@ function TagsValue({ tags }: { tags: string[] }) {
 }
 
 function isEmpty(value: unknown): boolean {
-  return value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
+  return (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
 }
 
 function firstImage(field: FieldOut | undefined): string | null {
   if (field === undefined || !Array.isArray(field.value)) {
     return null;
   }
-  return (field.value as ImageValue[]).find((image) => image.url !== null)?.url ?? null;
+  return (
+    (field.value as ImageValue[]).find((image) => image.url !== null)?.url ??
+    null
+  );
 }
 
 function textValue(fields: Map<string, FieldOut>, key: string): string | null {
@@ -130,7 +157,10 @@ function textValue(fields: Map<string, FieldOut>, key: string): string | null {
 export function ItemDetailPage() {
   const id = Number(useParams().itemId);
   const queryClient = useQueryClient();
-  const item = useQuery({ queryKey: ["item", id], queryFn: () => fetchItem(id) });
+  const item = useQuery({
+    queryKey: ["item", id],
+    queryFn: () => fetchItem(id),
+  });
   const dataTypes = useDataTypes();
   const [editing, setEditing] = useState<FieldOut | null>(null);
   const [rematching, setRematching] = useState(false);
@@ -140,24 +170,33 @@ export function ItemDetailPage() {
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
-    void queryClient.invalidateQueries({ queryKey: ["wall", detail.library_id] });
+    void queryClient.invalidateQueries({
+      queryKey: ["wall", detail.library_id],
+    });
   };
   const watcher = useTaskWatcher((task) => {
     setArranging(false);
     void queryClient.invalidateQueries({ queryKey: ["item", id] });
-    void queryClient.invalidateQueries({ queryKey: ["item-arrange-preview", id] });
+    void queryClient.invalidateQueries({
+      queryKey: ["item-arrange-preview", id],
+    });
     void queryClient.invalidateQueries({ queryKey: ["wall"] });
     notifications.show(
       task.status === "succeeded"
         ? { color: "green", message: `${task.type_label}完成` }
-        : { color: "red", title: `${task.type_label}失败`, message: task.error ?? "任务没有完成" },
+        : {
+            color: "red",
+            title: `${task.type_label}失败`,
+            message: task.error ?? "任务没有完成",
+          },
     );
   });
   const player = usePlayItem();
   const scrape = useMutation({
     mutationFn: () => scrapeItem(id, true),
     onSuccess: ({ task_id }) => watcher.watch(task_id),
-    onError: (error) => notifications.show({ color: "red", message: error.message }),
+    onError: (error) =>
+      notifications.show({ color: "red", message: error.message }),
   });
   const preview = useQuery({
     queryKey: ["item-arrange-preview", id],
@@ -176,7 +215,9 @@ export function ItemDetailPage() {
     onError: () => setArranging(false),
   });
   const rematch = useMutation({
-    mutationFn: (target: { tmdbId: number } | { source: string; externalId: string }) =>
+    mutationFn: (
+      target: { tmdbId: number } | { source: string; externalId: string },
+    ) =>
       "tmdbId" in target
         ? rematchItem(id, target.tmdbId)
         : rematchItemToSource(id, target.source, target.externalId),
@@ -187,8 +228,13 @@ export function ItemDetailPage() {
     },
   });
   const supplement = useMutation({
-    mutationFn: ({ source, externalId }: { source: string; externalId: string }) =>
-      addItemSource(id, source, externalId),
+    mutationFn: ({
+      source,
+      externalId,
+    }: {
+      source: string;
+      externalId: string;
+    }) => addItemSource(id, source, externalId),
     onSuccess: ({ task_id }) => {
       setSupplementing(false);
       watcher.watch(task_id);
@@ -207,14 +253,18 @@ export function ItemDetailPage() {
       updateItemFields(id, { [key]: value }),
     onSuccess: (detail) => {
       setDetail(detail);
-      notifications.show({ color: "green", message: `已保存「${editing?.label ?? ""}」并锁定` });
+      notifications.show({
+        color: "green",
+        message: `已保存「${editing?.label ?? ""}」并锁定`,
+      });
       setEditing(null);
     },
   });
   const locks = useMutation({
     mutationFn: (keys: string[]) => updateItemLocks(id, keys),
     onSuccess: setDetail,
-    onError: (error) => notifications.show({ color: "red", message: error.message }),
+    onError: (error) =>
+      notifications.show({ color: "red", message: error.message }),
   });
 
   if (item.isPending) {
@@ -231,18 +281,23 @@ export function ItemDetailPage() {
   const series = isSeriesType(dataTypes.data, detail.data_type_id);
   const allFields = detail.sections.flatMap((section) => section.fields);
   const byKey = new Map(allFields.map((field) => [field.key, field]));
-  const lockedKeys = allFields.filter((field) => field.locked).map((field) => field.key);
+  const lockedKeys = allFields
+    .filter((field) => field.locked)
+    .map((field) => field.key);
   const originalTitle = textValue(byKey, "original_title");
   const toggleLock = (field: FieldOut) =>
     locks.mutate(
-      field.locked ? lockedKeys.filter((key) => key !== field.key) : [...lockedKeys, field.key],
+      field.locked
+        ? lockedKeys.filter((key) => key !== field.key)
+        : [...lockedKeys, field.key],
     );
   const startEdit = (field: FieldOut) => {
     edit.reset();
     setEditing(field);
   };
   const sourceName = (source: string) =>
-    sources.data?.find((entry) => entry.id === source)?.name ?? sourceLabel(source);
+    sources.data?.find((entry) => entry.id === source)?.name ??
+    sourceLabel(source);
   const actions = (field: FieldOut) => (
     <FieldActions
       field={field}
@@ -257,7 +312,9 @@ export function ItemDetailPage() {
   const hasVideo =
     detail.files.some((file) => file.file_kind === "video") ||
     detail.seasons.some((season) => season.file_count > 0);
-  const sourceFiles = detail.files.filter((file) => file.file_kind in FILE_KIND_LABELS);
+  const sourceFiles = detail.files.filter(
+    (file) => file.file_kind in FILE_KIND_LABELS,
+  );
   // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
   const isWork = detail.kind === "work";
   const canArrange = isWork && hasVideo && detail.scraped_at !== null;
@@ -267,15 +324,23 @@ export function ItemDetailPage() {
     detail.files.some((file) => file.file_kind === "video");
   const landscape = detail.kind === "episode";
 
-  const peopleFields = allFields.filter((field) => field.value_type === "people");
-  const imageFields = allFields.filter((field) => field.value_type === "images");
-  const overviewFields = allFields.filter((field) => OVERVIEW_KEYS.has(field.key));
+  const peopleFields = allFields.filter(
+    (field) => field.value_type === "people",
+  );
+  const imageFields = allFields.filter(
+    (field) => field.value_type === "images",
+  );
+  const overviewFields = allFields.filter((field) =>
+    OVERVIEW_KEYS.has(field.key),
+  );
   const panelSections = detail.sections
     .map((section) => ({
       name: section.name,
       fields: section.fields.filter(
         (field) =>
-          field.value_type !== "people" && field.value_type !== "images" && !OVERVIEW_KEYS.has(field.key),
+          field.value_type !== "people" &&
+          field.value_type !== "images" &&
+          !OVERVIEW_KEYS.has(field.key),
       ),
     }))
     .filter((section) => section.fields.length > 0);
@@ -283,23 +348,34 @@ export function ItemDetailPage() {
     (sum, field) => sum + (Array.isArray(field.value) ? field.value.length : 0),
     0,
   );
-  const imagesFilled = imageFields.filter((field) => firstImage(field) !== null).length;
+  const imagesFilled = imageFields.filter(
+    (field) => firstImage(field) !== null,
+  ).length;
   const mainCast =
-    MAIN_CAST_KEYS.map((key) => byKey.get(key)).find((field) => field !== undefined) ??
+    MAIN_CAST_KEYS.map((key) => byKey.get(key)).find(
+      (field) => field !== undefined,
+    ) ??
     [...peopleFields].sort(
-      (a, b) => (Array.isArray(b.value) ? b.value.length : 0) - (Array.isArray(a.value) ? a.value.length : 0),
+      (a, b) =>
+        (Array.isArray(b.value) ? b.value.length : 0) -
+        (Array.isArray(a.value) ? a.value.length : 0),
     )[0];
-  const crewFields = peopleFields.filter((field) => field !== mainCast && !isEmpty(field.value));
+  const crewFields = peopleFields.filter(
+    (field) => field !== mainCast && !isEmpty(field.value),
+  );
 
   const logo = firstImage(byKey.get("clearlogo"));
   const tagline = textValue(byKey, "tagline");
   const metaPills: ReactNode[] = [];
-  const rating = allFields.find((field) => field.value_type === "rating" && !isEmpty(field.value));
+  const rating = allFields.find(
+    (field) => field.value_type === "rating" && !isEmpty(field.value),
+  );
   if (rating !== undefined) {
     const best = (rating.value as RatingValue[])[0];
     metaPills.push(
       <Pill key="rating" tone="accent">
-        <IconStar size={12} /> {ratingText(best.rating, best.max_rating)} {sourceLabel(best.source)}
+        <IconStar size={12} /> {ratingText(best.rating, best.max_rating)}{" "}
+        {sourceLabel(best.source)}
       </Pill>,
     );
   }
@@ -325,7 +401,11 @@ export function ItemDetailPage() {
   }
   if (detail.collection !== null) {
     metaPills.push(
-      <Link key="collection" to={`/items/${detail.collection.id}`} className={classes.ext}>
+      <Link
+        key="collection"
+        to={`/items/${detail.collection.id}`}
+        className={classes.ext}
+      >
         系列 <b>{detail.collection.title}</b>
       </Link>,
     );
@@ -334,24 +414,38 @@ export function ItemDetailPage() {
   const hero = (
     <div className={classes.hero}>
       {detail.fanart_url !== null && (
-        <div className={classes.heroBg} style={{ backgroundImage: `url("${detail.fanart_url}")` }} />
+        <div
+          className={classes.heroBg}
+          style={{ backgroundImage: `url("${detail.fanart_url}")` }}
+        />
       )}
       <span className={classes.scrapedAt}>
-        {detail.scraped_at !== null ? `上次刮削 ${formatTime(detail.scraped_at)}` : "还没刮削"}
+        {detail.scraped_at !== null
+          ? `上次刮削 ${formatTime(detail.scraped_at)}`
+          : "还没刮削"}
       </span>
       <div className={classes.heroInner}>
-        <div className={`${classes.poster} ${landscape ? classes.landscape : ""}`}>
+        <div
+          className={`${classes.poster} ${landscape ? classes.landscape : ""}`}
+        >
           {detail.poster_url !== null ? (
             <img src={detail.poster_url} alt={detail.title} />
           ) : (
-            <div className={classes.posterBlank} style={landscape ? { aspectRatio: "16 / 9" } : undefined}>
+            <div
+              className={classes.posterBlank}
+              style={landscape ? { aspectRatio: "16 / 9" } : undefined}
+            >
               <IconImage size={32} />
             </div>
           )}
         </div>
         <div className={classes.heroText}>
           {detail.show !== null && (
-            <Link to={`/items/${detail.show.id}`} className={classes.crumb} style={{ marginBottom: 8 }}>
+            <Link
+              to={`/items/${detail.show.id}`}
+              className={classes.crumb}
+              style={{ marginBottom: 8 }}
+            >
               {detail.show.title}
               {detail.position !== null ? ` · ${detail.position}` : ""}
             </Link>
@@ -364,13 +458,20 @@ export function ItemDetailPage() {
           ) : (
             <h1 className={classes.title}>{detail.title}</h1>
           )}
-          {(detail.subtitle !== null || (logo !== null && detail.year !== null)) && (
+          {(detail.subtitle !== null ||
+            (logo !== null && detail.year !== null)) && (
             <div className={classes.subtitle}>
-              {logo !== null ? `${detail.title}${detail.year !== null ? `（${detail.year}）` : ""}` : detail.subtitle}
+              {logo !== null
+                ? `${detail.title}${detail.year !== null ? `（${detail.year}）` : ""}`
+                : detail.subtitle}
             </div>
           )}
-          {metaPills.length > 0 && <div className={classes.meta}>{metaPills}</div>}
-          {tagline !== null && <div className={classes.tagline}>「{tagline}」</div>}
+          {metaPills.length > 0 && (
+            <div className={classes.meta}>{metaPills}</div>
+          )}
+          {tagline !== null && (
+            <div className={classes.tagline}>「{tagline}」</div>
+          )}
           {(isWork || canPlay) && (
             <div className={classes.actions}>
               {canPlay && (
@@ -446,7 +547,13 @@ export function ItemDetailPage() {
                   </>
                 );
                 return href !== null ? (
-                  <a key={provider} className={classes.ext} href={href} target="_blank" rel="noreferrer">
+                  <a
+                    key={provider}
+                    className={classes.ext}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {body}
                   </a>
                 ) : (
@@ -462,12 +569,20 @@ export function ItemDetailPage() {
     </div>
   );
 
-  const sectionHead = (title: string, extra?: ReactNode, more?: { label: string; tab: string }) => (
+  const sectionHead = (
+    title: string,
+    extra?: ReactNode,
+    more?: { label: string; tab: string },
+  ) => (
     <div className={classes.sectionHead}>
       <h3>{title}</h3>
       {extra}
       {more !== undefined && (
-        <button type="button" className={classes.more} onClick={() => setTab(more.tab)}>
+        <button
+          type="button"
+          className={classes.more}
+          onClick={() => setTab(more.tab)}
+        >
           {more.label}
         </button>
       )}
@@ -478,7 +593,13 @@ export function ItemDetailPage() {
     <div className={classes.people}>
       {people.map((person, index) => (
         <div key={`${person.id}-${index}`} className={classes.person}>
-          <Avatar src={person.photo_url} alt={person.name} size={72} radius={999} mx="auto">
+          <Avatar
+            src={person.photo_url}
+            alt={person.name}
+            size={72}
+            radius={999}
+            mx="auto"
+          >
             {person.name.slice(0, 1)}
           </Avatar>
           <b title={person.name}>{person.name}</b>
@@ -497,28 +618,39 @@ export function ItemDetailPage() {
       ? (field.value as ImageValue[]).filter((image) => image.url !== null)
       : [];
     const url = images[0]?.url ?? null;
-    const transparent = ["clearlogo", "clearart", "logo", "characterart"].includes(field.key);
+    const transparent = [
+      "clearlogo",
+      "clearart",
+      "logo",
+      "characterart",
+    ].includes(field.key);
     return (
-      <div key={field.key} className={`${classes.slot} ${classes.hoverRow} ${url === null ? classes.slotEmpty : ""}`}>
+      <div
+        key={field.key}
+        className={`${classes.slot} ${classes.hoverRow} ${url === null ? classes.slotEmpty : ""}`}
+      >
         {url !== null ? (
           <div
             className={`${classes.slotPic} ${transparent ? classes.checker : ""} ${
-              ["fanart", "thumb", "landscape", "banner"].includes(field.key) ? classes.cover : ""
+              ["fanart", "thumb", "landscape", "banner"].includes(field.key)
+                ? classes.cover
+                : ""
             }`}
           >
             <img src={url} alt={field.label} loading="lazy" />
           </div>
         ) : (
           <div className={classes.slotPic}>
-            <IconImage size={22} />
-            缺{field.label}
+            <IconImage size={22} />缺{field.label}
           </div>
         )}
         <div className={classes.slotCap}>
           <Text size="sm" fw={600} c="var(--mo-text)">
             {field.label}
           </Text>
-          {images.length > 1 && <span className="mo-mono">{images.length} 张</span>}
+          {images.length > 1 && (
+            <span className="mo-mono">{images.length} 张</span>
+          )}
           <span style={{ marginLeft: "auto" }}>{actions(field)}</span>
         </div>
       </div>
@@ -528,7 +660,10 @@ export function ItemDetailPage() {
   const overviewTab = (
     <>
       {overviewFields.map((field) => (
-        <div key={field.key} className={`${classes.section} ${classes.hoverRow}`}>
+        <div
+          key={field.key}
+          className={`${classes.section} ${classes.hoverRow}`}
+        >
           {sectionHead(field.label, actions(field))}
           {isEmpty(field.value) ? (
             <div className={classes.empty}>还没有{field.label}</div>
@@ -550,7 +685,27 @@ export function ItemDetailPage() {
       {detail.seasons.length > 0 && (
         <div className={classes.section}>
           {sectionHead("季和集", <small>{detail.seasons.length} 季</small>)}
-          <SeasonList seasons={detail.seasons} onPlay={player.play} playingId={player.playingId} />
+          <SeasonRails
+            seasons={detail.seasons}
+            renderEpisodeAction={(episode) =>
+              episode.playable ? (
+                <ActionIcon
+                  size={44}
+                  radius="xl"
+                  aria-label={`播放第 ${episode.number ?? "?"} 集 ${episode.title}`}
+                  loading={player.playingId === episode.id}
+                  onClick={() =>
+                    player.play(
+                      episode.id,
+                      `第 ${episode.number ?? "?"} 集 ${episode.title}`,
+                    )
+                  }
+                >
+                  <IconPlay size={20} />
+                </ActionIcon>
+              ) : null
+            }
+          />
         </div>
       )}
       {mainCast !== undefined && !isEmpty(mainCast.value) && (
@@ -580,12 +735,21 @@ export function ItemDetailPage() {
       )}
       {imagesFilled > 0 && (
         <div className={classes.section}>
-          {sectionHead("图片", <small>{imagesFilled} / {imageFields.length}</small>, {
-            label: "全部图片",
-            tab: "images",
-          })}
+          {sectionHead(
+            "图片",
+            <small>
+              {imagesFilled} / {imageFields.length}
+            </small>,
+            {
+              label: "全部图片",
+              tab: "images",
+            },
+          )}
           <div className={classes.images}>
-            {imageFields.filter((field) => firstImage(field) !== null).slice(0, 4).map(imageSlot)}
+            {imageFields
+              .filter((field) => firstImage(field) !== null)
+              .slice(0, 4)
+              .map(imageSlot)}
           </div>
         </div>
       )}
@@ -597,11 +761,16 @@ export function ItemDetailPage() {
       <div className={classes.empty}>这个类型没有人员字段</div>
     ) : (
       peopleFields.map((field) => (
-        <div key={field.key} className={`${classes.section} ${classes.hoverRow}`}>
+        <div
+          key={field.key}
+          className={`${classes.section} ${classes.hoverRow}`}
+        >
           {sectionHead(
             field.label,
             <>
-              <small>{Array.isArray(field.value) ? field.value.length : 0} 人</small>
+              <small>
+                {Array.isArray(field.value) ? field.value.length : 0} 人
+              </small>
               <span style={{ marginLeft: "auto" }}>{actions(field)}</span>
             </>,
           )}
@@ -617,13 +786,17 @@ export function ItemDetailPage() {
   const filesTab =
     sourceFiles.length === 0 ? (
       <div className={classes.empty}>
-        {detail.seasons.length > 0 ? "文件在各集里，展开季和集查看" : "没有关联的文件"}
+        {detail.seasons.length > 0
+          ? "文件在各集里，点开一集查看"
+          : "没有关联的文件"}
       </div>
     ) : (
       <Paper withBorder radius="lg" style={{ overflow: "hidden" }}>
         {sourceFiles.map((file) => (
           <div key={file.id} className={classes.file}>
-            <span className={`${classes.fileIcon} ${file.file_kind === "video" ? "" : classes.minor}`}>
+            <span
+              className={`${classes.fileIcon} ${file.file_kind === "video" ? "" : classes.minor}`}
+            >
               {FILE_KIND_ICONS[file.file_kind] ?? <IconFile size={16} />}
             </span>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -642,17 +815,25 @@ export function ItemDetailPage() {
       <div className={classes.panelHead}>
         <h3>资料</h3>
         <Text size="xs" c="dimmed" ml="auto">
-          {allFields.filter((field) => !isEmpty(field.value)).length} / {allFields.length} 项有值
+          {allFields.filter((field) => !isEmpty(field.value)).length} /{" "}
+          {allFields.length} 项有值
         </Text>
       </div>
       {panelSections.map((section) => (
         <div key={section.name}>
-          {panelSections.length > 1 && <div className={classes.group}>{section.name}</div>}
+          {panelSections.length > 1 && (
+            <div className={classes.group}>{section.name}</div>
+          )}
           {section.fields.map((field) => (
-            <div key={field.key} className={`${classes.kv} ${classes.hoverRow}`}>
+            <div
+              key={field.key}
+              className={`${classes.kv} ${classes.hoverRow}`}
+            >
               <span className={classes.kvLabel}>{field.label}</span>
               <div className={classes.kvValue}>
-                {field.value_type === "tags" && Array.isArray(field.value) && field.value.length > 0 ? (
+                {field.value_type === "tags" &&
+                Array.isArray(field.value) &&
+                field.value.length > 0 ? (
                   <TagsValue tags={field.value as string[]} />
                 ) : (
                   <FieldValue field={field} />
@@ -681,11 +862,24 @@ export function ItemDetailPage() {
         <Tabs value={tab} onChange={setTab} keepMounted={false}>
           <Tabs.List mb="lg">
             <Tabs.Tab value="overview">概览</Tabs.Tab>
-            <Tabs.Tab value="people">演职员 {peopleCount > 0 && <span className="mo-mono">{peopleCount}</span>}</Tabs.Tab>
-            <Tabs.Tab value="images">
-              图片 <span className="mo-mono">{imagesFilled}/{imageFields.length}</span>
+            <Tabs.Tab value="people">
+              演职员{" "}
+              {peopleCount > 0 && (
+                <span className="mo-mono">{peopleCount}</span>
+              )}
             </Tabs.Tab>
-            <Tabs.Tab value="files">文件 {sourceFiles.length > 0 && <span className="mo-mono">{sourceFiles.length}</span>}</Tabs.Tab>
+            <Tabs.Tab value="images">
+              图片{" "}
+              <span className="mo-mono">
+                {imagesFilled}/{imageFields.length}
+              </span>
+            </Tabs.Tab>
+            <Tabs.Tab value="files">
+              文件{" "}
+              {sourceFiles.length > 0 && (
+                <span className="mo-mono">{sourceFiles.length}</span>
+              )}
+            </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="overview">{overviewTab}</Tabs.Panel>
           <Tabs.Panel value="people">{peopleTab}</Tabs.Panel>
@@ -716,7 +910,9 @@ export function ItemDetailPage() {
           initialQuery={detail.title}
           picking={rematch.isPending}
           error={rematch.isError ? rematch.error.message : null}
-          onPick={(source, hit) => rematch.mutate({ source, externalId: hit.external_id })}
+          onPick={(source, hit) =>
+            rematch.mutate({ source, externalId: hit.external_id })
+          }
           onClose={() => setRematching(false)}
         />
       )}
@@ -728,7 +924,9 @@ export function ItemDetailPage() {
           exclude={Object.keys(detail.external_ids).slice(0, 1)}
           picking={supplement.isPending}
           error={supplement.isError ? supplement.error.message : null}
-          onPick={(source, hit) => supplement.mutate({ source, externalId: hit.external_id })}
+          onPick={(source, hit) =>
+            supplement.mutate({ source, externalId: hit.external_id })
+          }
           onClose={() => setSupplementing(false)}
         />
       )}
@@ -757,7 +955,8 @@ export function ItemDetailPage() {
                 empty: null,
                 previews: [preview.data],
                 canConfirm:
-                  preview.data.problems.length === 0 && (preview.data.write || preview.data.changes),
+                  preview.data.problems.length === 0 &&
+                  (preview.data.write || preview.data.changes),
               }
         }
         loading={preview.isFetching}
