@@ -126,7 +126,7 @@ def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlug
 
 
 def _bundled_source_infos(
-    manifest: Manifest, origin: Origin, disabled: set[str], error: str | None
+    manifest: Manifest, origin: Origin, error: str | None
 ) -> list[PluginInfo]:
     """父插件停用或导入失败时不 import，用 plugin.toml 的 [[sources]] 名单把子来源列成停用项。
 
@@ -238,7 +238,7 @@ def _build_infos(manifest: Manifest, origin: Origin, disabled: set[str]) -> list
     if not enabled:
         return [
             PluginInfo(*base),
-            *_bundled_source_infos(manifest, origin, disabled, None),
+            *_bundled_source_infos(manifest, origin, None),
         ]
     try:
         check_imports(manifest.folder)
@@ -247,9 +247,7 @@ def _build_infos(manifest: Manifest, origin: Origin, disabled: set[str]) -> list
     except PluginLoadError as error:
         return [
             PluginInfo(*base, error=str(error)),
-            *_bundled_source_infos(
-                manifest, origin, disabled, f"父插件 {manifest.id} 加载失败：{error}"
-            ),
+            *_bundled_source_infos(manifest, origin, f"父插件 {manifest.id} 加载失败：{error}"),
         ]
     infos = [PluginInfo(*base, plugin=plugin)]
     if isinstance(plugin, DataTypePlugin):
