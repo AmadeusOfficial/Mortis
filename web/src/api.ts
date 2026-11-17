@@ -371,6 +371,7 @@ export interface Library {
   data_type_name: string;
   automation: Automation;
   is_auto_scrape: boolean;
+  wall_collections: WallCollections;
   item_count: number;
   file_count: number;
   scraped_count: number;
@@ -388,6 +389,9 @@ export interface Library {
 
 export type Automation = "manual" | "watch" | "schedule";
 
+// 电影库海报墙怎么显示系列电影：只显示电影、系列和电影都显示、系列收起。
+export type WallCollections = "movies" | "both" | "collapse";
+
 export interface LibraryCreate {
   name: string;
   data_type_id: string;
@@ -395,6 +399,7 @@ export interface LibraryCreate {
   automation?: Automation;
   schedule_cron?: string | null;
   refresh_running?: boolean;
+  wall_collections?: WallCollections;
 }
 
 export interface LibraryUpdate {
@@ -404,6 +409,7 @@ export interface LibraryUpdate {
   automation?: Automation;
   schedule_cron?: string | null;
   refresh_running?: boolean;
+  wall_collections?: WallCollections;
 }
 
 export interface CronPreview {
@@ -470,6 +476,7 @@ export type SortOrder = "asc" | "desc";
 
 export interface WallItem {
   id: number;
+  kind: "work" | "collection";
   title: string;
   subtitle: string | null;
   year: number | null;

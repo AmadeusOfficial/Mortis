@@ -11,6 +11,11 @@ export function isSeriesType(types: DataType[] | undefined, dataTypeId: string):
   return types?.find((type) => type.id === dataTypeId)?.structure === "series";
 }
 
+// 单条目加分组的结构（电影），作品可以归进系列。
+export function isGroupType(types: DataType[] | undefined, dataTypeId: string): boolean {
+  return types?.find((type) => type.id === dataTypeId)?.structure === "item_group";
+}
+
 // 插件提供的数据类型：用来源插件匹配，不走 TMDB，不写 NFO、不整理。
 export function isPluginType(types: DataType[] | undefined, dataTypeId: string): boolean {
   const pluginId = types?.find((type) => type.id === dataTypeId)?.plugin_id;

@@ -5,6 +5,7 @@ import {
   Input,
   Loader,
   Modal,
+  Radio,
   Select,
   Stack,
   Text,
@@ -15,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   type Library,
+  type WallCollections,
   createLibrary,
   deleteLibrary,
   fetchDataTypes,
@@ -29,7 +31,14 @@ import {
 } from "../components/libraries/automation";
 import { PathPicker } from "../components/PathPicker";
 import { PageHeader, Pill } from "../components/ui";
-import { fileUnit, isPluginType, isSeriesType, itemUnit, useDataTypes } from "../dataTypes";
+import {
+  fileUnit,
+  isGroupType,
+  isPluginType,
+  isSeriesType,
+  itemUnit,
+  useDataTypes,
+} from "../dataTypes";
 import { IconPlus } from "../icons";
 import classes from "./LibrariesPage.module.css";
 
@@ -135,6 +144,10 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
   const dataTypeName = dataTypes.data?.find((type) => type.id === dataTypeId)?.name ?? "";
   const [automation, setAutomation] = useState<AutomationValue>(() => automationValue(library));
   const seriesType = isSeriesType(dataTypes.data, dataTypeId ?? "");
+  const groupType = isGroupType(dataTypes.data, dataTypeId ?? "");
+  const [wallCollections, setWallCollections] = useState<WallCollections>(
+    library?.wall_collections ?? "collapse",
+  );
   const save = useMutation({
     mutationFn: () => {
       const filled = paths.map((path) => path.trim()).filter((path) => path !== "");
@@ -143,6 +156,7 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
         schedule_cron: automation.automation === "schedule" ? automation.cron.trim() : null,
         refresh_running:
           automation.automation === "schedule" && seriesType && automation.refreshRunning,
+        ...(groupType ? { wall_collections: wallCollections } : {}),
       };
       return library === null
         ? createLibrary({ name, data_type_id: dataTypeId ?? "", paths: filled, ...scan })
@@ -150,6 +164,10 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      if (library !== null) {
+        void queryClient.invalidateQueries({ queryKey: ["library", library.id] });
+        void queryClient.invalidateQueries({ queryKey: ["wall", library.id] });
+      }
       notifications.show({
         color: "green",
         message: library === null ? "媒体库已新建" : "媒体库已保存",
@@ -221,6 +239,23 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
           </Stack>
         </Input.Wrapper>
         <AutomationFields value={automation} onChange={setAutomation} seriesType={seriesType} />
+        {groupType && (
+          <Radio.Group
+            label="海报墙里的系列电影"
+            value={wallCollections}
+            onChange={(next) => setWallCollections(next as WallCollections)}
+          >
+            <Stack gap={8} mt={6}>
+              <Radio
+                value="collapse"
+                label="系列收起"
+                description="同一系列有两部以上时只显示系列，点进去看系列里的电影"
+              />
+              <Radio value="both" label="系列和电影都显示" />
+              <Radio value="movies" label="只显示电影" />
+            </Stack>
+          </Radio.Group>
+        )}
         {save.isError && (
           <Alert color="red" title="保存失败">
             {save.error.message}
