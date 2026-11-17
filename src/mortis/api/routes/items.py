@@ -202,7 +202,7 @@ def list_items(
     library_id: int,
     session: SessionDep,
     q: str | None = Query(default=None, max_length=200),
-    sort: Literal["title", "release_date", "created_at"] = "title",
+    sort: Literal["title", "release_date", "created_at", "updated_at"] = "title",
     order: Literal["asc", "desc"] = "asc",
 ) -> list[dict[str, Any]]:
     libraries.get_library(session, library_id)
@@ -218,6 +218,7 @@ def list_items(
         "title": func.coalesce(Item.sort_title, Item.title),
         "release_date": Item.release_date,
         "created_at": Item.created_at,
+        "updated_at": Item.updated_at,
     }[sort]
     ordered = column.desc() if order == "desc" else column.asc()
     query = query.order_by(column.is_(None), ordered, Item.id)

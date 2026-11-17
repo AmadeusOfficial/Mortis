@@ -465,7 +465,7 @@ export interface TaskPage {
 export type TaskAction = "cancel" | "retry" | "delete";
 export type BulkAction = "cancel_active" | "retry_failed" | "clear_succeeded" | "clear_failed";
 
-export type WallSort = "title" | "release_date" | "created_at";
+export type WallSort = "title" | "release_date" | "created_at" | "updated_at";
 export type SortOrder = "asc" | "desc";
 
 export interface WallItem {

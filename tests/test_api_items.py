@@ -93,6 +93,11 @@ def test_wall_lists_works_with_posters(client: TestClient, scraped: dict[str, in
         params={"sort": "release_date", "order": "desc"},
     ).json()
     assert [row["title"] for row in by_date] == ["黑客帝国", "Heat"]
+    by_update = client.get(
+        f"/api/libraries/{scraped['library']}/items",
+        params={"sort": "updated_at", "order": "desc"},
+    ).json()
+    assert [row["title"] for row in by_update] == ["黑客帝国", "Heat"]
     found = client.get(f"/api/libraries/{scraped['library']}/items", params={"q": "matrix"}).json()
     assert [row["title"] for row in found] == ["黑客帝国"]
     assert client.get("/api/libraries/999/items").status_code == 404

@@ -6,7 +6,6 @@ import {
   Stack,
   Text,
   TextInput,
-  Tooltip,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
@@ -31,8 +30,6 @@ import { FilterChip, PageHeader, Pill } from "../components/ui";
 import { fileUnit, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
 import {
   IconClose,
-  IconGrid,
-  IconList,
   IconOrganize,
   IconScan,
   IconScrape,
@@ -47,7 +44,16 @@ const SORTS = [
   { value: "release_date:desc", label: "上映日期（新到旧）" },
   { value: "release_date:asc", label: "上映日期（旧到新）" },
   { value: "created_at:desc", label: "最近加入" },
+  { value: "updated_at:desc", label: "最近更新" },
 ];
+const DEFAULT_SORT = "title:asc";
+
+const sortStorageKey = (libraryId: number) => `mortis-wall-sort-${libraryId}`;
+
+function readSort(libraryId: number): string {
+  const saved = window.localStorage.getItem(sortStorageKey(libraryId));
+  return SORTS.some((option) => option.value === saved) ? (saved as string) : DEFAULT_SORT;
+}
 
 type ActionKind = "organize" | "scrape" | "arrange";
 type StatusFilter = "all" | "scraped" | "unscraped" | "issue";
@@ -96,7 +102,12 @@ export function LibraryWallPage() {
 
   const [search, setSearch] = useState("");
   const [query] = useDebouncedValue(search, 300);
-  const [sortKey, setSortKey] = useState("title:asc");
+  const [savedSort, setSavedSort] = useState(() => ({ id, value: readSort(id) }));
+  const sortKey = savedSort.id === id ? savedSort.value : readSort(id);
+  const setSortKey = (value: string) => {
+    window.localStorage.setItem(sortStorageKey(id), value);
+    setSavedSort({ id, value });
+  };
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, order] = sortKey.split(":") as [WallSort, SortOrder];
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -346,7 +357,7 @@ export function LibraryWallPage() {
             className={styles.searchWrap}
             classNames={{ input: styles.searchInput }}
             size="sm"
-            placeholder="搜索片名、原名或年份..."
+            placeholder="搜索片名或原名..."
             aria-label="搜索片名"
             leftSection={<IconSearch size={14} />}
             rightSection={
@@ -404,7 +415,7 @@ export function LibraryWallPage() {
           <Select
             data={SORTS}
             value={sortKey}
-            onChange={(value) => setSortKey(value ?? "title:asc")}
+            onChange={(value) => setSortKey(value ?? DEFAULT_SORT)}
             allowDeselect={false}
             leftSection={<IconSort size={14} />}
             classNames={{ input: styles.sortInput }}
@@ -412,29 +423,6 @@ export function LibraryWallPage() {
             w={195}
             aria-label="排序"
           />
-
-          <div className={styles.viewToggle} role="group" aria-label="视图切换">
-            <button
-              type="button"
-              className={styles.viewBtn}
-              data-active="true"
-              aria-label="网格视图"
-              aria-pressed="true"
-            >
-              <IconGrid size={14} />
-            </button>
-            <Tooltip label="列表视图还没做">
-              <button
-                type="button"
-                className={styles.viewBtn}
-                aria-label="列表视图"
-                aria-pressed="false"
-                onClick={() => notifications.show({ message: "列表视图还没做" })}
-              >
-                <IconList size={14} />
-              </button>
-            </Tooltip>
-          </div>
         </div>
       </div>
 

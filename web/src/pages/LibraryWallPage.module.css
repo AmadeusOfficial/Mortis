@@ -119,36 +119,6 @@
   font-size: 12.5px;
 }
 
-.viewToggle {
-  display: inline-flex;
-  background: var(--mo-bg);
-  border: 1px solid var(--mo-line);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
-}
-
-.viewBtn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 0;
-  background: transparent;
-  color: var(--mo-muted);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.viewBtn:hover {
-  color: var(--mo-text);
-}
-
-.viewBtn[data-active="true"] {
-  background: var(--mo-surface-2);
-  color: var(--mo-text);
-}
-
 /* 最小列宽跟窗口走：1900 宽约 6 列，1280 宽约 5 列，手机 2 列 */
 .wallGrid {
   display: grid;
