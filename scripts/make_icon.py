@@ -21,13 +21,18 @@ def render(svg: str, sizes: tuple[int, ...]) -> dict[int, bytes]:
         browser = p.chromium.launch(channel="msedge")
         try:
             for size in sizes:
-                page = browser.new_page(viewport={"width": size, "height": size}, device_scale_factor=1)
+                page = browser.new_page(
+                    viewport={"width": size, "height": size}, device_scale_factor=1
+                )
                 page.set_content(
                     "<!doctype html><html><body style='margin:0;background:transparent'>"
                     f"<div style='width:{size}px;height:{size}px'>{svg}</div></body></html>"
                 )
                 page.eval_on_selector(
-                    "svg", f"el => {{ el.setAttribute('width', '{size}'); el.setAttribute('height', '{size}'); el.style.display = 'block'; }}"
+                    "svg",
+                    "(el, size) => { el.setAttribute('width', size); "
+                    "el.setAttribute('height', size); el.style.display = 'block'; }",
+                    str(size),
                 )
                 images[size] = page.locator("div").screenshot(omit_background=True, type="png")
                 page.close()
