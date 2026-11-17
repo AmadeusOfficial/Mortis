@@ -6,6 +6,7 @@ from mortis.api.deps import ServicesDep, SessionDep
 from mortis.db.models import DataType, SourceOrder, TypeField
 from mortis.errors import UserError
 from mortis.plugins.registry import seed_orders
+from mortis.sources.builtin import default_orders, is_builtin_type, source_status
 
 router = APIRouter(prefix="/api")
 
@@ -20,6 +21,9 @@ class DataTypeOut(BaseModel):
 class SourceRef(BaseModel):
     id: str
     name: str
+    available: bool = True
+    reason: str | None = None
+    """不可用的原因，如「Key 未填」「还没实现」。不可用的来源照样排进顺序，刮削时跳过。"""
 
 
 class OrderEntry(BaseModel):
@@ -58,11 +62,24 @@ def list_data_types(session: SessionDep) -> list[DataTypeOut]:
     ]
 
 
-def _plugin_type(session: SessionDep, data_type_id: str) -> DataType:
+def _orderable_type(session: SessionDep, data_type_id: str) -> DataType:
     row = session.get(DataType, data_type_id)
-    if row is None or row.plugin_id is None:
-        raise UserError("只有插件数据类型能按字段设置来源顺序", status_code=404)
+    if row is None or (row.plugin_id is None and not is_builtin_type(row.id)):
+        raise UserError("这个数据类型没有来源顺序", status_code=404)
     return row
+
+
+def _source_refs(services: ServicesDep, data_type_id: str) -> list[SourceRef]:
+    """内置类型列内置来源（含不可用的），插件类型列启用的来源插件。"""
+    if not is_builtin_type(data_type_id):
+        return [
+            SourceRef(id=plugin.id, name=plugin.name)
+            for plugin in services.plugins.sources(data_type_id)
+        ]
+    return [
+        SourceRef(id=source.id, name=source.name, available=reason is None, reason=reason)
+        for source, reason in source_status(services, data_type_id)
+    ]
 
 
 def _entries(rows: list[SourceOrder], sources: list[str]) -> list[OrderEntry]:
@@ -72,8 +89,8 @@ def _entries(rows: list[SourceOrder], sources: list[str]) -> list[OrderEntry]:
 
 
 def _read(session: SessionDep, services: ServicesDep, data_type_id: str) -> SourceOrders:
-    plugins = services.plugins.sources(data_type_id)
-    ids = [plugin.id for plugin in plugins]
+    refs = _source_refs(services, data_type_id)
+    ids = [ref.id for ref in refs]
     rows = session.scalars(
         select(SourceOrder)
         .where(SourceOrder.data_type_id == data_type_id)
@@ -89,7 +106,7 @@ def _read(session: SessionDep, services: ServicesDep, data_type_id: str) -> Sour
         .order_by(TypeField.position)
     ).all()
     return SourceOrders(
-        sources=[SourceRef(id=plugin.id, name=plugin.name) for plugin in plugins],
+        sources=refs,
         whole=whole,
         fields=[
             FieldOrder(
@@ -109,7 +126,7 @@ def _read(session: SessionDep, services: ServicesDep, data_type_id: str) -> Sour
 def read_source_orders(
     data_type_id: str, session: SessionDep, services: ServicesDep
 ) -> SourceOrders:
-    _plugin_type(session, data_type_id)
+    _orderable_type(session, data_type_id)
     return _read(session, services, data_type_id)
 
 
@@ -117,7 +134,7 @@ def read_source_orders(
 def write_source_orders(
     data_type_id: str, body: SourceOrdersUpdate, session: SessionDep, services: ServicesDep
 ) -> SourceOrders:
-    _plugin_type(session, data_type_id)
+    _orderable_type(session, data_type_id)
     keys = set(
         session.scalars(select(TypeField.field_key).where(TypeField.data_type_id == data_type_id))
     )
@@ -153,12 +170,15 @@ def write_source_orders(
 def reset_source_orders(
     data_type_id: str, session: SessionDep, services: ServicesDep
 ) -> SourceOrders:
-    row = _plugin_type(session, data_type_id)
-    info = services.plugins.get(row.plugin_id or "")
-    plugin = info.plugin if info is not None else None
-    defaults = getattr(plugin, "default_orders", None)
-    if defaults is None:
-        raise UserError("数据类型插件没有启用，取不到默认顺序")
+    row = _orderable_type(session, data_type_id)
+    if row.plugin_id is None:
+        defaults = default_orders(row.id)
+    else:
+        info = services.plugins.get(row.plugin_id)
+        plugin = info.plugin if info is not None else None
+        defaults = getattr(plugin, "default_orders", None)
+        if defaults is None:
+            raise UserError("数据类型插件没有启用，取不到默认顺序")
     with services.locks.hold("catalog-write"):
         session.execute(delete(SourceOrder).where(SourceOrder.data_type_id == data_type_id))
         seed_orders(session, data_type_id, defaults)

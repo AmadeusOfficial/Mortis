@@ -101,8 +101,13 @@ class TmdbClient:
         return f"{IMAGE_BASE}/{size}{file_path}"
 
 
-def open_tmdb(services: Services, data_type_id: str = "movie") -> TmdbClient:
-    """按调用方的数据类型取搜索语言和成人内容开关；内置三种各有自己的一节。"""
+def open_tmdb(
+    services: Services, data_type_id: str = "movie", http: httpx.Client | None = None
+) -> TmdbClient:
+    """按调用方的数据类型取搜索语言和成人内容开关；内置三种各有自己的一节。
+
+    传入 http 时沿用调用方的客户端，这时不要把返回值当上下文管理器用，免得关掉它。
+    """
     config = services.config_store.load_config()
     secrets = services.config_store.load_secrets()
     if not secrets.tmdb_api_key.strip():
@@ -111,7 +116,7 @@ def open_tmdb(services: Services, data_type_id: str = "movie") -> TmdbClient:
     if not isinstance(section, MovieScrapeConfig | TvScrapeConfig):
         section = config.types.movie
     return TmdbClient(
-        services.http_client(),
+        http if http is not None else services.http_client(),
         secrets.tmdb_api_key,
         language=section.language,
         include_adult=section.include_adult,

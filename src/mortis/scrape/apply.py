@@ -88,7 +88,7 @@ def plan_values(
 ) -> dict[str, Pick | None]:
     """跳过的字段不出现；各来源都没值的字段是 None，表示要清空。
 
-    order 是整体顺序，或 field_orders 给出的按字段顺序。
+    order 是整体顺序，或 field_orders 给出的按字段顺序。评分字段合并各来源，其余取第一个有值的。
     """
     plan: dict[str, Pick | None] = {}
     for field in fields:
@@ -96,6 +96,9 @@ def plan_values(
         if key in skip:
             continue
         sources = order if isinstance(order, list) else order.get(key, order[""])
+        if field.value_type == "rating":
+            plan[key] = _merge_ratings(key, sources, candidates)
+            continue
         plan[key] = next(
             (
                 Pick(source, candidates[source][key])
@@ -105,6 +108,25 @@ def plan_values(
             None,
         )
     return plan
+
+
+def _merge_ratings(
+    key: str, sources: list[str], candidates: Mapping[str, Mapping[str, Any]]
+) -> Pick | None:
+    """按来源顺序合并评分；同一个评分来源（如 imdb）只留排在前面的那条。"""
+    merged: list[Any] = []
+    seen: set[str] = set()
+    first: str | None = None
+    for source in sources:
+        ratings = candidates.get(source, {}).get(key)
+        if ratings in EMPTY:
+            continue
+        first = first or source
+        for rating in ratings:
+            if rating["source"] not in seen:
+                seen.add(rating["source"])
+                merged.append(rating)
+    return Pick(first, merged) if first is not None else None
 
 
 def image_urls(

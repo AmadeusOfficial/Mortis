@@ -29,6 +29,7 @@ from mortis.errors import UserError
 from mortis.plugins.registry import PluginRegistry, plugin_folders
 from mortis.services import Services
 from mortis.settings import Settings
+from mortis.sources.builtin import seed_builtin_orders
 from mortis.tasks import repo as task_repo
 from mortis.tasks.registry import builtin_handlers
 from mortis.tasks.runner import TaskRunner
@@ -66,6 +67,7 @@ def create_app(
     plugins.load(startup_config.plugins.disabled)
     with session_factory() as session:
         ensure_builtin_types(session)
+        seed_builtin_orders(session)
         plugins.sync_catalog(session)
         session.commit()
         task_repo.recover_running(session)

@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -14,11 +15,15 @@ from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile, utc_now
 from mortis.organize.episodes import parse_episode
 from mortis.organize.names import parse_name, subtitle_belongs_to
-from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
+from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
+    SOURCE,
     download_images,
+    external_ids,
+    gather_sources,
     image_skip,
     load_snapshot,
+    load_snapshots,
     missing_photos,
     save_external_ids,
     save_snapshot,
@@ -26,14 +31,13 @@ from mortis.scrape.common import (
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
+from mortis.sources.builtin import FetchRequest, builtin_ids
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.search import similarity
 from mortis.sources.tmdb.tv import (
     episode_candidates,
     fetch_season,
-    fetch_show,
     season_candidates,
-    show_candidates,
     show_external_ids,
 )
 from mortis.tasks.base import TaskContext, TaskError
@@ -173,16 +177,16 @@ def _write(
     session: Session,
     item: Item,
     level: str,
-    values: dict[str, Any],
+    candidates: Mapping[str, Mapping[str, Any]],
     toggles: dict[str, str],
     config: TvScrapeConfig,
-    order: list[str],
+    order: Mapping[str, list[str]],
     files: dict[str, str],
 ) -> None:
     fields = level_fields(session, item.data_type_id, level)
     locked = set(json.loads(item.locked_fields))
     plan = plan_values(
-        fields, {"tmdb": values}, order, image_skip(fields, locked, toggles, config.images)
+        fields, candidates, order, image_skip(fields, locked, toggles, config.images)
     )
     write_plan(session, item, fields, plan, files)
 
@@ -240,7 +244,8 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         if tmdb_id is None:
             raise TaskError(f"「{show.title}」没有 TMDB 编号，先给它匹配一部剧")
         data_type_id = show.data_type_id
-        show_raw = load_snapshot(session, show.id, force)
+        ids = external_ids(session, show.id)
+        snapshots = load_snapshots(session, show.id, force)
         season_raws = {
             row.index_number: load_snapshot(session, row.id, force)
             for row in session.scalars(
@@ -252,17 +257,16 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         season_fields = level_fields(session, data_type_id, "season")
         episode_fields = level_fields(session, data_type_id, "episode")
 
-    sources: list[dict[str, Any]] = []
     with open_tmdb(services, data_type_id) as tmdb:
-        show_fetched = show_raw is None
-        if show_raw is None:
-            ctx.log(f"请求 TMDB 剧 {tmdb_id}")
-            show_raw = fetch_show(tmdb, tmdb_id, config)
-        sources.append(source_outcome("tmdb", "TMDB 剧集", "ok" if show_fetched else "cached"))
+        request = FetchRequest(services, data_type_id, config, ids, tmdb.http, ctx.log)
+        gathered = gather_sources(ctx, request, snapshots, {SOURCE: "TMDB 剧集"})
+        sources = gathered.sources
+        show_raw = gathered.raws[SOURCE]
+        show_fetched = SOURCE in gathered.fetched
         local = _resolve(parsed_local, show_raw)
         local_seasons = {season for season, _ in local.values()}
         local_episodes = {(season, n) for season, numbers in local.values() for n in numbers}
-        show_values = show_candidates(show_raw, config)
+        by_source = gathered.candidates
         seasons: list[_Season] = []
         for entry in show_raw.get("seasons") or []:
             number = entry.get("season_number")
@@ -304,14 +308,16 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 seasons.append(season)
 
         skip = image_skip(show_fields, set(), SHOW_IMAGES, config.images)
-        urls = image_urls(show_fields, {"tmdb": show_values}, skip)
+        urls = image_urls(show_fields, by_source, skip)
         season_skip = image_skip(season_fields, set(), SEASON_IMAGES, config.images)
         episode_skip = image_skip(episode_fields, set(), EPISODE_IMAGES, config.images)
-        people: list[dict[str, Any]] = list(show_values.get("actors", []))
+        people: list[dict[str, Any]] = [
+            actor for values in by_source.values() for actor in values.get("actors", [])
+        ]
         for season in seasons:
-            urls += image_urls(season_fields, {"tmdb": season.values}, season_skip)
+            urls += image_urls(season_fields, {SOURCE: season.values}, season_skip)
             for values in season.episodes.values():
-                urls += image_urls(episode_fields, {"tmdb": values}, episode_skip)
+                urls += image_urls(episode_fields, {SOURCE: values}, episode_skip)
                 people += values.get("actors", [])
         if config.images.actor_images:
             with ctx.session_factory() as session:
@@ -323,10 +329,10 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         show = session.get(Item, item_id)
         if show is None:
             raise TaskError("条目在刮削期间被删除")
-        order = source_order(session, data_type_id)
-        if show_fetched:
-            save_snapshot(session, show.id, show_raw)
-        _write(session, show, "work", show_values, SHOW_IMAGES, config, order, files)
+        order = field_orders(session, data_type_id, builtin_ids(data_type_id))
+        for source in gathered.fetched:
+            save_snapshot(session, show.id, gathered.raws[source], source)
+        _write(session, show, "work", by_source, SHOW_IMAGES, config, order, files)
         save_external_ids(session, show.id, show_external_ids(show_raw))
 
         targets: dict[str, int] = {}
@@ -338,14 +344,28 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
             if season.fetched:
                 save_snapshot(session, season_row.id, season.raw)
             _write(
-                session, season_row, "season", season.values, SEASON_IMAGES, config, order, files
+                session,
+                season_row,
+                "season",
+                {SOURCE: season.values},
+                SEASON_IMAGES,
+                config,
+                order,
+                files,
             )
             kept: set[int] = set()
             for number, values in season.episodes.items():
                 episode_row = _child(session, season_row, "episode", number)
                 kept.add(episode_row.id)
                 _write(
-                    session, episode_row, "episode", values, EPISODE_IMAGES, config, order, files
+                    session,
+                    episode_row,
+                    "episode",
+                    {SOURCE: values},
+                    EPISODE_IMAGES,
+                    config,
+                    order,
+                    files,
                 )
                 episode_count += 1
                 if season.ids.get(number):

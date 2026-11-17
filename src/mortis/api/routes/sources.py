@@ -5,6 +5,7 @@ from mortis.api.deps import ServicesDep
 from mortis.errors import UserError
 from mortis.plugin_api import SourceError
 from mortis.plugins.host import open_host
+from mortis.sources.builtin import source_status
 
 router = APIRouter(prefix="/api/sources")
 
@@ -13,6 +14,10 @@ class SourceOut(BaseModel):
     id: str
     name: str
     data_type: str
+    builtin: bool = False
+    available: bool = True
+    reason: str | None = None
+    """不可用的原因。内置来源不走 /search，搜索 TMDB 用 /api/tmdb。"""
 
 
 class HitOut(BaseModel):
@@ -26,7 +31,18 @@ class HitOut(BaseModel):
 
 @router.get("", response_model=list[SourceOut])
 def list_sources(services: ServicesDep, data_type: str = Query(min_length=1)) -> list[SourceOut]:
-    return [
+    builtin = [
+        SourceOut(
+            id=source.id,
+            name=source.name,
+            data_type=data_type,
+            builtin=True,
+            available=reason is None,
+            reason=reason,
+        )
+        for source, reason in source_status(services, data_type)
+    ]
+    return builtin + [
         SourceOut(id=plugin.id, name=plugin.name, data_type=plugin.data_type)
         for plugin in services.plugins.sources(data_type)
     ]

@@ -405,7 +405,7 @@ def test_source_orders_read_write_reset(client: TestClient) -> None:
 
     bad = client.put("/api/data-types/doujin/source-orders", json={"orders": {"nope": None}})
     assert bad.status_code == 422
-    assert client.get("/api/data-types/movie/source-orders").status_code == 404
+    assert client.get("/api/data-types/nope/source-orders").status_code == 404
 
     reset = client.post("/api/data-types/doujin/source-orders/reset").json()
     fields = {f["key"]: f for f in reset["fields"]}

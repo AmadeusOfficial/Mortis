@@ -16,11 +16,14 @@ from mortis.db.models import (
 from mortis.items.identity import find_by_tmdb
 from mortis.organize.service import unscraped_work_ids
 from mortis.output.service import after_scrape, arrange_config, has_video
-from mortis.scrape.apply import image_urls, level_fields, plan_values, source_order, write_plan
+from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
     download_images,
+    external_ids,
+    gather_sources,
     image_skip,
     load_snapshot,
+    load_snapshots,
     missing_photos,
     save_external_ids,
     save_snapshot,
@@ -30,13 +33,12 @@ from mortis.scrape.common import (
 from mortis.scrape.images import ImageStore
 from mortis.scrape.item import scrape_item
 from mortis.scrape.tv import scrape_show
+from mortis.sources.builtin import FetchRequest, builtin_ids
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.common import SOURCE
 from mortis.sources.tmdb.movie import (
     collection_candidates,
     fetch_collection,
-    fetch_movie,
-    movie_candidates,
     movie_external_ids,
 )
 from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
@@ -80,23 +82,24 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         library_id, data_type_id = item.library_id, item.data_type_id
         work_fields = level_fields(session, data_type_id, "work")
         collection_fields = level_fields(session, data_type_id, "collection")
-        raw = load_snapshot(session, item.id, force)
+        ids = external_ids(session, item.id)
+        snapshots = load_snapshots(session, item.id, force)
         work_skip = image_skip(work_fields, set(), WORK_IMAGES, config.images)
 
     # 请求和下载不持锁；写库时再进锁，按当时的锁定集合选值。
-    sources: list[dict[str, Any]] = []
     with open_tmdb(services, data_type_id) as tmdb:
-        fetched = raw is None
-        if raw is None:
-            ctx.log(f"请求 TMDB 电影 {tmdb_id}")
-            raw = fetch_movie(tmdb, tmdb_id, config)
-        sources.append(source_outcome("tmdb", "TMDB 电影", "ok" if fetched else "cached"))
+        request = FetchRequest(services, data_type_id, config, ids, tmdb.http, ctx.log)
+        gathered = gather_sources(ctx, request, snapshots, {SOURCE: "TMDB 电影"})
+        sources = gathered.sources
+        raw = gathered.raws[SOURCE]
+        fetched = SOURCE in gathered.fetched
         ctx.check_cancelled()
-        candidates = movie_candidates(raw, config)
-        urls = image_urls(work_fields, {SOURCE: candidates}, work_skip)
+        candidates = gathered.candidates
+        urls = image_urls(work_fields, candidates, work_skip)
         if config.images.actor_images:
             with ctx.session_factory() as session:
-                urls += missing_photos(session, candidates.get("actors", []))
+                for values in candidates.values():
+                    urls += missing_photos(session, values.get("actors", []))
 
         collection: _Collection | None = None
         info = raw.get("belongs_to_collection") or {}
@@ -129,16 +132,16 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
         item = session.get(Item, item_id)
         if item is None:
             raise TaskError("条目在刮削期间被删除")
-        order = source_order(session, data_type_id)
+        order = field_orders(session, data_type_id, builtin_ids(data_type_id))
         locked = set(json.loads(item.locked_fields))
         plan = plan_values(
             work_fields,
-            {SOURCE: candidates},
+            candidates,
             order,
             image_skip(work_fields, locked, WORK_IMAGES, config.images),
         )
-        if fetched:
-            save_snapshot(session, item.id, raw)
+        for source in gathered.fetched:
+            save_snapshot(session, item.id, gathered.raws[source], source)
         write_plan(session, item, work_fields, plan, files)
         save_external_ids(session, item.id, movie_external_ids(raw))
 

@@ -1,6 +1,9 @@
 """电影和电视剧刮削共用的快照、图片和编号读写。"""
 
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
 
 import httpx2 as httpx
@@ -15,8 +18,10 @@ from mortis.db.models import (
     TypeField,
     utc_now,
 )
+from mortis.errors import UserError
 from mortis.scrape.images import ImageError, ImageStore
-from mortis.tasks.base import TaskContext
+from mortis.sources.builtin import FetchRequest, builtin_sources
+from mortis.tasks.base import TaskCancelled, TaskContext, TaskError
 
 SOURCE = "tmdb"
 
@@ -71,6 +76,102 @@ def load_snapshot(
         return None
     record = session.get(ItemSourceRecord, (item_id, source))
     return json.loads(record.raw) if record is not None else None
+
+
+def load_snapshots(session: Session, item_id: int, force: bool) -> dict[str, dict[str, Any]]:
+    """条目已有的各来源快照；强制刮削时当作都没有。"""
+    if force:
+        return {}
+    return {
+        record.source: json.loads(record.raw)
+        for record in session.scalars(
+            select(ItemSourceRecord).where(ItemSourceRecord.item_id == item_id)
+        )
+    }
+
+
+def external_ids(session: Session, item_id: int) -> dict[str, str]:
+    return dict(
+        session.execute(
+            select(ItemExternalId.provider, ItemExternalId.external_id).where(
+                ItemExternalId.item_id == item_id
+            )
+        ).all()
+    )
+
+
+@dataclass
+class Gathered:
+    """各内置来源的结果。raws 含沿用的快照，fetched 是这次新请求、要写快照的来源。"""
+
+    raws: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
+    candidates: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
+    fetched: set[str] = dataclass_field(default_factory=set)
+    sources: list[dict[str, Any]] = dataclass_field(default_factory=list)
+
+    def record(self, source_id: str, name: str, outcome: str, detail: str | None = None) -> None:
+        self.sources.append(source_outcome(source_id, name, outcome, detail))
+
+
+def gather_sources(
+    ctx: TaskContext,
+    request: FetchRequest,
+    snapshots: Mapping[str, dict[str, Any]],
+    labels: Mapping[str, str],
+) -> Gathered:
+    """按默认顺序逐个取适用于这个类型的内置来源。已有快照的不再请求。
+
+    还没有取数函数的来源不出现在结果里。主源失败时整个刮削失败，其余来源出错只记下来。
+    labels 给结果里的来源换个名字，比如「TMDB 电影」。
+    """
+    config = ctx.services.config_store.load_config()
+    secrets = ctx.services.config_store.load_secrets()
+    gathered = Gathered()
+    for source in builtin_sources(request.data_type_id):
+        if source.fetcher is None:
+            continue
+        name = labels.get(source.id, source.name)
+        reason = source.disabled_reason(config, secrets)
+        if reason is not None:
+            if source.primary:
+                raise TaskError(f"{name} 不可用：{reason}")
+            ctx.log(f"{name} 不可用，跳过：{reason}")
+            gathered.record(source.id, name, "skipped", reason)
+            continue
+        ctx.check_cancelled()
+        raw = snapshots.get(source.id)
+        cached = raw is not None
+        try:
+            if raw is None:
+                raw = source.fetcher.fetch(request)
+            if raw is None:
+                message = f"{name} 上没有这个条目"
+                if source.primary:
+                    raise TaskError(message)
+                ctx.log(message)
+                gathered.record(source.id, name, "not_found", message)
+                continue
+            values = source.fetcher.candidates(raw, request)
+        except TaskCancelled:
+            raise
+        except Exception as error:
+            if source.primary:
+                raise
+            detail = (
+                error.message
+                if isinstance(error, UserError)
+                else f"{type(error).__name__}: {error}"
+            )
+            message = f"{name} 出错，跳过：{detail}"
+            ctx.log(message)
+            gathered.record(source.id, name, "failed", message)
+            continue
+        gathered.raws[source.id] = raw
+        gathered.candidates[source.id] = values
+        if not cached:
+            gathered.fetched.add(source.id)
+        gathered.record(source.id, name, "cached" if cached else "ok")
+    return gathered
 
 
 def save_external_ids(session: Session, item_id: int, ids: dict[str, str]) -> None:
