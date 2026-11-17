@@ -217,3 +217,10 @@ nfo_single_studio = false
 [plugins]
 # 停用的插件 id
 disabled = []
+
+[ai]
+# 智能体用的模型接口，OpenAI 兼容的 Chat Completions；key 写在 secrets.toml 的 [ai]
+base_url = "https://api.deepseek.com"
+model = "deepseek-chat"
+# 一次提问最多几轮工具调用，1 到 20
+max_rounds = 8

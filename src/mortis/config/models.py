@@ -475,6 +475,34 @@ class PlaybackConfig(BaseModel):
     """播放插件 id；空字符串表示用第一个可用的播放插件。"""
 
 
+class AiConfig(BaseModel):
+    """智能体用的模型接口：OpenAI 兼容的 Chat Completions。key 在密钥文件的 [ai]。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    base_url: str = "https://api.deepseek.com"
+    """请求发到 {base_url}/chat/completions。"""
+    model: str = "deepseek-chat"
+    max_rounds: int = Field(default=8, ge=1, le=20)
+    """一次提问最多几轮工具调用。"""
+
+    @field_validator("base_url")
+    @classmethod
+    def _check_base_url(cls, value: str) -> str:
+        url = value.strip().rstrip("/")
+        if not re.fullmatch(r"https?://[^\s/]+(/\S*)?", url):
+            raise PydanticCustomError("base_url", "接口地址要以 http:// 或 https:// 开头")
+        return url
+
+    @field_validator("model")
+    @classmethod
+    def _check_model(cls, value: str) -> str:
+        model = value.strip()
+        if not model:
+            raise PydanticCustomError("model", "模型名不能为空")
+        return model
+
+
 class AppConfig(BaseModel):
     """普通设置。每种数据类型的设置在 types 下，插件自己的设置和密钥都在 sources 下。"""
 
@@ -488,6 +516,7 @@ class AppConfig(BaseModel):
     """每个来源或插件一节，按插件自己的 Settings 模型校验。"""
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     playback: PlaybackConfig = Field(default_factory=PlaybackConfig)
+    ai: AiConfig = Field(default_factory=AiConfig)
 
 
 CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
@@ -495,6 +524,7 @@ CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
     "files": FilesConfig,
     "tasks": TasksConfig,
     "playback": PlaybackConfig,
+    "ai": AiConfig,
 }
 
 TYPES_PREFIX = "types."
@@ -510,13 +540,20 @@ class NetworkSecrets(BaseModel):
     proxy_password: str = ""
 
 
+class AiSecrets(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    api_key: str = ""
+
+
 class Secrets(BaseModel):
-    """密钥。代理凭据在 network 下，来源和插件的密钥在 sources.<id> 下。"""
+    """密钥。代理凭据在 network 下，模型接口的 key 在 ai 下，来源和插件的密钥在 sources.<id> 下。"""
 
     model_config = ConfigDict(extra="ignore")
 
     network: NetworkSecrets = Field(default_factory=NetworkSecrets)
     sources: dict[str, dict[str, Any]] = {}
+    ai: AiSecrets = Field(default_factory=AiSecrets)
 
     @property
     def tmdb_api_key(self) -> str:
@@ -525,8 +562,8 @@ class Secrets(BaseModel):
         return key if isinstance(key, str) else ""
 
 
-SECRET_KEYS: tuple[str, ...] = ("tmdb_api_key", "proxy_username", "proxy_password")
-"""设置页能改的三个密钥，形状固定；它们分别存在 network 和 sources.tmdb 下。"""
+SECRET_KEYS: tuple[str, ...] = ("tmdb_api_key", "proxy_username", "proxy_password", "ai_api_key")
+"""设置页能改的四个密钥，形状固定；它们分别存在 network、sources.tmdb 和 ai 下。"""
 
 
 def secret_value(secrets: Secrets, key: str) -> str:
@@ -537,6 +574,8 @@ def secret_value(secrets: Secrets, key: str) -> str:
         return secrets.network.proxy_username
     if key == "proxy_password":
         return secrets.network.proxy_password
+    if key == "ai_api_key":
+        return secrets.ai.api_key
     raise KeyError(key)
 
 
@@ -553,5 +592,8 @@ def set_secret(secrets: Secrets, key: str, value: str) -> None:
         return
     if key == "proxy_password":
         secrets.network.proxy_password = value
+        return
+    if key == "ai_api_key":
+        secrets.ai.api_key = value
         return
     raise KeyError(key)

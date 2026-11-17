@@ -1,4 +1,5 @@
-from collections.abc import Iterator
+import json
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import httpx2 as httpx
@@ -68,12 +69,14 @@ def test_secrets_status_never_returns_values(client: TestClient, data_dir: Path)
         "tmdb_api_key": False,
         "proxy_username": False,
         "proxy_password": False,
+        "ai_api_key": False,
     }
     response = client.put("/api/secrets", json={"tmdb_api_key": "  k-123  "})
     assert response.json() == {
         "tmdb_api_key": True,
         "proxy_username": False,
         "proxy_password": False,
+        "ai_api_key": False,
     }
     assert "k-123" not in response.text
     assert "k-123" not in client.get("/api/secrets").text
@@ -85,7 +88,12 @@ def test_secrets_status_never_returns_values(client: TestClient, data_dir: Path)
 def test_secrets_partial_update_and_clear(client: TestClient) -> None:
     client.put("/api/secrets", json={"proxy_username": "me", "tmdb_api_key": "k"})
     status = client.put("/api/secrets", json={"tmdb_api_key": None}).json()
-    assert status == {"tmdb_api_key": False, "proxy_username": True, "proxy_password": False}
+    assert status == {
+        "tmdb_api_key": False,
+        "proxy_username": True,
+        "proxy_password": False,
+        "ai_api_key": False,
+    }
     status = client.put("/api/secrets", json={"proxy_username": ""}).json()
     assert status["proxy_username"] is False
 
@@ -115,6 +123,122 @@ def test_check_tmdb_uses_saved_key(data_dir: Path) -> None:
             "message": "连接成功",
         }
     assert seen[0].url.params["api_key"] == "abc"
+
+
+AI_KEY = "sk-ai-secret-123"
+
+
+def test_ai_settings_saved(client: TestClient, data_dir: Path) -> None:
+    body = {"base_url": "https://api.example.com/v1/", "model": "qwen-plus", "max_rounds": 12}
+    saved = client.put("/api/settings/ai", json=body).json()
+    assert saved["ai"] == {**body, "base_url": "https://api.example.com/v1"}
+    assert client.get("/api/settings").json()["ai"] == saved["ai"]
+    assert "[ai]" in (data_dir / "config.toml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"max_rounds": 0},
+        {"max_rounds": 21},
+        {"base_url": "api.deepseek.com"},
+        {"model": ""},
+    ],
+)
+def test_ai_settings_rejects_bad_values(client: TestClient, body: dict[str, object]) -> None:
+    assert client.put("/api/settings/ai", json=body).status_code == 422
+    assert client.get("/api/settings").json()["ai"] == DEFAULT_SETTINGS["ai"]
+
+
+def test_ai_key_saved_but_never_returned(client: TestClient, data_dir: Path) -> None:
+    status = client.put("/api/secrets", json={"ai_api_key": f"  {AI_KEY}  "}).json()
+    assert status["ai_api_key"] is True
+    for path in ("/api/settings", "/api/secrets"):
+        assert AI_KEY not in client.get(path).text
+    text = (data_dir / "secrets.toml").read_text(encoding="utf-8")
+    assert "[ai]" in text
+    assert f'api_key = "{AI_KEY}"' in text
+    assert not (data_dir / "config.toml").exists()
+
+
+def test_check_ai_without_key(client: TestClient) -> None:
+    assert client.post("/api/settings/check-ai").json() == {
+        "ok": False,
+        "message": "还没有填 AI 的 key",
+    }
+
+
+def _ai_client(data_dir: Path, handler: Callable[[httpx.Request], httpx.Response]) -> TestClient:
+    return TestClient(_app(data_dir, httpx.MockTransport(handler)), base_url=LOCAL)
+
+
+def test_check_ai_success_uses_saved_key_and_draft(data_dir: Path) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "好"}}]})
+
+    with _ai_client(data_dir, handler) as client:
+        client.put("/api/secrets", json={"ai_api_key": AI_KEY})
+        assert client.post("/api/settings/check-ai").json() == {
+            "ok": True,
+            "message": "连接成功，模型 deepseek-chat 可用",
+        }
+        draft = {"base_url": "https://llm.example.com/v1/", "model": "qwen-plus"}
+        response = client.post("/api/settings/check-ai", json=draft)
+        assert response.json()["ok"] is True
+        assert client.get("/api/settings").json()["ai"] == DEFAULT_SETTINGS["ai"]
+
+    first, second = seen
+    assert str(first.url) == "https://api.deepseek.com/chat/completions"
+    assert first.headers["Authorization"] == f"Bearer {AI_KEY}"
+    payload = json.loads(first.content)
+    assert payload["model"] == "deepseek-chat"
+    assert payload["stream"] is False
+    assert 0 < payload["max_tokens"] <= 8
+    assert str(second.url) == "https://llm.example.com/v1/chat/completions"
+    assert json.loads(second.content)["model"] == "qwen-plus"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_check_ai_rejected_key(data_dir: Path, status: int) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": {"message": f"bad key {AI_KEY}"}})
+
+    with _ai_client(data_dir, handler) as client:
+        client.put("/api/secrets", json={"ai_api_key": AI_KEY})
+        body = client.post("/api/settings/check-ai").json()
+    assert body["ok"] is False
+    assert body["message"].startswith("key 不对")
+    assert AI_KEY not in body["message"]
+
+
+def test_check_ai_timeout(data_dir: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    with _ai_client(data_dir, handler) as client:
+        client.put("/api/secrets", json={"ai_api_key": AI_KEY})
+        body = client.post("/api/settings/check-ai").json()
+    assert body["ok"] is False
+    assert body["message"].startswith("连不上")
+    assert "超时" in body["message"]
+
+
+def test_check_ai_other_status_gives_reason(data_dir: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": {"message": "Model Not Exist"}})
+
+    with _ai_client(data_dir, handler) as client:
+        client.put("/api/secrets", json={"ai_api_key": AI_KEY})
+        body = client.post("/api/settings/check-ai").json()
+    assert body == {"ok": False, "message": "接口返回 HTTP 404：Model Not Exist"}
+
+
+def test_check_ai_rejects_bad_draft(client: TestClient) -> None:
+    response = client.post("/api/settings/check-ai", json={"base_url": "nope"})
+    assert response.status_code == 422
 
 
 def test_broken_config_file_reports_path(data_dir: Path) -> None:

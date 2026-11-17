@@ -21,6 +21,7 @@ import {
   SecretField,
   TasksSection,
 } from "../components/settings/GeneralSections";
+import { AiSection } from "../components/settings/AiSection";
 import {
   BUILTIN_SOURCE_ENTRIES,
   BuiltinSourceSection,
@@ -41,6 +42,7 @@ import {
   IconPlay,
   IconPlugin,
   IconSettings,
+  IconSparkle,
 } from "../icons";
 import styles from "./SettingsPage.module.css";
 
@@ -207,6 +209,11 @@ export function SettingsPage() {
       entries: [{ key: "playback", label: "播放器", available: playbackReady }],
     },
     {
+      group: "AI",
+      icon: <IconSparkle size={14} />,
+      entries: [{ key: "ai", label: "模型接口", available: secrets.data?.ai_api_key }],
+    },
+    {
       group: "插件",
       icon: <IconPlugin size={14} />,
       entries: [{ key: "plugins", label: "插件管理" }],
@@ -220,6 +227,7 @@ export function SettingsPage() {
     keys.includes(key) ||
     key === "plugins" ||
     key === "playback" ||
+    key === "ai" ||
     /^(general|type|source)\.[A-Za-z0-9_-]+$/.test(key);
   // 登录跳回来时先落到那个插件的来源页。
   const loginSection = loginPlugin === null ? null : `source.${loginPlugin}`;
@@ -394,6 +402,9 @@ function Section({
   }
   if (current === "playback") {
     return <PlaybackSection />;
+  }
+  if (current === "ai") {
+    return <AiSection />;
   }
   if (current === "source.tmdb") {
     return <TmdbSection />;

@@ -204,10 +204,18 @@ export interface AppConfig {
   plugins: { disabled: string[] };
   // 默认播放插件的 id；空字符串表示用第一个可用的。
   playback: { player: string };
+  ai: AiConfig;
+}
+
+// 智能体用的模型接口：OpenAI 兼容的 Chat Completions；key 在密钥里的 ai_api_key。
+export interface AiConfig {
+  base_url: string;
+  model: string;
+  max_rounds: number;
 }
 
 // 这几节是通用的；每种数据类型的设置在 types 下，用 saveTypeSettings 存。
-export type SettingsSection = "network" | "files" | "tasks" | "playback";
+export type SettingsSection = "network" | "files" | "tasks" | "playback" | "ai";
 
 export function isBuiltinSection(
   value: TypeSection,
@@ -228,7 +236,7 @@ export function typeSection(types: TypesConfig | undefined, dataTypeId: string):
   return { ...defaultPluginTypeConfig(), ...value };
 }
 
-export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password";
+export type SecretKey = "tmdb_api_key" | "proxy_username" | "proxy_password" | "ai_api_key";
 export type SecretsStatus = Record<SecretKey, boolean>;
 export type SecretsUpdate = Partial<Record<SecretKey, string | null>>;
 
@@ -236,6 +244,8 @@ export interface TmdbCheck {
   ok: boolean;
   message: string;
 }
+
+export type AiCheck = TmdbCheck;
 
 export interface DataType {
   id: string;
@@ -615,6 +625,9 @@ export const fetchSecretsStatus = () => request<SecretsStatus>("GET", "/api/secr
 export const saveSecrets = (update: SecretsUpdate) =>
   request<SecretsStatus>("PUT", "/api/secrets", update);
 export const checkTmdb = () => request<TmdbCheck>("POST", "/api/settings/check-tmdb");
+// 接口地址和模型名可以是还没保存的草稿；key 总是用已保存的。
+export const checkAi = (draft: Pick<AiConfig, "base_url" | "model">) =>
+  request<AiCheck>("POST", "/api/settings/check-ai", draft);
 export const fetchDataTypes = () => request<DataType[]>("GET", "/api/data-types");
 export const fetchLibraries = () => request<Library[]>("GET", "/api/libraries");
 export const createLibrary = (body: LibraryCreate) =>

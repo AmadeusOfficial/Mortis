@@ -3,9 +3,11 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from mortis.agent.check import AiCheck, check_ai
 from mortis.api.deps import ConfigStoreDep, ServicesDep, SessionDep
 from mortis.config.models import (
     SECRET_KEYS,
+    AiConfig,
     AppConfig,
     FilesConfig,
     MovieScrapeConfig,
@@ -34,6 +36,7 @@ class SecretsUpdate(BaseModel):
     tmdb_api_key: str | None = None
     proxy_username: str | None = None
     proxy_password: str | None = None
+    ai_api_key: str | None = None
 
 
 # 内置类型的节用各自的模型，其余都是插件类型。
@@ -80,6 +83,11 @@ def write_playback(
     return store.save_section("playback", section)
 
 
+@router.put("/settings/ai", response_model=AppConfig)
+def write_ai(section: AiConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("ai", section)
+
+
 @router.put("/settings/types/{type_id}", response_model=AppConfig)
 def write_type(
     type_id: str, body: dict[str, Any], session: SessionDep, store: ConfigStoreDep
@@ -117,3 +125,31 @@ def check_tmdb(request: Request, store: ConfigStoreDep) -> TmdbCheck:
         config.network, secrets, transport=request.app.state.http_transport
     ) as client:
         return check_tmdb_key(client, secrets.tmdb_api_key)
+
+
+class AiCheckDraft(BaseModel):
+    """设置页还没保存的接口地址和模型名；不给就用已保存的。key 总是用已保存的。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str | None = None
+    model: str | None = None
+
+
+@router.post("/settings/check-ai", response_model=AiCheck)
+def check_ai_settings(
+    request: Request, store: ConfigStoreDep, draft: AiCheckDraft | None = None
+) -> AiCheck:
+    config = store.load_config()
+    secrets = store.load_secrets()
+    values = config.ai.model_dump()
+    if draft is not None:
+        values.update(draft.model_dump(exclude_none=True))
+    try:
+        ai = AiConfig.model_validate(values)
+    except ValidationError as error:
+        raise UserError(f"设置不合法：{validation_problems(error)}") from None
+    with build_client(
+        config.network, secrets, transport=request.app.state.http_transport
+    ) as client:
+        return check_ai(client, ai, secrets.ai.api_key)

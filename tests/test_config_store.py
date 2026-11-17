@@ -6,12 +6,15 @@ from pydantic import ValidationError
 
 from mortis.config.models import (
     SECRET_KEYS,
+    AiConfig,
     AppConfig,
     FilesConfig,
     MovieScrapeConfig,
     NetworkConfig,
     Secrets,
     TasksConfig,
+    secret_value,
+    set_secret,
 )
 from mortis.config.store import ConfigError, ConfigStore
 
@@ -25,7 +28,51 @@ def test_network_defaults_work_without_local_proxy() -> None:
         7890,
         False,
     )
-    assert SECRET_KEYS == ("tmdb_api_key", "proxy_username", "proxy_password")
+    assert SECRET_KEYS == ("tmdb_api_key", "proxy_username", "proxy_password", "ai_api_key")
+
+
+def test_ai_defaults_to_deepseek() -> None:
+    ai = AppConfig().ai
+    assert (ai.base_url, ai.model, ai.max_rounds) == (
+        "https://api.deepseek.com",
+        "deepseek-chat",
+        8,
+    )
+    assert Secrets().ai.api_key == ""
+
+
+@pytest.mark.parametrize("rounds", [0, 21])
+def test_ai_max_rounds_bounds(rounds: int) -> None:
+    with pytest.raises(ValidationError):
+        AiConfig(max_rounds=rounds)
+
+
+def test_ai_base_url_and_model_are_cleaned() -> None:
+    ai = AiConfig(base_url="  https://api.example.com/v1/  ", model=" qwen-plus ")
+    assert (ai.base_url, ai.model) == ("https://api.example.com/v1", "qwen-plus")
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [{"base_url": "api.deepseek.com"}, {"base_url": "ftp://x"}, {"base_url": ""}, {"model": " "}],
+)
+def test_ai_rejects_bad_values(patch: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        AiConfig.model_validate(patch)
+
+
+def test_ai_section_and_key_roundtrip(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    saved = store.save_section("ai", AiConfig(model="deepseek-reasoner", max_rounds=3))
+    assert (saved.ai.model, saved.ai.max_rounds) == ("deepseek-reasoner", 3)
+    assert store.load_config().ai == saved.ai
+    secrets = store.load_secrets()
+    set_secret(secrets, "ai_api_key", "sk-ai")
+    store.save_secrets(secrets)
+    assert secret_value(store.load_secrets(), "ai_api_key") == "sk-ai"
+    raw = tomllib.loads(store.secrets_path.read_text(encoding="utf-8"))
+    assert raw["ai"] == {"api_key": "sk-ai"}
+    assert "sk-ai" not in store.config_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -136,8 +183,9 @@ def test_examples_match_defaults() -> None:
     secrets = tomllib.loads((REPO_ROOT / "secrets.example.toml").read_text(encoding="utf-8"))
     assert AppConfig.model_validate(config) == AppConfig()
     assert "api_key" in secrets["sources"]["tmdb"]
-    assert set(secrets) == {"network", "sources"}
+    assert set(secrets) == {"network", "sources", "ai"}
     assert set(secrets["network"]) == {"proxy_username", "proxy_password"}
+    assert secrets["ai"] == {"api_key": ""}
 
 
 def test_non_utf8_file_becomes_config_error(tmp_path: Path) -> None:
