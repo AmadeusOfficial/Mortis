@@ -98,20 +98,6 @@ export function LibrariesPage() {
               onDelete={() => setDeleting(library)}
             />
           ))}
-
-          <button
-            type="button"
-            className={classes.addCard}
-            onClick={() => setEditing("new")}
-          >
-            <div className={classes.addInner}>
-              <span className={classes.addIcon} aria-hidden="true">
-                <IconPlus size={22} />
-              </span>
-              <span className={classes.addTitle}>新建媒体库</span>
-              <span className={classes.addHint}>选择数据类型，点「浏览」指定目录</span>
-            </div>
-          </button>
         </div>
       )}
 
