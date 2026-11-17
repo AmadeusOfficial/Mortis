@@ -29,7 +29,7 @@ import { PosterCard } from "../components/PosterCard";
 import { SeasonList } from "../components/SeasonList";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
-import { Pill, sourceLabel } from "../components/ui";
+import { Pill, ratingText, sourceLabel } from "../components/ui";
 import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import {
@@ -292,7 +292,7 @@ export function ItemDetailPage() {
     const best = (rating.value as RatingValue[])[0];
     metaPills.push(
       <Pill key="rating" tone="accent">
-        <IconStar size={12} /> {best.rating.toFixed(1)} {sourceLabel(best.source)}
+        <IconStar size={12} /> {ratingText(best.rating, best.max_rating)} {sourceLabel(best.source)}
       </Pill>,
     );
   }

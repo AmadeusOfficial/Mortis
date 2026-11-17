@@ -1,5 +1,6 @@
 import { Anchor, Avatar, Badge, Group, Image, Stack, Text } from "@mantine/core";
 import type { FieldOut, ImageValue, PersonValue, RatingValue } from "../api";
+import { ratingText, sourceLabel } from "./ui";
 
 const PEOPLE_SHOWN = 24;
 
@@ -55,8 +56,9 @@ export function FieldValue({ field }: { field: FieldOut }) {
         <Stack gap={0}>
           {(value as RatingValue[]).map((rating) => (
             <Text key={rating.source} size="sm">
-              {rating.rating.toFixed(1)} / {rating.max_rating}（{rating.source.toUpperCase()}
-              {rating.vote_count !== null && `，${rating.vote_count} 人`}）
+              {ratingText(rating.rating, rating.max_rating)}
+              {rating.max_rating !== 100 && ` / ${rating.max_rating}`}（{sourceLabel(rating.source)}
+              {rating.vote_count !== null && `，${rating.vote_count.toLocaleString("zh-CN")} 人`}）
             </Text>
           ))}
         </Stack>

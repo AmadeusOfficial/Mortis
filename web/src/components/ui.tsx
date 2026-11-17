@@ -16,6 +16,9 @@ const SOURCE_LABELS: Record<string, string> = {
   imdb: "IMDb",
   tvdb: "TVDB",
   fanarttv: "Fanart",
+  fanart: "Fanart.tv",
+  ratings_rt: "烂番茄",
+  tomatometerallcritics: "烂番茄",
   bangumi: "Bangumi",
   vndb: "VNDB",
   cngal: "CnGal",
@@ -25,6 +28,11 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
+}
+
+/** 百分制的评分（烂番茄）写成百分比，其余写一位小数。 */
+export function ratingText(rating: number, maxRating: number): string {
+  return maxRating === 100 ? `${Math.round(rating)}%` : rating.toFixed(1);
 }
 
 export function SourceBadge({ source, label }: { source: string; label?: string }) {
