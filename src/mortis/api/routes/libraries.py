@@ -12,6 +12,8 @@ from mortis.tasks import schedule
 
 router = APIRouter(prefix="/api/libraries")
 
+WallCollections = Literal["movies", "both", "collapse"]
+
 
 class LibraryOut(BaseModel):
     id: int
@@ -20,6 +22,7 @@ class LibraryOut(BaseModel):
     data_type_name: str
     automation: str
     is_auto_scrape: bool
+    wall_collections: WallCollections
     paths: list[str]
     item_count: int
     file_count: int
@@ -45,6 +48,7 @@ class LibraryCreate(BaseModel):
     automation: Automation = "manual"
     schedule_cron: str | None = None
     refresh_running: bool = False
+    wall_collections: WallCollections = "collapse"
 
 
 class LibraryUpdate(BaseModel):
@@ -56,6 +60,7 @@ class LibraryUpdate(BaseModel):
     automation: Automation | None = None
     schedule_cron: str | None = None
     refresh_running: bool | None = None
+    wall_collections: WallCollections | None = None
 
 
 def _out(
@@ -72,6 +77,7 @@ def _out(
         data_type_name=library.data_type.name,
         automation=library.automation,
         is_auto_scrape=bool(library.is_auto_scrape),
+        wall_collections=library.wall_collections,
         paths=[row.path for row in library.paths],
         item_count=stats.item_count,
         file_count=stats.file_count,
@@ -122,6 +128,7 @@ def create_library(body: LibraryCreate, session: SessionDep, watcher: WatchDep) 
         automation=body.automation,
         schedule_cron=body.schedule_cron,
         refresh_running=body.refresh_running,
+        wall_collections=body.wall_collections,
     )
     watcher.sync()
     return _one(session, watcher, library)
@@ -145,6 +152,7 @@ def update_library(
         automation=body.automation,
         schedule_cron=body.schedule_cron,
         refresh_running=body.refresh_running,
+        wall_collections=body.wall_collections,
     )
     watcher.sync()
     return _one(session, watcher, library)

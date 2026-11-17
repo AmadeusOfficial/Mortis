@@ -223,6 +223,52 @@ def test_toggle_auto_scrape(client: TestClient, dirs: dict[str, Path]) -> None:
     assert body["paths"] == library["paths"]
 
 
+def test_wall_collections_defaults_to_collapse(client: TestClient, dirs: dict[str, Path]) -> None:
+    library = _create(client, [str(dirs["a"])]).json()
+    assert library["wall_collections"] == "collapse"
+    body = client.patch(
+        f"/api/libraries/{library['id']}", json={"wall_collections": "movies"}
+    ).json()
+    assert body["wall_collections"] == "movies"
+    assert client.get(f"/api/libraries/{library['id']}").json()["wall_collections"] == "movies"
+    bad = client.patch(f"/api/libraries/{library['id']}", json={"wall_collections": "bogus"})
+    assert bad.status_code == 422
+    created = client.post(
+        "/api/libraries",
+        json={
+            "name": "另一个",
+            "data_type_id": "movie",
+            "paths": [str(dirs["b"])],
+            "wall_collections": "both",
+        },
+    ).json()
+    assert created["wall_collections"] == "both"
+
+
+def test_wall_collections_only_for_item_group(client: TestClient, dirs: dict[str, Path]) -> None:
+    rejected = client.post(
+        "/api/libraries",
+        json={
+            "name": "剧",
+            "data_type_id": "tv",
+            "paths": [str(dirs["a"])],
+            "wall_collections": "both",
+        },
+    )
+    assert rejected.status_code == 422
+    assert "只有电影库能设置" in rejected.json()["detail"]
+    library = client.post(
+        "/api/libraries", json={"name": "剧", "data_type_id": "tv", "paths": [str(dirs["a"])]}
+    ).json()
+    assert library["wall_collections"] == "collapse"
+    response = client.patch(f"/api/libraries/{library['id']}", json={"wall_collections": "movies"})
+    assert response.status_code == 422
+    assert "只有电影库能设置" in response.json()["detail"]
+    assert client.get(f"/api/libraries/{library['id']}").json()["wall_collections"] == "collapse"
+    same = client.patch(f"/api/libraries/{library['id']}", json={"wall_collections": "collapse"})
+    assert same.status_code == 200
+
+
 def test_stats_scraped_issues_and_sample_posters(client: TestClient, dirs: dict[str, Path]) -> None:
     library = _create(client, [str(dirs["a"])]).json()
     factory = client.app.state.session_factory

@@ -83,6 +83,9 @@ class Library(Base):
     __tablename__ = "libraries"
     __table_args__ = (
         CheckConstraint("automation in ('manual', 'watch', 'schedule')", name="automation"),
+        CheckConstraint(
+            "wall_collections in ('movies', 'both', 'collapse')", name="wall_collections"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -90,6 +93,8 @@ class Library(Base):
     name: Mapped[str]
     automation: Mapped[str] = mapped_column(server_default=text("'manual'"))
     is_auto_scrape: Mapped[int] = mapped_column(server_default=text("1"))
+    # 海报墙怎么显示系列电影，只对 item_group 结构的库生效。
+    wall_collections: Mapped[str] = mapped_column(server_default=text("'collapse'"))
     created_at: Mapped[str]
     updated_at: Mapped[str]
 

@@ -127,8 +127,12 @@ def issue_text(error: str | None) -> str | None:
     return line if len(line) <= ISSUE_LENGTH else line[:ISSUE_LENGTH] + "…"
 
 
-def wall_rows(session: Session, items: list[Item]) -> list[dict[str, Any]]:
+def wall_rows(
+    session: Session, items: list[Item], year_dates: dict[int, str | None] | None = None
+) -> list[dict[str, Any]]:
+    """year_dates 按条目 id 给出算年份用的日期，没给的用条目自己的发行日期。"""
     ids = [item.id for item in items]
+    dates = year_dates or {}
     scraped = set(
         session.scalars(select(ItemSourceRecord.item_id).where(ItemSourceRecord.item_id.in_(ids)))
     )
@@ -136,9 +140,10 @@ def wall_rows(session: Session, items: list[Item]) -> list[dict[str, Any]]:
     return [
         {
             "id": item.id,
+            "kind": item.kind,
             "title": item.title,
             "subtitle": item.subtitle,
-            "year": year_of(item.release_date),
+            "year": year_of(dates.get(item.id, item.release_date)),
             "poster_url": image_url(item.poster_path),
             "is_scraped": item.id in scraped,
             "issue": _issue_of(latest.get(item.id)),

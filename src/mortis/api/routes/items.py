@@ -42,6 +42,7 @@ class Enqueued(BaseModel):
 
 class WallItem(BaseModel):
     id: int
+    kind: Literal["work", "collection"]
     title: str
     subtitle: str | None
     year: int | None
@@ -205,10 +206,42 @@ def list_items(
     sort: Literal["title", "release_date", "created_at", "updated_at"] = "title",
     order: Literal["asc", "desc"] = "asc",
 ) -> list[dict[str, Any]]:
-    libraries.get_library(session, library_id)
-    query = select(Item).where(Item.library_id == library_id, Item.kind == "work")
-    if q and q.strip():
-        term = q.strip()
+    library = libraries.get_library(session, library_id)
+    term = q.strip() if q else ""
+    if library.data_type.structure != "item_group":
+        mode = libraries.WALL_MOVIES
+    elif term and library.wall_collections == libraries.WALL_COLLAPSE:
+        mode = libraries.WALL_BOTH
+    else:
+        mode = library.wall_collections
+    parts = (
+        select(
+            Item.parent_id.label("parent_id"),
+            func.count().label("part_count"),
+            func.min(Item.release_date).label("first_date"),
+        )
+        .where(Item.library_id == library_id, Item.kind == "work", Item.parent_id.is_not(None))
+        .group_by(Item.parent_id)
+        .subquery()
+    )
+    own = parts.alias("own_parts")
+    siblings = parts.alias("sibling_parts")
+    is_work = Item.kind == "work"
+    if mode == libraries.WALL_MOVIES:
+        shown = is_work
+    elif mode == libraries.WALL_BOTH:
+        shown = is_work | ((Item.kind == "collection") & (own.c.part_count >= 1))
+    else:
+        shown = (is_work & (func.coalesce(siblings.c.part_count, 0) < 2)) | (
+            (Item.kind == "collection") & (own.c.part_count >= 2)
+        )
+    query = (
+        select(Item, own.c.first_date)
+        .outerjoin(own, own.c.parent_id == Item.id)
+        .outerjoin(siblings, siblings.c.parent_id == Item.parent_id)
+        .where(Item.library_id == library_id, shown)
+    )
+    if term:
         query = query.where(
             Item.title.icontains(term, autoescape=True)
             | Item.original_title.icontains(term, autoescape=True)
@@ -216,13 +249,15 @@ def list_items(
         )
     column = {
         "title": func.coalesce(Item.sort_title, Item.title),
-        "release_date": Item.release_date,
+        "release_date": func.coalesce(Item.release_date, own.c.first_date),
         "created_at": Item.created_at,
         "updated_at": Item.updated_at,
     }[sort]
     ordered = column.desc() if order == "desc" else column.asc()
     query = query.order_by(column.is_(None), ordered, Item.id)
-    return wall_rows(session, list(session.scalars(query)))
+    rows = session.execute(query).all()
+    years = {item.id: first for item, first in rows if item.kind == "collection"}
+    return wall_rows(session, [item for item, _ in rows], years)
 
 
 @router.get("/items/{item_id}", response_model=ItemDetail)

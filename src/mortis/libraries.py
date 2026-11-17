@@ -22,6 +22,11 @@ from mortis.tasks import schedule
 MAX_NAME_LENGTH = 50
 SAMPLE_POSTERS = 8
 AUTOMATIONS = ("manual", "watch", "schedule")
+WALL_MOVIES = "movies"
+WALL_BOTH = "both"
+WALL_COLLAPSE = "collapse"
+WALL_COLLECTIONS = (WALL_MOVIES, WALL_BOTH, WALL_COLLAPSE)
+DEFAULT_WALL_COLLECTIONS = WALL_COLLAPSE
 
 
 class LibraryError(UserError):
@@ -239,6 +244,16 @@ def _apply_automation(
     schedule.sync_library_schedules(session, library, cron=cron, refresh_running=refresh)
 
 
+def _apply_wall_collections(library: Library, wall_collections: str | None) -> None:
+    if wall_collections is None:
+        return
+    if wall_collections not in WALL_COLLECTIONS:
+        raise LibraryError(f"没有这种系列显示方式：{wall_collections}", status_code=422)
+    if library.data_type.structure != "item_group" and wall_collections != DEFAULT_WALL_COLLECTIONS:
+        raise LibraryError("只有电影库能设置海报墙里的系列电影", status_code=422)
+    library.wall_collections = wall_collections
+
+
 def create_library(
     session: Session,
     *,
@@ -248,6 +263,7 @@ def create_library(
     automation: str = "manual",
     schedule_cron: str | None = None,
     refresh_running: bool = False,
+    wall_collections: str = DEFAULT_WALL_COLLECTIONS,
 ) -> Library:
     cleaned_name = _clean_name(name)
     data_type = session.get(DataType, data_type_id)
@@ -266,6 +282,7 @@ def create_library(
     )
     library.paths = [LibraryPath(path=path) for path in normalized]
     library.data_type = data_type
+    _apply_wall_collections(library, wall_collections)
     session.add(library)
     session.flush()
     _apply_automation(
@@ -289,8 +306,10 @@ def update_library(
     automation: str | None = None,
     schedule_cron: str | None = None,
     refresh_running: bool | None = None,
+    wall_collections: str | None = None,
 ) -> Library:
     library = get_library(session, library_id)
+    _apply_wall_collections(library, wall_collections)
     if name is not None:
         library.name = _clean_name(name)
     if paths is not None:

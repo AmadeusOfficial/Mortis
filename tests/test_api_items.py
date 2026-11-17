@@ -1,10 +1,12 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
@@ -99,7 +101,10 @@ def test_wall_lists_works_with_posters(client: TestClient, scraped: dict[str, in
     ).json()
     assert [row["title"] for row in by_update] == ["黑客帝国", "Heat"]
     found = client.get(f"/api/libraries/{scraped['library']}/items", params={"q": "matrix"}).json()
-    assert [row["title"] for row in found] == ["黑客帝国"]
+    assert [(row["title"], row["kind"]) for row in found] == [
+        ("黑客帝国", "work"),
+        ("黑客帝国（系列）", "collection"),
+    ]
     assert client.get("/api/libraries/999/items").status_code == 404
 
 
@@ -223,6 +228,180 @@ def test_rematch(client: TestClient, app: FastAPI, scraped: dict[str, int]) -> N
     assert detail["external_ids"] == {"tmdb": "949"}
     assert detail["collection"] is None
     assert _field(detail, "tagline")["value"] is None
+
+
+def _add_item(session: Session, library_id: int, title: str, **values: Any) -> Item:
+    now = utc_now()
+    item = Item(
+        library_id=library_id,
+        data_type_id="movie",
+        kind=values.pop("kind", "work"),
+        title=title,
+        created_at=now,
+        updated_at=now,
+        **values,
+    )
+    session.add(item)
+    session.flush()
+    return item
+
+
+@pytest.fixture
+def shelf(app: FastAPI, client: TestClient, tmp_path: Path) -> dict[str, int]:
+    """教父系列两部、单部系列一部、空系列、无系列的盗火线。"""
+    root = tmp_path / "片架"
+    root.mkdir()
+    library = client.post(
+        "/api/libraries", json={"name": "电影", "data_type_id": "movie", "paths": [str(root)]}
+    ).json()
+    with app.state.session_factory() as session:
+        lid = library["id"]
+        godfather = _add_item(
+            session, lid, "教父（系列）", kind="collection", subtitle="The Godfather Collection"
+        )
+        single = _add_item(session, lid, "单部系列", kind="collection")
+        empty = _add_item(session, lid, "空系列", kind="collection")
+        part1 = _add_item(session, lid, "教父", parent_id=godfather.id, release_date="1972-03-14")
+        part2 = _add_item(session, lid, "教父2", parent_id=godfather.id, release_date="1974-12-20")
+        alone = _add_item(session, lid, "孤片", parent_id=single.id, release_date="2001-01-01")
+        heat = _add_item(session, lid, "盗火线", release_date="1995-12-15")
+        session.commit()
+        return {
+            "library": lid,
+            "godfather": godfather.id,
+            "single": single.id,
+            "empty": empty.id,
+            "part1": part1.id,
+            "part2": part2.id,
+            "alone": alone.id,
+            "heat": heat.id,
+        }
+
+
+def _wall(client: TestClient, library_id: int, **params: str) -> list[tuple[str, str]]:
+    rows = client.get(f"/api/libraries/{library_id}/items", params=params).json()
+    return [(row["title"], row["kind"]) for row in rows]
+
+
+def _set_mode(client: TestClient, library_id: int, mode: str) -> None:
+    response = client.patch(f"/api/libraries/{library_id}", json={"wall_collections": mode})
+    assert response.status_code == 200
+    assert response.json()["wall_collections"] == mode
+
+
+def test_wall_movies_mode_lists_only_works(client: TestClient, shelf: dict[str, int]) -> None:
+    _set_mode(client, shelf["library"], "movies")
+    assert _wall(client, shelf["library"]) == [
+        ("孤片", "work"),
+        ("教父", "work"),
+        ("教父2", "work"),
+        ("盗火线", "work"),
+    ]
+
+
+def test_wall_both_mode_lists_collections_and_works(
+    client: TestClient, shelf: dict[str, int]
+) -> None:
+    _set_mode(client, shelf["library"], "both")
+    assert _wall(client, shelf["library"]) == [
+        ("单部系列", "collection"),
+        ("孤片", "work"),
+        ("教父", "work"),
+        ("教父2", "work"),
+        ("教父（系列）", "collection"),
+        ("盗火线", "work"),
+    ]
+
+
+def test_wall_collapse_hides_parts_and_shows_collection(
+    client: TestClient, shelf: dict[str, int]
+) -> None:
+    rows = client.get(f"/api/libraries/{shelf['library']}/items").json()
+    assert [(row["title"], row["kind"]) for row in rows] == [
+        ("孤片", "work"),
+        ("教父（系列）", "collection"),
+        ("盗火线", "work"),
+    ]
+    card = rows[1]
+    assert card["id"] == shelf["godfather"]
+    assert card["subtitle"] == "The Godfather Collection"
+    assert card["poster_url"] is None and card["is_scraped"] is False and card["issue"] is None
+
+
+def test_wall_collapse_single_part_shows_the_movie(
+    client: TestClient, shelf: dict[str, int]
+) -> None:
+    ids = {row["id"] for row in client.get(f"/api/libraries/{shelf['library']}/items").json()}
+    assert shelf["alone"] in ids
+    assert shelf["single"] not in ids and shelf["empty"] not in ids
+
+
+def test_wall_search_does_not_collapse(client: TestClient, shelf: dict[str, int]) -> None:
+    assert _wall(client, shelf["library"], q="教父") == [
+        ("教父", "work"),
+        ("教父2", "work"),
+        ("教父（系列）", "collection"),
+    ]
+    assert _wall(client, shelf["library"], q="系列") == [
+        ("单部系列", "collection"),
+        ("教父（系列）", "collection"),
+    ]
+    collapsed = _wall(client, shelf["library"], q="教父")
+    _set_mode(client, shelf["library"], "both")
+    assert _wall(client, shelf["library"], q="教父") == collapsed
+    _set_mode(client, shelf["library"], "movies")
+    assert _wall(client, shelf["library"], q="系列") == []
+    assert _wall(client, shelf["library"], q="教父") == [("教父", "work"), ("教父2", "work")]
+
+
+def test_collection_card_year_and_sort(
+    client: TestClient, app: FastAPI, shelf: dict[str, int]
+) -> None:
+    lid = shelf["library"]
+    with app.state.session_factory() as session:
+        undated = _add_item(session, lid, "无日期系列", kind="collection")
+        _add_item(session, lid, "无日期一", parent_id=undated.id)
+        _add_item(session, lid, "无日期二", parent_id=undated.id)
+        session.commit()
+    rows = client.get(f"/api/libraries/{lid}/items", params={"sort": "release_date"}).json()
+    assert [(row["title"], row["year"]) for row in rows] == [
+        ("教父（系列）", 1972),
+        ("盗火线", 1995),
+        ("孤片", 2001),
+        ("无日期系列", None),
+    ]
+    desc = _wall(client, lid, sort="release_date", order="desc")
+    assert [title for title, _ in desc] == ["孤片", "盗火线", "教父（系列）", "无日期系列"]
+    with app.state.session_factory() as session:
+        godfather = session.get(Item, shelf["godfather"])
+        godfather.release_date = "1999-01-01"
+        godfather.sort_title = "一"
+        session.commit()
+    rows = client.get(f"/api/libraries/{lid}/items", params={"sort": "release_date"}).json()
+    assert [(row["title"], row["year"]) for row in rows] == [
+        ("盗火线", 1995),
+        ("教父（系列）", 1972),
+        ("孤片", 2001),
+        ("无日期系列", None),
+    ]
+    assert [title for title, _ in _wall(client, lid)] == [
+        "教父（系列）",
+        "孤片",
+        "无日期系列",
+        "盗火线",
+    ]
+    _set_mode(client, lid, "both")
+    assert [title for title, _ in _wall(client, lid, sort="release_date")] == [
+        "教父",
+        "教父2",
+        "盗火线",
+        "教父（系列）",
+        "单部系列",
+        "孤片",
+        "无日期系列",
+        "无日期一",
+        "无日期二",
+    ]
 
 
 def test_image_route_rejects_bad_paths(client: TestClient) -> None:

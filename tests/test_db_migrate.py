@@ -200,6 +200,33 @@ def test_upgrade_from_0001_keeps_rows(tmp_path: Path) -> None:
     conn.close()
 
 
+def test_upgrade_from_0003_defaults_wall_collections_to_collapse(tmp_path: Path) -> None:
+    db_path = tmp_path / "old.db"
+    command.upgrade(_alembic_config(db_path), "0003")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "insert into data_types (id, name, structure) values ('movie', '电影', 'item_group')"
+        )
+        conn.execute(
+            "insert into libraries (data_type_id, name, created_at, updated_at) "
+            "values ('movie', '电影', 'x', 'x')"
+        )
+    conn.close()
+    upgrade_database(db_path)
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("select wall_collections from libraries").fetchone() == ("collapse",)
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute("update libraries set wall_collections = 'bogus'")
+    conn.close()
+
+    command.downgrade(_alembic_config(db_path), "0003")
+    with sqlite3.connect(db_path) as conn:
+        columns = [row[1] for row in conn.execute("pragma table_info(libraries)")]
+        assert "wall_collections" not in columns
+        assert conn.execute("select name from libraries").fetchall() == [("电影",)]
+    conn.close()
+
+
 def test_deleting_parent_task_deletes_children(session: Session) -> None:
     parent = Task(task_type="organize", status="succeeded", created_at=utc_now())
     session.add(parent)
