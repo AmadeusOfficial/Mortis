@@ -18,12 +18,12 @@ def test_proxy_url_empty_host_means_no_proxy() -> None:
 
 
 def test_proxy_url_without_credentials() -> None:
-    assert proxy_url(NetworkConfig(), Secrets()) == "http://127.0.0.1:7890"
+    assert proxy_url(NetworkConfig(proxy_host="127.0.0.1"), Secrets()) == "http://127.0.0.1:7890"
 
 
 def test_proxy_url_quotes_credentials() -> None:
     secrets = Secrets(network={"proxy_username": "a@b", "proxy_password": "p:w/x"})
-    assert proxy_url(NetworkConfig(proxy_port=1080), secrets) == (
+    assert proxy_url(NetworkConfig(proxy_host="127.0.0.1", proxy_port=1080), secrets) == (
         "http://a%40b:p%3Aw%2Fx@127.0.0.1:1080"
     )
 
@@ -135,7 +135,12 @@ def test_build_client_defaults_without_transport() -> None:
         assert client.timeout.connect == 15.0
         assert client.trust_env is False
         assert client.headers["User-Agent"] == f"Mortis/{get_version()}"
-        assert client._mounts  # 设了代理主机：挂了代理传输
+        assert not client._mounts  # 默认不用代理
+
+
+def test_build_client_with_proxy_host_mounts_proxy() -> None:
+    with build_client(NetworkConfig(proxy_host="127.0.0.1"), Secrets()) as client:
+        assert client._mounts
 
 
 def test_build_client_without_proxy_host_has_no_proxy_mounts() -> None:

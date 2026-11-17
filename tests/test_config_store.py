@@ -18,12 +18,12 @@ from mortis.config.store import ConfigError, ConfigStore
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_defaults_match_local_tmm() -> None:
+def test_network_defaults_work_without_local_proxy() -> None:
     network = AppConfig().network
     assert (network.proxy_host, network.proxy_port, network.ignore_cert_errors) == (
-        "127.0.0.1",
+        "",
         7890,
-        True,
+        False,
     )
     assert SECRET_KEYS == ("tmdb_api_key", "proxy_username", "proxy_password")
 

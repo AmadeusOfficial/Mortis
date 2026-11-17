@@ -2,9 +2,9 @@
 
 [network]
 # 代理主机，留空表示不用代理
-proxy_host = "127.0.0.1"
+proxy_host = ""
 proxy_port = 7890
-ignore_cert_errors = true
+ignore_cert_errors = false
 
 [files]
 # 扫描时认作视频的扩展名

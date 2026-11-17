@@ -27,9 +27,9 @@ def _is_plain_host(host: str) -> bool:
 class NetworkConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    proxy_host: str = "127.0.0.1"
+    proxy_host: str = ""
     proxy_port: int = Field(default=7890, ge=1, le=65535)
-    ignore_cert_errors: bool = True
+    ignore_cert_errors: bool = False
 
     @field_validator("proxy_host")
     @classmethod
