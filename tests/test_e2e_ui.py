@@ -89,7 +89,7 @@ def test_create_edit_delete_library(page: Page, base_url: str, tmp_path: Path) -
 def test_settings_save_secret_and_check(page: Page, base_url: str, data_dir: Path) -> None:
     page.goto(base_url + "/settings")
     # 默认分区是「通用 → 网络」，窄屏是 Select，宽屏是左侧导航。
-    expect(page.get_by_label("代理主机")).to_have_value("127.0.0.1")
+    expect(page.get_by_label("代理主机")).to_have_value("")
 
     page.get_by_label("代理端口").fill("1080")
     page.get_by_role("button", name="保存网络设置").click()

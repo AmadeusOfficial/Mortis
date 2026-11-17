@@ -58,39 +58,10 @@ export const theme = createTheme({
   },
 });
 
-// 页面自己的配色变量，组件和页面样式只用这些，不写死颜色。
+// 页面自己的配色变量，组件和页面样式只用这些，不写死颜色。界面只有深色。
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {},
-  light: {
-    "--mo-bg": "#f3f5f9",
-    "--mo-side": "#ffffff",
-    "--mo-surface": "#ffffff",
-    "--mo-surface-2": "#f8fafc",
-    "--mo-surface-3": "#eff3f9",
-    "--mo-line": "rgba(15, 23, 42, 0.08)",
-    "--mo-line-2": "rgba(15, 23, 42, 0.15)",
-    "--mo-text": "#0f172a",
-    "--mo-dim": "#475569",
-    "--mo-muted": "#64748b",
-    "--mo-accent": "#2563eb",
-    "--mo-accent-hi": "#1d4ed8",
-    "--mo-accent-soft": "rgba(37, 99, 235, 0.10)",
-    "--mo-accent-bd": "rgba(37, 99, 235, 0.25)",
-    "--mo-source": "#0369a1",
-    "--mo-source-soft": "rgba(14, 165, 233, 0.12)",
-    "--mo-source-bd": "rgba(14, 165, 233, 0.28)",
-    "--mo-ok": "#059669",
-    "--mo-ok-soft": "rgba(5, 150, 105, 0.10)",
-    "--mo-ok-bd": "rgba(5, 150, 105, 0.26)",
-    "--mo-warn": "#b45309",
-    "--mo-warn-soft": "rgba(217, 119, 6, 0.12)",
-    "--mo-warn-bd": "rgba(217, 119, 6, 0.30)",
-    "--mo-bad": "#be123c",
-    "--mo-bad-soft": "rgba(225, 29, 72, 0.10)",
-    "--mo-bad-bd": "rgba(225, 29, 72, 0.28)",
-    "--mo-shadow": "0 10px 30px -18px rgba(15, 23, 42, 0.35)",
-    "--mantine-color-body": "#f3f5f9",
-  },
+  light: {},
   dark: {
     "--mo-bg": "#0a0d13",
     "--mo-side": "#0e121a",

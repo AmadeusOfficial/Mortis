@@ -287,6 +287,13 @@ export const IconMoon = makeIcon(
 
 export const IconMenu = makeIcon(<path d="M4 6h16M4 12h16M4 18h16" />);
 
+export const IconSidebar = makeIcon(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+  </>,
+);
+
 export const IconDrag = makeIcon(
   <>
     <circle cx="9" cy="6" r="1" />

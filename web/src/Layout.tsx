@@ -1,10 +1,10 @@
-import { AppShell, Burger, Group, Progress, SegmentedControl, Text, useMantineColorScheme } from "@mantine/core";
-import { useDisclosure, useMediaQuery } from "@mantine/hooks";
+import { ActionIcon, AppShell, Burger, Group, Progress, Text, Tooltip } from "@mantine/core";
+import { useDisclosure, useLocalStorage, useMediaQuery } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 import { NavLink as RouterNavLink, Outlet, useLocation } from "react-router";
 import { fetchLibraries, fetchSystemInfo, fetchTasks, fetchUnmatched } from "./api";
-import { DataTypeIcon, IconLibraries, IconSettings, IconTasks, IconUnmatched, Logo } from "./icons";
+import { DataTypeIcon, IconLibraries, IconSettings, IconSidebar, IconTasks, IconUnmatched, Logo } from "./icons";
 
 function NavItem({
   to,
@@ -12,19 +12,34 @@ function NavItem({
   label,
   end,
   extra,
+  tip,
+  dot,
+  collapsed,
 }: {
   to: string;
   icon: ReactNode;
   label: string;
   end?: boolean;
   extra?: ReactNode;
+  tip?: string;
+  dot?: boolean;
+  collapsed: boolean;
 }) {
   return (
-    <RouterNavLink to={to} end={end} className="mo-nav">
-      {icon}
-      <span className="mo-nav-label">{label}</span>
-      {extra}
-    </RouterNavLink>
+    <Tooltip label={tip ?? label} position="right" withArrow disabled={!collapsed}>
+      <RouterNavLink to={to} end={end} className="mo-nav" aria-label={collapsed ? (tip ?? label) : undefined}>
+        <span className="mo-nav-icon">
+          {icon}
+          {collapsed && dot && <span className="mo-nav-dot" />}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="mo-nav-label">{label}</span>
+            {extra}
+          </>
+        )}
+      </RouterNavLink>
+    </Tooltip>
   );
 }
 
@@ -66,22 +81,7 @@ function RunningTask() {
   );
 }
 
-function SchemeSwitch() {
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
-  return (
-    <SegmentedControl
-      size="xs"
-      value={colorScheme === "light" ? "light" : "dark"}
-      onChange={(value) => setColorScheme(value as "light" | "dark")}
-      data={[
-        { value: "dark", label: "深色" },
-        { value: "light", label: "浅色" },
-      ]}
-    />
-  );
-}
-
-function Sidebar() {
+function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
   const info = useQuery({ queryKey: ["system-info"], queryFn: fetchSystemInfo });
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
   const unmatched = useQuery({ queryKey: ["unmatched", null], queryFn: () => fetchUnmatched(null) });
@@ -94,25 +94,27 @@ function Sidebar() {
   const activeCount = active.data?.total ?? 0;
 
   return (
-    <div className="mo-side">
+    <div className="mo-side" data-collapsed={collapsed}>
       <div className="mo-brand">
         <Logo size={30} />
-        <div>
-          <Group gap={6}>
-            <Text fw={700} fz={16}>
-              莫提斯
+        {!collapsed && (
+          <div>
+            <Group gap={6}>
+              <Text fw={700} fz={16}>
+                莫提斯
+              </Text>
+              <span className="mo-brand-en">MORTIS</span>
+            </Group>
+            <Text fz={11} c="var(--mo-muted)">
+              单人本地片库
             </Text>
-            <span className="mo-brand-en">MORTIS</span>
-          </Group>
-          <Text fz={11} c="var(--mo-muted)">
-            单人本地片库
-          </Text>
-        </div>
+          </div>
+        )}
       </div>
 
       <nav className="mo-nav-group">
         <div className="mo-nav-title">媒体库</div>
-        <NavItem to="/libraries" end icon={<IconLibraries />} label="全部媒体库" />
+        <NavItem to="/libraries" end icon={<IconLibraries />} label="全部媒体库" collapsed={collapsed} />
         {(libraries.data ?? []).map((library) => (
           <NavItem
             key={library.id}
@@ -120,6 +122,7 @@ function Sidebar() {
             icon={<DataTypeIcon dataTypeId={library.data_type_id} />}
             label={library.name}
             extra={<span className="mo-nav-count mo-mono">{library.item_count}</span>}
+            collapsed={collapsed}
           />
         ))}
       </nav>
@@ -130,25 +133,44 @@ function Sidebar() {
           to="/unmatched"
           icon={<IconUnmatched />}
           label="未识别"
+          tip={unmatchedCount > 0 ? `未识别（${unmatchedCount}）` : undefined}
           extra={unmatchedCount > 0 && <span className="mo-nav-badge mo-mono">{unmatchedCount}</span>}
+          dot={unmatchedCount > 0}
+          collapsed={collapsed}
         />
         <NavItem
           to="/tasks"
           icon={<IconTasks />}
           label="任务"
+          tip={activeCount > 0 ? `任务（${activeCount} 进行中）` : undefined}
           extra={activeCount > 0 && <span className="mo-nav-live">{activeCount} 进行中</span>}
+          dot={activeCount > 0}
+          collapsed={collapsed}
         />
-        <NavItem to="/settings" icon={<IconSettings />} label="设置" />
+        <NavItem to="/settings" icon={<IconSettings />} label="设置" collapsed={collapsed} />
       </nav>
 
       <div className="mo-side-foot">
-        <RunningTask />
-        <Group justify="space-between" mt="sm">
-          <Text fz={11} className="mo-mono" c="var(--mo-muted)">
-            {info.isSuccess && `v${info.data.version}`}
-            {info.isError && "连不上后端"}
-          </Text>
-          <SchemeSwitch />
+        {!collapsed && <RunningTask />}
+        <Group justify={collapsed ? "center" : "space-between"} mt={collapsed ? 0 : "sm"}>
+          {!collapsed && (
+            <Text fz={11} className="mo-mono" c="var(--mo-muted)">
+              {info.isSuccess && `v${info.data.version}`}
+              {info.isError && "连不上后端"}
+            </Text>
+          )}
+          {onToggle !== undefined && (
+            <Tooltip label={collapsed ? "展开侧栏" : "收起侧栏"} position="right" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={onToggle}
+                aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
+              >
+                <IconSidebar size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </div>
     </div>
@@ -158,13 +180,18 @@ function Sidebar() {
 export function Layout() {
   const mobile = useMediaQuery("(max-width: 62em)");
   const [opened, { toggle, close }] = useDisclosure(false);
+  const [sideCollapsed, setSideCollapsed] = useLocalStorage({
+    key: "mortis-sidebar-collapsed",
+    defaultValue: false,
+  });
+  const collapsed = !mobile && sideCollapsed;
   const { pathname } = useLocation();
   useEffect(() => close(), [pathname, close]);
 
   return (
     <AppShell
       header={{ height: 52, collapsed: !mobile }}
-      navbar={{ width: 240, breakpoint: "62em", collapsed: { mobile: !opened } }}
+      navbar={{ width: collapsed ? 68 : 240, breakpoint: "62em", collapsed: { mobile: !opened } }}
       padding={0}
     >
       <AppShell.Header className="mo-topbar">
@@ -175,7 +202,10 @@ export function Layout() {
         </Group>
       </AppShell.Header>
       <AppShell.Navbar className="mo-navbar">
-        <Sidebar />
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={mobile ? undefined : () => setSideCollapsed((value) => !value)}
+        />
       </AppShell.Navbar>
       <AppShell.Main className="mo-main">
         <div className="mo-page">

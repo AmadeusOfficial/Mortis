@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { WallItem } from "../api";
-import { IconImage, IconScrape, IconSearch, IconWarning } from "../icons";
+import { IconImage, IconScrape, IconWarning } from "../icons";
 import styles from "./PosterCard.module.css";
 
 export interface PosterCardProps {
@@ -36,44 +36,36 @@ export function PosterCard({ item, className }: PosterCardProps) {
           </div>
         )}
         <div className={styles.scrim} />
-        {hasIssue ? (
+        {state === "issue" && (
           <span className={`${styles.badge} ${styles.badgeBad}`}>
-            <IconWarning size={11} />
+            <IconWarning size={12} />
             异常
           </span>
-        ) : (
-          !item.is_scraped && (
-            <span className={`${styles.badge} ${styles.badgeWarn}`}>
-              <IconScrape size={11} />
-              未刮削
-            </span>
-          )
         )}
-        <div className={styles.overlay} aria-hidden="true">
-          <span className={styles.detailBtn}>
-            <IconSearch size={12} />
-            详情
+        {state === "unscraped" && (
+          <span className={`${styles.badge} ${styles.badgeWarn}`}>
+            <IconScrape size={12} />
+            未刮削
           </span>
-        </div>
+        )}
       </div>
 
-      <h3 className={styles.title} title={item.title}>
-        {item.title}
-      </h3>
-      <p className={styles.subtitle} title={caption || undefined}>
-        {caption || "\u00a0"}
-      </p>
-
-      {hasIssue && (
-        <div className={`${styles.note} ${styles.noteBad}`} title={item.issue ?? undefined}>
-          <span className={styles.noteText}>{item.issue}</span>
-        </div>
-      )}
-      {!hasIssue && !item.is_scraped && (
-        <div className={`${styles.note} ${styles.noteWarn}`} title="待刮削元数据">
-          <span className={styles.noteText}>待刮削元数据</span>
-        </div>
-      )}
+      <div className={styles.meta}>
+        <h3 className={styles.title} title={item.title}>
+          {item.title}
+        </h3>
+        {state === "issue" ? (
+          <p className={`${styles.subtitle} ${styles.statusBad}`} title={item.issue ?? undefined}>
+            {item.issue}
+          </p>
+        ) : state === "unscraped" ? (
+          <p className={`${styles.subtitle} ${styles.statusWarn}`}>待刮削元数据</p>
+        ) : (
+          <p className={styles.subtitle} title={caption || undefined}>
+            {caption || "\u00a0"}
+          </p>
+        )}
+      </div>
     </Link>
   );
 }

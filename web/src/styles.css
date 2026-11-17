@@ -39,7 +39,8 @@ a {
 }
 .mo-page {
   padding: 28px 36px 56px;
-  max-width: 1680px;
+  max-width: 1880px;
+  margin-inline: auto;
 }
 @media (max-width: 62em) {
   .mo-page {
@@ -100,9 +101,21 @@ a {
   font-weight: 500;
   text-decoration: none;
 }
-.mo-nav > svg {
-  color: var(--mo-muted);
+.mo-nav-icon {
+  position: relative;
+  display: inline-flex;
   flex: none;
+  color: var(--mo-muted);
+}
+.mo-nav-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mo-warn);
+  box-shadow: 0 0 0 2px var(--mo-side);
 }
 .mo-nav:hover {
   background: var(--mo-surface-2);
@@ -113,7 +126,7 @@ a {
   border-color: var(--mo-accent-bd);
   color: var(--mo-text);
 }
-.mo-nav.active > svg {
+.mo-nav.active .mo-nav-icon {
   color: var(--mo-accent-hi);
 }
 .mo-nav-label {
@@ -151,6 +164,25 @@ a {
   margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--mo-line);
+}
+.mo-side[data-collapsed="true"] {
+  padding: 18px 10px 14px;
+}
+.mo-side[data-collapsed="true"] .mo-brand {
+  justify-content: center;
+  padding: 2px 0 14px;
+}
+.mo-side[data-collapsed="true"] .mo-nav-title {
+  height: 1px;
+  margin: 0 8px 8px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  background: var(--mo-line);
+}
+.mo-side[data-collapsed="true"] .mo-nav {
+  justify-content: center;
+  padding: 9px 0;
 }
 .mo-running {
   display: block;
