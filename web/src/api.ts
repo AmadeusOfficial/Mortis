@@ -780,6 +780,50 @@ export function playCandidates(error: unknown): PlayCandidate[] | null {
   return null;
 }
 
+export interface DeletePreview {
+  item_id: number;
+  title: string;
+  library_id: number;
+  folders: string[];
+  // 不含 folders 里已经包括的文件。
+  files: string[];
+  file_count: number;
+  total_size: number;
+  permanent: boolean;
+  // 独占文件夹里会一起删的未登记文件，sample 是前几个的相对路径。
+  unregistered: { count: number; total_size: number; sample: string[] };
+  reasons: string[];
+}
+
+export interface DeleteExpected {
+  folders: string[];
+  files: string[];
+  file_count: number;
+  total_size: number;
+  permanent: boolean;
+  unregistered_count: number;
+}
+
+// 预览里确认过的内容原样交回，后端重新算一遍，不一样就 409。
+export function deleteExpected(preview: DeletePreview): DeleteExpected {
+  return {
+    folders: preview.folders,
+    files: preview.files,
+    file_count: preview.file_count,
+    total_size: preview.total_size,
+    permanent: preview.permanent,
+    unregistered_count: preview.unregistered.count,
+  };
+}
+
+export const fetchDeletePreview = (id: number) =>
+  request<DeletePreview>("GET", `/api/items/${id}/delete-preview`);
+export const deleteItem = (id: number, confirmTitle: string, expected: DeleteExpected) =>
+  request<{ deleted: boolean; library_id: number }>("DELETE", `/api/items/${id}`, {
+    confirm_title: confirmTitle,
+    expected,
+  });
+
 export const fetchItemArrangePreview = (id: number) =>
   request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
 export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);

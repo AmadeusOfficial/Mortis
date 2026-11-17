@@ -4,6 +4,7 @@ import {
   Avatar,
   Button,
   Loader,
+  Menu,
   Paper,
   SimpleGrid,
   Tabs,
@@ -32,6 +33,7 @@ import {
   updateItemLocks,
 } from "../api";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
+import { DeleteItemModal } from "../components/DeleteItemModal";
 import { FieldActions } from "../components/detail/FieldActions";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
@@ -52,12 +54,14 @@ import {
   IconImage,
   IconInfo,
   IconLink,
+  IconMore,
   IconOrganize,
   IconPlay,
   IconRefresh,
   IconScrape,
   IconStar,
   IconSubtitle,
+  IconTrash,
   IconVideo,
 } from "../icons";
 import { useTaskWatcher } from "../useTaskWatcher";
@@ -168,6 +172,7 @@ export function ItemDetailPage() {
   const [supplementing, setSupplementing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
@@ -325,6 +330,8 @@ export function ItemDetailPage() {
     detail.files.some((file) => file.file_kind === "video");
   // 本地文件是游戏文件夹的条目（Galgame）按钮叫「启动」，启动的是文件夹里选定的程序。
   const canLaunch = detail.files.some((file) => file.file_kind === "game");
+  // 只有单部作品能删；剧、季、集和系列后端也不让删。
+  const canDelete = dataTypes.data !== undefined && isWork && !series;
   const landscape = detail.kind === "episode";
 
   const peopleFields = allFields.filter(
@@ -565,6 +572,25 @@ export function ItemDetailPage() {
                 >
                   整理
                 </Button>
+              )}
+              {canDelete && (
+                <Menu position="bottom-end" withinPortal>
+                  <Menu.Target>
+                    <Button variant="default" aria-label="更多操作">
+                      <IconMore size={16} />
+                    </Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      color="red"
+                      leftSection={<IconTrash size={14} />}
+                      disabled={busy}
+                      onClick={() => setDeleting(true)}
+                    >
+                      删除
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
               )}
             </div>
           )}
@@ -972,6 +998,13 @@ export function ItemDetailPage() {
           error={rematch.isError ? rematch.error.message : null}
           onPick={(hit: MovieHit) => rematch.mutate({ tmdbId: hit.tmdb_id })}
           onClose={() => setRematching(false)}
+        />
+      )}
+      {deleting && (
+        <DeleteItemModal
+          itemId={detail.id}
+          title={detail.title}
+          onClose={() => setDeleting(false)}
         />
       )}
       <ArrangePreviewModal
