@@ -109,6 +109,7 @@ def test_settings_schema(plugin: PlayerPlugin) -> None:
     assert properties["magpie_path"]["title"] == "Magpie 路径"
     assert properties["ensure_magpie"]["title"] == "启动游戏时确保 Magpie 在运行"
     assert properties["magpie_path"]["description"]
+    assert properties["magpie_path"]["format"] == "file-path"
 
 
 def test_always_available(plugin: PlayerPlugin, tmp_path: Path) -> None:
@@ -122,14 +123,14 @@ def test_always_available(plugin: PlayerPlugin, tmp_path: Path) -> None:
         assert plugin.available(host)
 
 
-def test_detected_path_is_magpie_when_enabled(plugin: PlayerPlugin, tmp_path: Path) -> None:
+def test_detected_path_is_none(plugin: PlayerPlugin, tmp_path: Path) -> None:
     magpie = _touch(tmp_path / "Magpie" / "Magpie.exe")
     assert plugin.detected_path(_host(plugin)) is None
     assert plugin.detected_path(_host(plugin, magpie_path=str(magpie))) is None
     missing = _host(plugin, ensure_magpie=True, magpie_path=str(tmp_path / "x.exe"))
     assert plugin.detected_path(missing) is None
     host = _host(plugin, ensure_magpie=True, magpie_path=str(magpie))
-    assert plugin.detected_path(host) == str(magpie)
+    assert plugin.detected_path(host) is None
 
 
 # 挑选启动程序
@@ -149,6 +150,23 @@ def test_targets_exclude_helpers(plugin: PlayerPlugin, tmp_path: Path) -> None:
         "dxwebsetup.exe",
         "UnityCrashHandler64.exe",
         "notification_helper.exe",
+        "vcredist_x86.exe",
+        "dotnetfx35.exe",
+        "oalinst.exe",
+        "PhysX_SystemSoftware.exe",
+        "7z.exe",
+        "7za.exe",
+        "PrereqSetup.exe",
+        "GameUninstall.exe",
+        "python.exe",
+        "pythonw.exe",
+        "環境設定.exe",
+        "設定.exe",
+        "セットアップ.exe",
+        "アンインストール.exe",
+        "游戏设置.exe",
+        "配置工具.exe",
+        "卸载.exe",
         "readme.txt",
         "game.dll",
     ):
@@ -156,20 +174,74 @@ def test_targets_exclude_helpers(plugin: PlayerPlugin, tmp_path: Path) -> None:
     assert plugin.targets(_host(plugin), str(folder)) == ["game.exe"]
 
 
+def test_targets_keep_names_that_only_look_like_helpers(
+    plugin: PlayerPlugin, tmp_path: Path
+) -> None:
+    folder = tmp_path / "游戏"
+    for name in ("game.exe", "python_game.exe", "MyConfigurator2.exe"):
+        _touch(folder / name)
+    assert sorted(plugin.targets(_host(plugin), str(folder))) == [
+        "MyConfigurator2.exe",
+        "game.exe",
+        "python_game.exe",
+    ]
+
+
 def test_targets_skip_redist_and_hidden_folders(plugin: PlayerPlugin, tmp_path: Path) -> None:
     folder = tmp_path / "游戏"
     _touch(folder / "game.exe")
-    for sub in ("_CommonRedist", "redist", "DirectX", "__MACOSX", ".git"):
+    for sub in ("_CommonRedist", "redist", "DirectX", "__MACOSX", ".git", "lib"):
         _touch(folder / sub / "tool.exe")
+    _touch(folder / "lib" / "py3-windows-x86_64" / "renpy.exe")
     _touch(folder / "data" / "tool.exe")
     assert plugin.targets(_host(plugin), str(folder)) == ["game.exe", _rel("data", "tool.exe")]
 
 
-def test_targets_fall_back_when_everything_excluded(plugin: PlayerPlugin, tmp_path: Path) -> None:
+def test_targets_empty_when_everything_excluded(plugin: PlayerPlugin, tmp_path: Path) -> None:
     folder = tmp_path / "游戏"
     _touch(folder / "setup.exe", size=10)
     _touch(folder / "unins000.exe", size=5)
-    assert plugin.targets(_host(plugin), str(folder)) == ["setup.exe", "unins000.exe"]
+    assert plugin.targets(_host(plugin), str(folder)) == []
+
+
+def test_targets_prefer_chinese_build_among_matches(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    folder = tmp_path / "Summer Pockets"
+    _touch(folder / "SummerPockets.exe", size=900)
+    _touch(folder / "SummerPockets_chs.exe", size=10)
+    _touch(folder / "SummerPocketsCHT.exe", size=20)
+    _touch(folder / "SummerPockets_CN.exe", size=30)
+    _touch(folder / "SummerPockets-SC.exe", size=40)
+    _touch(folder / "SummerPockets中文版.exe", size=50)
+    _touch(folder / "汉化补丁.exe", size=5000)
+    _touch(folder / "SummerPocketsScene.exe", size=800)
+    assert plugin.targets(_host(plugin), str(folder)) == [
+        "SummerPockets中文版.exe",
+        "SummerPockets-SC.exe",
+        "SummerPockets_CN.exe",
+        "SummerPocketsCHT.exe",
+        "SummerPockets_chs.exe",
+        "SummerPockets.exe",
+        "SummerPocketsScene.exe",
+        "汉化补丁.exe",
+    ]
+
+
+def test_targets_stop_after_max_dirs(
+    plugin: PlayerPlugin, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 别的测试会重新加载插件，sys.modules 里的模块不一定是这个对象用的那个。
+    module = type(plugin).targets.__globals__
+    assert module["MAX_DIRS"] == 500
+    monkeypatch.setitem(module, "MAX_DIRS", 3)
+    folder = tmp_path / "游戏"
+    _touch(folder / "game.exe")
+    for index in range(10):
+        _touch(folder / f"d{index:02}" / "x.exe")
+    assert plugin.targets(_host(plugin), str(folder)) == [
+        "game.exe",
+        _rel("d00", "x.exe"),
+        _rel("d01", "x.exe"),
+    ]
 
 
 def test_targets_ranking(plugin: PlayerPlugin, tmp_path: Path) -> None:
@@ -253,6 +325,17 @@ def test_play_skips_missing_magpie(plugin: PlayerPlugin, tmp_path: Path) -> None
         host = _host(plugin, magpie_path=magpie_path, ensure_magpie=True)
         plugin.play(host, str(exe))
         assert host.launched == [(str(exe), [], str(exe.parent))], magpie_path
+        assert len(host.messages) == 1, magpie_path
+        assert host.messages[0].startswith("Magpie 路径无效，没有启动 Magpie：")
+        if magpie_path.strip():
+            assert host.messages[0].endswith(magpie_path)
+
+
+def test_play_without_magpie_switch_logs_nothing(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    host = _host(plugin, magpie_path=str(tmp_path / "没有.exe"), ensure_magpie=False)
+    plugin.play(host, str(exe))
+    assert host.messages == []
 
 
 def test_play_continues_when_magpie_fails(plugin: PlayerPlugin, tmp_path: Path) -> None:

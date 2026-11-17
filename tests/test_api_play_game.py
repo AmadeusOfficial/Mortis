@@ -404,6 +404,34 @@ def test_single_candidate_launches_and_remembers(
     assert _remembered(store) == {str(folder): "only.exe"}
 
 
+def test_choose_with_single_candidate_asks_first(
+    app: FastAPI,
+    client: TestClient,
+    launcher: FakeLauncher,
+    store: ConfigStore,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "单个"
+    library = _library(client, root, "galgame")
+    item = _item(app, library, "galgame")
+    folder = root / "只有一个"
+    _touch(folder / "only.exe")
+    file_id = _file(app, library, item, folder, "game")
+
+    response = client.post(f"/api/items/{item}/play", json={"choose": True})
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["detail"] == "有 1 个可以启动的程序，选一个再启动"
+    assert [(c["file_id"], c["target"]) for c in body["candidates"]] == [(file_id, "only.exe")]
+    assert launcher.launched == []
+    assert _remembered(store) == {}
+
+    picked = client.post(f"/api/items/{item}/play", json={"file_id": file_id, "target": "only.exe"})
+    assert picked.status_code == 200, picked.text
+    assert launcher.launched == [(str(folder / "only.exe"), [])]
+    assert _remembered(store) == {str(folder): "only.exe"}
+
+
 def test_empty_or_missing_folder(
     app: FastAPI, client: TestClient, launcher: FakeLauncher, tmp_path: Path
 ) -> None:
@@ -425,13 +453,77 @@ def test_empty_or_missing_folder(
     assert launcher.launched == []
 
 
-def test_no_game_player_is_404(
+def test_disabled_game_player_is_503_with_reason(
     client: TestClient,
     launcher: FakeLauncher,
     store: ConfigStore,
     game: tuple[int, Path, int],
 ) -> None:
     item, _folder, _file_id = game
+    for plugin_id in ("fake_game", "galgame_launcher"):
+        store.save_plugin(plugin_id, disabled=True)
+    assert client.post("/api/plugins/reload").status_code == 200
+    response = client.post(f"/api/items/{item}/play")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Galgame 启动已停用，在插件管理里启用"
+    assert launcher.launched == []
+
+
+def test_disabled_parent_points_to_parent(
+    client: TestClient,
+    launcher: FakeLauncher,
+    store: ConfigStore,
+    game: tuple[int, Path, int],
+) -> None:
+    item, _folder, _file_id = game
+    for plugin_id in ("fake_game", "galgame"):
+        store.save_plugin(plugin_id, disabled=True)
+    assert client.post("/api/plugins/reload").status_code == 200
+    response = client.post(f"/api/items/{item}/play")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Galgame 插件已停用，在插件管理里启用"
+    assert launcher.launched == []
+
+
+def test_failed_game_player_is_503_with_error(
+    client: TestClient,
+    launcher: FakeLauncher,
+    store: ConfigStore,
+    data_dir: Path,
+    game: tuple[int, Path, int],
+) -> None:
+    item, _folder, _file_id = game
+    store.save_plugin("fake_game", disabled=True)
+    broken = data_dir / "plugins" / "galgame"
+    broken.mkdir(parents=True)
+    (broken / "plugin.toml").write_text(
+        'id = "galgame"\nname = "Galgame"\nversion = "9"\nkind = "data_type"\n\n'
+        '[[players]]\nid = "galgame_launcher"\nname = "Galgame 启动"\n',
+        encoding="utf-8",
+    )
+    (broken / "__init__.py").write_text("PLUGIN = None\n", encoding="utf-8")
+    assert client.post("/api/plugins/reload").status_code == 200
+    response = client.post(f"/api/items/{item}/play")
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail.startswith("Galgame 启动没有加载：父插件 galgame 加载失败"), detail
+    assert launcher.launched == []
+
+
+def test_no_game_player_is_404(
+    app: FastAPI,
+    client: TestClient,
+    launcher: FakeLauncher,
+    store: ConfigStore,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "电影"
+    library = _library(client, root, "movie")
+    item = _item(app, library, "movie")
+    folder = root / "游戏"
+    _touch(folder / "game.exe")
+    _file(app, library, item, folder, "game")
+    # 停用的 Galgame 启动属于 Galgame 类型，电影条目不提它。
     for plugin_id in ("fake_game", "galgame_launcher"):
         store.save_plugin(plugin_id, disabled=True)
     assert client.post("/api/plugins/reload").status_code == 200

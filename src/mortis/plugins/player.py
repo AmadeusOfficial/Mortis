@@ -120,8 +120,25 @@ def choose_player(
     raise UserError("没有可用的播放插件", status_code=503)
 
 
+def _inactive_game_player(registry: PluginRegistry, data_type_id: str) -> str | None:
+    """这个类型自带的播放插件停用了或没加载时，告诉用户去哪里启用。
+
+    停用的插件不 import，看不到它的 file_kinds，只能按它属于这个数据类型来认。
+    """
+    for info in registry.all():
+        if info.kind != "player" or info.active or info.parent != data_type_id:
+            continue
+        if info.error is not None:
+            return f"{info.name}没有加载：{info.error}"
+        parent = registry.get(data_type_id)
+        if parent is not None and not parent.enabled:
+            return f"{parent.name} 插件已停用，在插件管理里启用"
+        return f"{info.name}已停用，在插件管理里启用"
+    return None
+
+
 def choose_game_player(
-    registry: PluginRegistry, launcher: Launcher, store: ConfigStore
+    registry: PluginRegistry, launcher: Launcher, store: ConfigStore, data_type_id: str = ""
 ) -> tuple[PlayerPlugin, PluginPlayerHost]:
     """启动游戏用第一个可用的 game 插件；都用不了时报第一个的原因。"""
     first: tuple[PlayerPlugin, str] | None = None
@@ -133,9 +150,12 @@ def choose_game_player(
         if reason is None:
             return plugin, host
         first = first or (plugin, reason)
-    if first is None:
-        raise UserError("没有能启动游戏的插件", status_code=404)
-    raise UserError(f"{first[0].name} 不可用：{first[1]}", status_code=503)
+    if first is not None:
+        raise UserError(f"{first[0].name} 不可用：{first[1]}", status_code=503)
+    inactive = _inactive_game_player(registry, data_type_id) if data_type_id else None
+    if inactive is not None:
+        raise UserError(inactive, status_code=503)
+    raise UserError("没有能启动游戏的插件", status_code=404)
 
 
 def remembers(plugin: PlayerPlugin) -> bool:

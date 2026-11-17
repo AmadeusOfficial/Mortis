@@ -121,7 +121,7 @@ def play_item(
     request = body if body is not None else PlayRequest()
     games = game_folders(session, item)
     if games:
-        return _launch_game(services, games, request)
+        return _launch_game(services, item, games, request)
     videos = playable_videos(session, item)
     if not videos:
         raise UserError("这个条目没有视频文件", status_code=404)
@@ -206,7 +206,7 @@ def _allowed(
 
 
 def _launch_game(
-    services: Services, games: list[MediaFile], request: PlayRequest
+    services: Services, item: Item, games: list[MediaFile], request: PlayRequest
 ) -> PlayResult | JSONResponse:
     row = _pick(games, request.file_id)
     if row is None:
@@ -227,7 +227,7 @@ def _launch_game(
     if not folder.is_dir():
         raise UserError(f"游戏文件夹不在了：{row.path}", status_code=404)
     store = services.config_store
-    plugin, host = choose_game_player(services.plugins, services.launcher, store)
+    plugin, host = choose_game_player(services.plugins, services.launcher, store, item.data_type_id)
 
     remembered = remembered_target(host, row.path)
     if request.target is not None:
@@ -242,7 +242,8 @@ def _launch_game(
         targets = _targets(plugin, host, folder)
         if not targets:
             raise UserError("文件夹里没有可以启动的程序", status_code=404)
-        if len(targets) > 1:
+        # 重选时只有一个也交给页面确认，不直接启动。
+        if len(targets) > 1 or request.choose:
             return _choices(
                 f"有 {len(targets)} 个可以启动的程序，选一个再启动",
                 [_program(row, folder, relative) for relative in targets],

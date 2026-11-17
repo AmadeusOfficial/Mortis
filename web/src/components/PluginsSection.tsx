@@ -33,6 +33,7 @@ import {
 } from "../api";
 import styles from "../pages/SettingsPage.module.css";
 import { IconRefresh } from "../icons";
+import { PathPicker } from "./PathPicker";
 import { SettingCard, SettingRow } from "./settings/SettingLayout";
 import { Pill } from "./ui";
 
@@ -453,6 +454,22 @@ function PluginSchemaField({
           value={asNumber(value)}
           onChange={(next) => onChange(typeof next === "number" ? next : 0)}
         />
+      </SettingRow>
+    );
+  }
+  if (property.format === "file-path") {
+    return (
+      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
+        <Group gap="xs" wrap="nowrap">
+          <PathPicker
+            id={inputId}
+            describedBy={property.description ? hintId : undefined}
+            label={label}
+            mode="file"
+            value={asText(value)}
+            onChange={onChange}
+          />
+        </Group>
       </SettingRow>
     );
   }

@@ -252,6 +252,7 @@ export interface JsonSchemaProperty {
   description?: string;
   default?: unknown;
   enum?: string[];
+  format?: string;
 }
 
 export interface JsonSchema {
@@ -806,8 +807,10 @@ export interface DirListing {
   // 空字符串表示上一级是盘符列表；null 表示已经在盘符列表。
   parent: string | null;
   dirs: { name: string; path: string }[];
+  files: { name: string; path: string }[];
 }
 
-export function fetchDirs(path: string): Promise<DirListing> {
-  return request("GET", `/api/files/dirs?path=${encodeURIComponent(path)}`);
+export function fetchDirs(path: string, files = false): Promise<DirListing> {
+  const query = `path=${encodeURIComponent(path)}${files ? "&files=true" : ""}`;
+  return request("GET", `/api/files/dirs?${query}`);
 }

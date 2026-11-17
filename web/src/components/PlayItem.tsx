@@ -84,7 +84,9 @@ export function usePlayItem(): {
     choosing === null
       ? ""
       : programs
-        ? `有 ${choosing.candidates.length} 个可以启动的程序，选一个启动，下次直接用它。`
+        ? choosing.candidates.length === 1
+          ? "只找到这一个可以启动的程序，确认后启动，下次直接用它。"
+          : `有 ${choosing.candidates.length} 个可以启动的程序，选一个启动，下次直接用它。`
         : choosing.game
           ? `有 ${choosing.candidates.length} 个游戏文件夹，选一个启动。`
           : `有 ${choosing.candidates.length} 个视频文件，选一个打开。`;

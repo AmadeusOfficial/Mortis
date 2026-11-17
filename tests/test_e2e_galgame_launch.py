@@ -122,6 +122,36 @@ def test_choose_remember_and_change_program(page: Page, world: tuple[World, str]
     assert _launched(state) == [start, start, other, other]
 
 
+def test_change_program_confirms_single_candidate(page: Page, world: tuple[World, str]) -> None:
+    state, url = world
+    (state.folder / "Launcher.exe").unlink()
+    start = str(state.folder / "Start.exe")
+    page.goto(f"{url}/items/{state.item}")
+
+    page.get_by_role("button", name="更换启动程序").click()
+    dialog = page.get_by_role("dialog", name="选择启动程序 · 某游戏")
+    expect(dialog).to_be_visible()
+    expect(
+        dialog.get_by_text("只找到这一个可以启动的程序，确认后启动，下次直接用它。")
+    ).to_be_visible()
+    assert state.launcher.launched == []
+
+    dialog.get_by_role("button", name="启动 Start.exe").click()
+    expect(page.get_by_text("已启动 Start.exe")).to_be_visible()
+    expect(dialog).to_be_hidden()
+    assert _launched(state) == [start]
+
+
+def test_disabled_launcher_reason_is_shown(page: Page, world: tuple[World, str]) -> None:
+    state, url = world
+    disabled = page.request.put(f"{url}/api/plugins/galgame_launcher", data={"enabled": False})
+    assert disabled.status == 200, disabled.text()
+    page.goto(f"{url}/items/{state.item}")
+    page.get_by_role("button", name="启动", exact=True).click()
+    expect(page.get_by_text("Galgame 启动已停用，在插件管理里启用")).to_be_visible()
+    assert state.launcher.launched == []
+
+
 def test_launcher_settings_not_a_video_player(
     page: Page, world: tuple[World, str], tmp_path: Path
 ) -> None:
@@ -137,7 +167,19 @@ def test_launcher_settings_not_a_video_player(
     page.keyboard.press("Escape")
 
     magpie = tmp_path / "Magpie" / "Magpie.exe"
-    page.get_by_label("Magpie 路径").fill(str(magpie))
+    magpie.parent.mkdir()
+    magpie.write_bytes(b"")
+    (magpie.parent / "README.txt").write_text("x", encoding="utf-8")
+    page.get_by_role("button", name="浏览", exact=True).click()
+    picker = page.get_by_role("dialog", name="选择文件")
+    expect(picker).to_be_visible()
+    expect(picker.get_by_role("button", name="选择这个目录")).to_have_count(0)
+    picker.get_by_label("当前目录").fill(str(magpie.parent))
+    picker.get_by_label("当前目录").press("Enter")
+    expect(picker.get_by_label("选择文件 README.txt")).to_be_visible()
+    picker.get_by_label("选择文件 Magpie.exe").click()
+    expect(picker).to_be_hidden()
+    expect(page.get_by_label("Magpie 路径")).to_have_value(str(magpie))
     page.get_by_role("button", name="保存 Galgame 启动 设置").click()
     expect(page.get_by_text("Galgame 启动 的设置已保存")).to_be_visible()
     page.reload()
