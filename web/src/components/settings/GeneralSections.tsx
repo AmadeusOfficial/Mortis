@@ -202,9 +202,6 @@ export function SecretField({
 }) {
   const queryClient = useQueryClient();
   const status = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
-  const [value, setValue] = useState("");
-  const inputId = useId();
-  const hintId = useId();
 
   const save = useMutation({
     mutationFn: (next: string | null) => {
@@ -212,27 +209,66 @@ export function SecretField({
       update[secretKey] = next;
       return saveSecrets(update);
     },
-    onSuccess: (saved, next) => {
+    onSuccess: (saved) => {
       queryClient.setQueryData(["secrets"], saved);
-      setValue("");
       onChanged?.();
+    },
+  });
+
+  return (
+    <SecretInputRow
+      label={label}
+      hintExtra={hintExtra}
+      isSet={status.data === undefined ? undefined : status.data[secretKey]}
+      loadError={status.isError ? status.error : null}
+      saving={save.isPending}
+      error={save.error}
+      onSave={(next, done) => save.mutate(next, { onSuccess: done })}
+    />
+  );
+}
+
+// 密钥输入行：只显示是否已填，保存后清空输入框；清除时 next 是 null。
+export function SecretInputRow({
+  label,
+  hintExtra,
+  isSet,
+  loadError,
+  saving,
+  error,
+  onSave,
+}: {
+  label: string;
+  hintExtra?: string;
+  // undefined 表示还在读取。
+  isSet: boolean | undefined;
+  loadError: Error | null;
+  saving: boolean;
+  error: Error | null;
+  onSave: (next: string | null, done: () => void) => void;
+}) {
+  const [value, setValue] = useState("");
+  const inputId = useId();
+  const hintId = useId();
+
+  const known = isSet !== undefined;
+  const statusText =
+    loadError !== null
+      ? `读取失败：${loadError.message}`
+      : !known
+        ? "正在读取…"
+        : isSet
+          ? "已填写。输入新值会覆盖，留空不修改。"
+          : "未填写";
+  const hint = hintExtra ? `${statusText} ${hintExtra}` : statusText;
+  const submit = (next: string | null) =>
+    onSave(next, () => {
+      setValue("");
       notifications.show({
         color: "green",
         message: next === null ? `${label}已清除` : `${label}已保存`,
       });
-    },
-  });
-
-  const known = status.data !== undefined;
-  const isSet = status.data?.[secretKey] ?? false;
-  const statusText = status.isError
-    ? `读取失败：${status.error.message}`
-    : !known
-      ? "正在读取…"
-      : isSet
-        ? "已填写。输入新值会覆盖，留空不修改。"
-        : "未填写";
-  const hint = hintExtra ? `${statusText} ${hintExtra}` : statusText;
+    });
 
   return (
     <SettingRow label={label} hint={hint} htmlFor={inputId} hintId={hintId} align="start">
@@ -250,8 +286,8 @@ export function SecretField({
             variant="default"
             aria-label={`保存${label}`}
             disabled={!known || value.trim() === ""}
-            loading={save.isPending}
-            onClick={() => save.mutate(value)}
+            loading={saving}
+            onClick={() => submit(value)}
           >
             保存
           </Button>
@@ -259,15 +295,15 @@ export function SecretField({
             variant="subtle"
             color="red"
             aria-label={`清除${label}`}
-            disabled={!known || !isSet}
-            onClick={() => save.mutate(null)}
+            disabled={!known || !isSet || saving}
+            onClick={() => submit(null)}
           >
             清除
           </Button>
         </Group>
-        {save.isError && (
+        {error !== null && (
           <Text c="var(--mo-bad)" size="xs">
-            {save.error.message}
+            {error.message}
           </Text>
         )}
       </Stack>

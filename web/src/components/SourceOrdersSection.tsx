@@ -26,6 +26,8 @@ import { IconDrag } from "../icons";
 import { SettingCard } from "./settings/SettingLayout";
 import { Pill } from "./ui";
 
+const BUILTIN_TYPES_WITH_ORDERS = ["movie", "tv", "anime"];
+
 // 一份可编辑的顺序：整体顺序和字段自己的顺序用的是同一种结构。
 type FieldDraft = {
   key: string;
@@ -62,10 +64,11 @@ function moveEntry(entries: OrderEntry[], index: number, delta: number): OrderEn
 
 export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
   const dataTypes = useQuery({ queryKey: ["data-types"], queryFn: fetchDataTypes });
-  // 数据类型页只渲染自己那一份；不给参数时列出所有插件类型。
-  const pluginTypes = (dataTypes.data ?? []).filter(
+  // 数据类型页只渲染自己那一份；不给参数时列出所有有来源顺序的类型。
+  const orderTypes = (dataTypes.data ?? []).filter(
     (type) =>
-      type.plugin_id !== null && (dataTypeId === undefined || type.id === dataTypeId),
+      (type.plugin_id !== null || BUILTIN_TYPES_WITH_ORDERS.includes(type.id)) &&
+      (dataTypeId === undefined || type.id === dataTypeId),
   );
 
   if (dataTypes.isError) {
@@ -82,7 +85,7 @@ export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
   if (!dataTypes.isSuccess) {
     return null;
   }
-  if (pluginTypes.length === 0) {
+  if (orderTypes.length === 0) {
     // 指定了类型时它自己没有来源顺序，整块不显示。
     if (dataTypeId !== undefined) {
       return null;
@@ -90,11 +93,11 @@ export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
     return (
       <SettingCard
         title="来源顺序"
-        description="还没有插件数据类型。启用数据类型插件后，这里会按类型列出各自的来源顺序。"
+        description="还没有可以排来源的数据类型。"
       >
         <div className={styles.cardBody}>
           <Text size="sm" c="var(--mo-dim)">
-            暂无可配置的插件数据类型。
+            暂无可配置的数据类型。
           </Text>
         </div>
       </SettingCard>
@@ -102,7 +105,7 @@ export function SourceOrdersSection({ dataTypeId }: { dataTypeId?: string }) {
   }
   return (
     <>
-      {pluginTypes.map((type) => (
+      {orderTypes.map((type) => (
         <SourceOrderBlock key={type.id} dataType={type} />
       ))}
     </>
@@ -349,8 +352,8 @@ function OrderList({
   onChange: (index: number, delta: number) => void;
   onToggleExcluded?: (index: number) => void;
 }) {
-  const nameOf = (id: string) => sources.find((source) => source.id === id)?.name ?? id;
-  const installed = (id: string) => sources.some((source) => source.id === id);
+  const refOf = (id: string) => sources.find((source) => source.id === id);
+  const nameOf = (id: string) => refOf(id)?.name ?? id;
 
   if (entries.length === 0) {
     return (
@@ -364,52 +367,62 @@ function OrderList({
 
   return (
     <div>
-      {entries.map((entry, index) => (
-        <div
-          key={entry.source}
-          className={styles.orderRow}
-          data-excluded={entry.excluded ? "true" : "false"}
-        >
-          <span className={styles.orderGrip} aria-hidden="true">
-            <IconDrag size={14} />
-          </span>
-          <span className={styles.orderRank}>{index + 1}</span>
-          <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
-            <Text size="sm" fw={500}>
-              {nameOf(entry.source)}
-            </Text>
-            {!installed(entry.source) && <Pill tone="neutral">未安装</Pill>}
-          </Group>
-          <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              aria-label={`上移${nameOf(entry.source)}`}
-              disabled={index === 0}
-              onClick={() => onChange(index, -1)}
-            >
-              上移
-            </Button>
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              aria-label={`下移${nameOf(entry.source)}`}
-              disabled={index === entries.length - 1}
-              onClick={() => onChange(index, 1)}
-            >
-              下移
-            </Button>
-            {showExcluded && onToggleExcluded !== undefined && (
-              <Switch
-                size="xs"
-                label="排除"
-                checked={entry.excluded}
-                onChange={() => onToggleExcluded(index)}
-              />
-            )}
-          </Group>
-        </div>
-      ))}
+      {entries.map((entry, index) => {
+        const ref = refOf(entry.source);
+        const unavailable = ref !== undefined && ref.available === false;
+        return (
+          <div
+            key={entry.source}
+            className={styles.orderRow}
+            data-excluded={entry.excluded ? "true" : "false"}
+            data-unavailable={unavailable ? "true" : "false"}
+          >
+            <span className={styles.orderGrip} aria-hidden="true">
+              <IconDrag size={14} />
+            </span>
+            <span className={styles.orderRank}>{index + 1}</span>
+            <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
+              <Text size="sm" fw={500}>
+                {nameOf(entry.source)}
+              </Text>
+              {ref === undefined && <Pill tone="neutral">未安装</Pill>}
+              {unavailable && (
+                <Text size="xs" c="var(--mo-dim)">
+                  不可用：{ref.reason ?? "未知原因"}
+                </Text>
+              )}
+            </Group>
+            <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                aria-label={`上移${nameOf(entry.source)}`}
+                disabled={index === 0}
+                onClick={() => onChange(index, -1)}
+              >
+                上移
+              </Button>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                aria-label={`下移${nameOf(entry.source)}`}
+                disabled={index === entries.length - 1}
+                onClick={() => onChange(index, 1)}
+              >
+                下移
+              </Button>
+              {showExcluded && onToggleExcluded !== undefined && (
+                <Switch
+                  size="xs"
+                  label="排除"
+                  checked={entry.excluded}
+                  onChange={() => onToggleExcluded(index)}
+                />
+              )}
+            </Group>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Checkbox, Group, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { Checkbox, Group, NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
 import { useId } from "react";
 import type {
   MovieImages,
@@ -9,6 +9,7 @@ import type {
   TvScrapeConfig,
 } from "../../api";
 import styles from "../../pages/SettingsPage.module.css";
+import { Pill } from "../ui";
 import { SettingRow } from "./SettingLayout";
 
 const LANGUAGES = [
@@ -35,11 +36,16 @@ const STILL_SIZES = [
   { value: "w300", label: "中（w300）" },
   { value: "original", label: "大（原图）" },
 ];
-const MOVIE_IMAGE_LABELS: [keyof MovieImages, string][] = [
+type MovieImageSwitch = Exclude<keyof MovieImages, "extrafanart" | "extrafanart_count">;
+const MOVIE_IMAGE_LABELS: [MovieImageSwitch, string][] = [
   ["poster", "海报"],
   ["fanart", "同人画"],
   ["clearlogo", "透明标志"],
   ["keyart", "关键艺术图"],
+  ["banner", "横幅"],
+  ["clearart", "透明艺术图"],
+  ["discart", "光盘"],
+  ["thumb", "缩略图"],
   ["collection_poster", "系列海报"],
   ["collection_fanart", "系列同人画"],
   ["actor_images", "演员头像"],
@@ -49,10 +55,35 @@ const TV_IMAGE_LABELS: [keyof TvImages, string][] = [
   ["fanart", "同人画"],
   ["clearlogo", "透明标志"],
   ["keyart", "关键艺术图"],
+  ["banner", "横幅"],
+  ["clearart", "透明艺术图"],
+  ["thumb", "缩略图"],
+  ["characterart", "角色图"],
   ["season_poster", "季海报"],
+  ["season_banner", "季横幅"],
+  ["season_thumb", "季缩略图"],
   ["episode_thumb", "集缩略图"],
   ["actor_images", "演员头像"],
 ];
+
+// 宽高比检测还没做，先把开关占上，和 TMM 一样默认关。
+function AspectRatioRow() {
+  const id = useId();
+  return (
+    <SettingRow
+      label={
+        <Group gap={6} component="span">
+          自动识别画面比例
+          <Pill tone="neutral">未实现</Pill>
+        </Group>
+      }
+      hint="刮削后检测视频实际的画面比例"
+      htmlFor={id}
+    >
+      <Switch id={id} checked={false} disabled onChange={() => undefined} />
+    </SettingRow>
+  );
+}
 
 const TEMPLATE_HINT =
   "可用 ${title} ${originalTitle} ${year} ${edition} ${videoFormat} ${audioCodec} ${tmdb} ${imdb}；${前缀,标记,后缀} 只在标记有值时出现；给 Plex 用可在目录模板末尾加 ${{tmdb-,tmdb,}}";
@@ -158,6 +189,8 @@ export function MovieScrapeFields({
   const posterId = useId();
   const fanartId = useId();
   const textlessId = useId();
+  const extraId = useId();
+  const extraHintId = useId();
 
   return (
     <div className={styles.fieldList}>
@@ -238,6 +271,45 @@ export function MovieScrapeFields({
           ))}
         </Group>
       </SettingRow>
+      <SettingRow
+        label={
+          <Group gap={6} component="span">
+            额外同人画
+            <Pill tone="neutral">未实现</Pill>
+          </Group>
+        }
+        hint="除主同人画外再抓几张，写进 extrafanart 目录；下载和写出还没做"
+        htmlFor={extraId}
+        hintId={extraHintId}
+      >
+        <Group gap="sm" wrap="nowrap">
+          <Switch
+            id={extraId}
+            aria-describedby={extraHintId}
+            checked={movie.images.extrafanart}
+            onChange={(event) =>
+              onChange({ images: { ...movie.images, extrafanart: event.currentTarget.checked } })
+            }
+          />
+          <NumberInput
+            aria-label="额外同人画数量"
+            className={styles.monoInput}
+            w={110}
+            min={1}
+            max={20}
+            allowDecimal={false}
+            suffix=" 张"
+            disabled={!movie.images.extrafanart}
+            value={movie.images.extrafanart_count}
+            onChange={(value) => {
+              if (typeof value === "number" && value >= 1 && value <= 20) {
+                onChange({ images: { ...movie.images, extrafanart_count: value } });
+              }
+            }}
+          />
+        </Group>
+      </SettingRow>
+      <AspectRatioRow />
     </div>
   );
 }
@@ -537,6 +609,7 @@ export function SeriesScrapeFields({
           ))}
         </Group>
       </SettingRow>
+      <AspectRatioRow />
       <SettingRow
         label="显示缺少的集"
         hint="已播出但本地没有文件的集也列出来，灰色标「缺」"

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 import httpx2 as httpx
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -64,6 +65,12 @@ class BuiltinSource:
     """主源失败时整个刮削失败；其余来源失败只记下来。"""
     ready: Callable[[Path], str | None] | None = None
     """依赖数据目录里本地数据的来源，数据还没准备好时返回原因。"""
+    settings_model: type[BaseModel] | None = None
+    """存在 config.sources[id] 的设置；None 表示没有单独的设置页（TMDB 的 key 走 /api/secrets）。"""
+    secrets_model: type[BaseModel] | None = None
+    """存在 secrets.sources[id] 的密钥。"""
+    provider: Callable[[Secrets], str] | None = None
+    """这个来源背后实际请求的服务，给设置页显示。"""
 
     def disabled_reason(
         self, config: AppConfig, secrets: Secrets, data_dir: Path | None = None
@@ -124,6 +131,8 @@ SOURCES: tuple[BuiltinSource, ...] = (
         frozenset({"images"}),
         check=fanart.check,
         fetcher=fanart.FETCHER,
+        settings_model=fanart.Settings,
+        secrets_model=fanart.SecretSettings,
     ),
     BuiltinSource(
         "tvdb",
@@ -132,6 +141,8 @@ SOURCES: tuple[BuiltinSource, ...] = (
         frozenset({"text", "images"}),
         check=tvdb.check,
         fetcher=tvdb.FETCHER,
+        settings_model=tvdb.Settings,
+        secrets_model=tvdb.SecretSettings,
     ),
     BuiltinSource(
         "imdb",
@@ -141,6 +152,8 @@ SOURCES: tuple[BuiltinSource, ...] = (
         check=imdb.check,
         fetcher=imdb.FETCHER,
         ready=imdb.ready,
+        settings_model=imdb.Settings,
+        secrets_model=imdb.SecretSettings,
     ),
     BuiltinSource(
         "ratings_rt",
@@ -149,6 +162,9 @@ SOURCES: tuple[BuiltinSource, ...] = (
         frozenset({"rating"}),
         check=ratings_rt.check,
         fetcher=ratings_rt.FETCHER,
+        settings_model=ratings_rt.Settings,
+        secrets_model=ratings_rt.SecretSettings,
+        provider=ratings_rt.provider_name,
     ),
 )
 BY_ID = {source.id: source for source in SOURCES}

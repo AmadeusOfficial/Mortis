@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx2 as httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -53,11 +53,17 @@ class SecretSettings(BaseModel):
 
 
 def settings_of(config: AppConfig) -> Settings:
-    return Settings.model_validate(config.sources.get(SOURCE, {}))
+    try:
+        return Settings.model_validate(config.sources.get(SOURCE, {}))
+    except ValidationError:
+        return Settings()
 
 
 def secrets_of(secrets: Secrets) -> SecretSettings:
-    return SecretSettings.model_validate(secrets.sources.get(SOURCE, {}))
+    try:
+        return SecretSettings.model_validate(secrets.sources.get(SOURCE, {}))
+    except ValidationError:
+        return SecretSettings()
 
 
 def check(config: AppConfig, _secrets: Secrets) -> str | None:

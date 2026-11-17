@@ -237,7 +237,8 @@
   border-bottom: 0;
 }
 
-.orderRow[data-excluded="true"] {
+.orderRow[data-excluded="true"],
+.orderRow[data-unavailable="true"] {
   opacity: 0.6;
 }
 

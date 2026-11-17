@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 import httpx2 as httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from mortis.config.models import AppConfig, Secrets, TvScrapeConfig
 from mortis.errors import UserError
@@ -84,11 +84,17 @@ class SecretSettings(BaseModel):
 
 
 def settings_of(config: AppConfig) -> Settings:
-    return Settings.model_validate(config.sources.get(SOURCE, {}))
+    try:
+        return Settings.model_validate(config.sources.get(SOURCE, {}))
+    except ValidationError:
+        return Settings()
 
 
 def secrets_of(secrets: Secrets) -> SecretSettings:
-    return SecretSettings.model_validate(secrets.sources.get(SOURCE, {}))
+    try:
+        return SecretSettings.model_validate(secrets.sources.get(SOURCE, {}))
+    except ValidationError:
+        return SecretSettings()
 
 
 def check(_config: AppConfig, secrets: Secrets) -> str | None:

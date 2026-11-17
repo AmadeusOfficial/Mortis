@@ -299,6 +299,8 @@ class MovieScrapeConfig(BaseModel):
     poster_size: PosterSize = "w780"
     fanart_size: FanartSize = "original"
     prefer_textless_fanart: bool = True
+    detect_aspect_ratio: bool = False
+    """宽高比检测还没实现，先占位；本机 TMM 也是关的。"""
     images: MovieImages = Field(default_factory=MovieImages)
     output: MovieOutputConfig = Field(default_factory=MovieOutputConfig)
 
@@ -381,6 +383,8 @@ class TvScrapeConfig(BaseModel):
     fanart_size: FanartSize = "original"
     still_size: StillSize = "w300"
     prefer_textless_fanart: bool = True
+    detect_aspect_ratio: bool = False
+    """宽高比检测还没实现，先占位；本机 TMM 也是关的。"""
     show_missing_episodes: bool = True
     show_missing_specials: bool = True
     images: TvImages = Field(default_factory=TvImages)

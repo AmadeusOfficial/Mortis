@@ -78,6 +78,12 @@ export interface MovieImages {
   fanart: boolean;
   clearlogo: boolean;
   keyart: boolean;
+  banner: boolean;
+  clearart: boolean;
+  discart: boolean;
+  thumb: boolean;
+  extrafanart: boolean;
+  extrafanart_count: number;
   collection_poster: boolean;
   collection_fanart: boolean;
   actor_images: boolean;
@@ -110,6 +116,7 @@ export interface MovieScrapeConfig {
   poster_size: string;
   fanart_size: string;
   prefer_textless_fanart: boolean;
+  detect_aspect_ratio: boolean;
   images: MovieImages;
   output: MovieOutputConfig;
 }
@@ -119,7 +126,13 @@ export interface TvImages {
   fanart: boolean;
   clearlogo: boolean;
   keyart: boolean;
+  banner: boolean;
+  clearart: boolean;
+  thumb: boolean;
+  characterart: boolean;
   season_poster: boolean;
+  season_banner: boolean;
+  season_thumb: boolean;
   episode_thumb: boolean;
   actor_images: boolean;
 }
@@ -150,6 +163,7 @@ export interface TvScrapeConfig {
   fanart_size: string;
   still_size: string;
   prefer_textless_fanart: boolean;
+  detect_aspect_ratio: boolean;
   show_missing_episodes: boolean;
   show_missing_specials: boolean;
   images: TvImages;
@@ -278,6 +292,37 @@ export interface PluginUpdate {
 export interface SourceRef {
   id: string;
   name: string;
+  builtin?: boolean;
+  // 内置来源会带可用状态；不可用的来源照样排进顺序，刮削时跳过。
+  available?: boolean;
+  reason?: string | null;
+}
+
+// 有单独设置页的内置来源：Fanart.tv、TVDB、IMDb、烂番茄。
+export interface BuiltinSourceInfo {
+  id: string;
+  name: string;
+  data_types: string[];
+  available: boolean;
+  reason: string | null;
+  settings: Record<string, unknown>;
+  // 每个密钥是否已填，不含原文。
+  secrets: Record<string, boolean>;
+  provider: string | null;
+}
+
+// settings 只改给出的键；secrets 里不出现的键不改，空字符串表示清除。
+export interface BuiltinSourceUpdate {
+  settings?: Record<string, unknown>;
+  secrets?: Record<string, string>;
+}
+
+export interface ImdbDataset {
+  imported_at: string | null;
+  count: number | null;
+  stale: boolean;
+  // 正在排队或运行的更新任务。
+  task_id: number | null;
 }
 
 export interface OrderEntry {
@@ -612,6 +657,13 @@ export const pluginLoginUrl = (id: string) => `/api/plugins/${id}/oauth/login`;
 
 export const fetchSources = (dataType: string) =>
   request<SourceRef[]>("GET", `/api/sources?data_type=${encodeURIComponent(dataType)}`);
+export const fetchBuiltinSources = () =>
+  request<BuiltinSourceInfo[]>("GET", "/api/sources/builtin");
+export const updateBuiltinSource = (id: string, body: BuiltinSourceUpdate) =>
+  request<BuiltinSourceInfo>("PUT", `/api/sources/builtin/${id}`, body);
+export const fetchImdbDataset = () => request<ImdbDataset>("GET", "/api/sources/imdb/dataset");
+export const refreshImdbDataset = () =>
+  request<Enqueued>("POST", "/api/sources/imdb/dataset/refresh");
 export const searchSource = (source: string, query: string) =>
   request<SourceHit[]>(
     "GET",

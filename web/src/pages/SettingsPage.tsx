@@ -8,7 +8,7 @@
   Text,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
 import { type DataType, checkTmdb, fetchPlugins, fetchSecretsStatus } from "../api";
@@ -21,6 +21,13 @@ import {
   SecretField,
   TasksSection,
 } from "../components/settings/GeneralSections";
+import {
+  BUILTIN_SOURCE_ENTRIES,
+  BuiltinSourceSection,
+  invalidateSourceStatus,
+  isBuiltinSourceSection,
+  useBuiltinSources,
+} from "../components/settings/BuiltinSources";
 import { SettingCard } from "../components/settings/SettingLayout";
 import { TypeSettings } from "../components/settings/TypeSettings";
 import { PageHeader, Pill } from "../components/ui";
@@ -47,6 +54,7 @@ export function SettingsPage() {
   const dataTypes = useDataTypes();
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
   const secrets = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
+  const builtinSources = useBuiltinSources();
   const [searchParams, setSearchParams] = useSearchParams();
   const narrow = useMediaQuery("(max-width: 62em)");
 
@@ -109,6 +117,11 @@ export function SettingsPage() {
           label: "TMDB",
           available: secrets.data?.tmdb_api_key === true,
         },
+        ...BUILTIN_SOURCE_ENTRIES.map((entry) => ({
+          key: `source.${entry.id}`,
+          label: entry.label,
+          available: builtinSources.data?.find((source) => source.id === entry.id)?.available,
+        })),
         ...(plugins.data ?? [])
           .filter((plugin) => plugin.kind === "source")
           .map((plugin) => ({
@@ -233,6 +246,9 @@ function Section({
   if (current === "source.tmdb") {
     return <TmdbSection />;
   }
+  if (current.startsWith("source.") && isBuiltinSourceSection(current.slice("source.".length))) {
+    return <BuiltinSourceSection sourceId={current.slice("source.".length)} />;
+  }
   if (current.startsWith("source.")) {
     return (
       <SourcePluginSettings
@@ -250,6 +266,7 @@ function Section({
 
 // TMDB 是内置类型的来源，密钥和插件密钥一起存在密钥文件里。
 function TmdbSection() {
+  const queryClient = useQueryClient();
   const check = useMutation({ mutationFn: checkTmdb });
   const status = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
   const filled = status.data?.tmdb_api_key ?? false;
@@ -269,7 +286,10 @@ function TmdbSection() {
           secretKey="tmdb_api_key"
           label="TMDB API Key"
           hintExtra="元数据和图片来自 TMDB。可以填 API Key（v3）或读访问令牌（v4）。测试连接使用已保存的网络设置。"
-          onChanged={() => check.reset()}
+          onChanged={() => {
+            check.reset();
+            invalidateSourceStatus(queryClient);
+          }}
         />
       </div>
       <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>

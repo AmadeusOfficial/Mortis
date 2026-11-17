@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from mortis.api.deps import ServicesDep
+from mortis.config.models import validation_problems
 from mortis.errors import UserError
 from mortis.plugin_api import Account, SourceAuthError, SourceError, SourcePlugin
 from mortis.plugins.host import PluginHost, open_host, plugin_secrets, plugin_settings
@@ -141,11 +142,7 @@ def update_plugin(
         try:
             values = plugin.Settings.model_validate(update.settings).model_dump(mode="json")
         except ValidationError as error:
-            problems = "；".join(
-                f"{'.'.join(str(part) for part in item['loc'])}：{item['msg']}"
-                for item in error.errors(include_input=False, include_url=False)
-            )
-            raise UserError(f"设置不合法：{problems}") from None
+            raise UserError(f"设置不合法：{validation_problems(error)}") from None
         store.save_plugin(plugin_id, values=values)
     if update.secrets is not None:
         assert isinstance(plugin, SourcePlugin)

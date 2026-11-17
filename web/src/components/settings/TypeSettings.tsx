@@ -10,8 +10,8 @@ import {
   type TvScrapeConfig,
   type TypeSection,
   fetchPlugins,
-  fetchSecretsStatus,
   fetchSettings,
+  fetchSources,
   saveTypeSettings,
   typeSection,
 } from "../../api";
@@ -220,7 +220,7 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
 
       <TypeSources dataTypeId={dataTypeId} />
 
-      {/* 来源顺序单独保存；内置类型没有来源顺序时这个组件返回空。 */}
+      {/* 来源顺序单独保存，不跟着下面的保存栏。 */}
       <SourceOrdersSection dataTypeId={dataTypeId} />
 
       <SaveBar
@@ -236,39 +236,82 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
   );
 }
 
-// 这个类型用的来源：内置类型是 TMDB，插件类型是服务它的来源插件。
+function SourceStatusRow({
+  id,
+  name,
+  reason,
+}: {
+  id: string;
+  name: string;
+  reason: string | null;
+}) {
+  return (
+    <div className={styles.listRow}>
+      <Group gap="xs" wrap="wrap" style={{ minWidth: 0 }}>
+        <Text size="sm" fw={600}>
+          {name}
+        </Text>
+        <Pill tone={reason === null ? "ok" : "bad"}>{reason === null ? "可用" : "不可用"}</Pill>
+        {reason !== null && (
+          <Text size="xs" c="var(--mo-dim)">
+            {reason}
+          </Text>
+        )}
+      </Group>
+      <Anchor
+        component={Link}
+        to={`/settings?section=source.${id}`}
+        size="sm"
+        fw={600}
+        style={{ flexShrink: 0 }}
+      >
+        去设置
+      </Anchor>
+    </div>
+  );
+}
+
+// 这个类型用的来源：内置类型是内置来源，插件类型是服务它的来源插件。
 function TypeSources({ dataTypeId }: { dataTypeId: string }) {
   const dataTypes = useDataTypes();
-  const secrets = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
   const type = dataTypes.data?.find((item) => item.id === dataTypeId);
   const builtin = type !== undefined && type.plugin_id === null;
+  const sources = useQuery({
+    queryKey: ["sources", dataTypeId],
+    queryFn: () => fetchSources(dataTypeId),
+    enabled: builtin,
+  });
 
   return (
     <SettingCard title="来源" description="当前数据类型可用的元数据与图片刮削来源">
       {builtin ? (
-        <div className={styles.listRow}>
-          <Group gap="xs" wrap="wrap">
-            <Text size="sm" fw={600}>
-              TMDB
-            </Text>
-            {secrets.data === undefined ? (
-              <Pill tone="neutral">正在读取…</Pill>
-            ) : secrets.data.tmdb_api_key ? (
-              <Pill tone="ok">可用</Pill>
-            ) : (
-              <>
-                <Pill tone="bad">不可用</Pill>
-                <Text size="xs" c="var(--mo-dim)">
-                  Key 未填
-                </Text>
-              </>
-            )}
-          </Group>
-          <Anchor component={Link} to="/settings?section=source.tmdb" size="sm" fw={600}>
-            去设置
-          </Anchor>
-        </div>
+        <>
+          {sources.isError && (
+            <div className={styles.cardBody}>
+              <Alert color="red" title="读不到来源">
+                {sources.error.message}
+              </Alert>
+            </div>
+          )}
+          {sources.isPending && (
+            <div className={styles.cardBody}>
+              <Text size="sm" c="var(--mo-dim)">
+                正在读取来源…
+              </Text>
+            </div>
+          )}
+          {sources.data
+            ?.filter((source) => source.builtin === true)
+            .map((source) => (
+              <SourceStatusRow
+                key={source.id}
+                id={source.id}
+                name={source.name}
+                reason={source.available === false ? (source.reason ?? "未知原因") : null}
+              />
+            ))}
+        </>
       ) : (
         <>
           {plugins.isError && (
@@ -304,30 +347,12 @@ function TypeSources({ dataTypeId }: { dataTypeId: string }) {
                   ? plugin.error
                   : plugin.notice;
               return (
-                <div key={plugin.id} className={styles.listRow}>
-                  <Group gap="xs" wrap="wrap" style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={600}>
-                      {plugin.name}
-                    </Text>
-                    <Pill tone={reason === null ? "ok" : "bad"}>
-                      {reason === null ? "可用" : "不可用"}
-                    </Pill>
-                    {reason !== null && (
-                      <Text size="xs" c="var(--mo-dim)">
-                        {reason}
-                      </Text>
-                    )}
-                  </Group>
-                  <Anchor
-                    component={Link}
-                    to={`/settings?section=source.${plugin.id}`}
-                    size="sm"
-                    fw={600}
-                    style={{ flexShrink: 0 }}
-                  >
-                    去设置
-                  </Anchor>
-                </div>
+                <SourceStatusRow
+                  key={plugin.id}
+                  id={plugin.id}
+                  name={plugin.name}
+                  reason={reason}
+                />
               );
             })}
         </>
