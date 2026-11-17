@@ -21,6 +21,7 @@ TYPE_LABELS = {
     "arrange_library": "整理整库",
     "write_files": "写出文件",
     "rename": "重命名",
+    "refresh_imdb": "更新 IMDb 评分数据",
 }
 
 

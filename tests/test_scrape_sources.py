@@ -1,8 +1,10 @@
 import dataclasses
+import gzip
 import json
 from pathlib import Path
 from typing import Any
 
+import httpx2 as httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -24,13 +26,14 @@ from mortis.db.models import (
 )
 from mortis.scrape.apply import field_orders, level_fields, plan_values
 from mortis.settings import Settings
-from mortis.sources import builtin
+from mortis.sources import builtin, imdb
 from mortis.sources.builtin import (
     FetchRequest,
     builtin_ids,
     default_orders,
     seed_builtin_orders,
 )
+from mortis.sources.imdb import queue_refresh_if_stale
 from mortis.tasks import repo
 from tests.fakes import FakeTmdb, load_fixture
 
@@ -60,7 +63,9 @@ class FakeFetcher:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, source_id: str, fetcher: FakeFetcher) -> None:
-    source = dataclasses.replace(builtin.BY_ID[source_id], fetcher=fetcher)
+    source = dataclasses.replace(
+        builtin.BY_ID[source_id], fetcher=fetcher, check=lambda *_: None, ready=None
+    )
     monkeypatch.setitem(builtin.BY_ID, source_id, source)
 
 
@@ -205,7 +210,7 @@ def test_source_orders_api_lists_builtin_sources(app: FastAPI) -> None:
     assert [(s["id"], s["available"], s["reason"]) for s in body["sources"]] == [
         ("tmdb", True, None),
         ("fanart", False, "还没实现"),
-        ("imdb", False, "还没实现"),
+        ("imdb", False, "评分数据还没下载"),
         ("ratings_rt", False, "还没实现"),
     ]
     assert [e["source"] for e in body["whole"]] == ["tmdb", "fanart", "imdb", "ratings_rt"]
@@ -310,7 +315,7 @@ def test_extra_source_merges_ratings_and_keeps_its_snapshot(
     item_id = _work(app, "movie", 603, "The Matrix")
     first = _run(app, item_id)
     assert first.status == "succeeded", first.error
-    assert _outcomes(first) == [("tmdb", "ok"), ("tmdb_collection", "ok")]
+    assert _outcomes(first) == [("tmdb", "ok"), ("imdb", "skipped"), ("tmdb_collection", "ok")]
     movie_requests = fake.paths().count("/3/movie/603")
 
     imdb = FakeFetcher({"ratings": [_rating("imdb", 8.7), _rating("tmdb", 1.0)]})
@@ -333,6 +338,49 @@ def test_extra_source_merges_ratings_and_keeps_its_snapshot(
     _run(app, item_id, force=True)
     assert imdb.calls == 2
     assert fake.paths().count("/3/movie/603") == movie_requests + 1
+
+
+def _imdb_dataset(app: FastAPI, rows: str) -> None:
+    body = gzip.compress(("tconst\taverageRating\tnumVotes\n" + rows).encode())
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, content=body))
+    with httpx.Client(transport=transport) as http:
+        imdb.refresh_dataset(http, app.state.services.data_dir, lambda _message: None)
+
+
+def test_first_scrape_reads_imdb_rating_with_id_from_tmdb(app: FastAPI) -> None:
+    _imdb_dataset(app, "tt0133093\t8.7\t2100000\n")
+    item_id = _work(app, "movie", 603, "The Matrix")
+    task = _run(app, item_id)
+    assert task.status == "succeeded", task.error
+    assert ("imdb", "ok") in _outcomes(task)
+    assert _ratings(app, item_id)["imdb"] == 8.7
+
+
+def test_imdb_dataset_api(app: FastAPI) -> None:
+    client = TestClient(app, base_url=LOCAL)
+    empty = client.get("/api/sources/imdb/dataset").json()
+    assert empty == {"imported_at": None, "count": None, "stale": True, "task_id": None}
+    first = client.post("/api/sources/imdb/dataset/refresh").json()
+    again = client.post("/api/sources/imdb/dataset/refresh").json()
+    assert first == again
+    assert client.get("/api/sources/imdb/dataset").json()["task_id"] == first["task_id"]
+
+    _imdb_dataset(app, "tt0133093\t8.7\t2100000\n")
+    ready = client.get("/api/sources/imdb/dataset").json()
+    assert ready["count"] == 1 and ready["stale"] is False
+
+
+def test_startup_queues_imdb_refresh_only_when_stale(app: FastAPI) -> None:
+    config = app.state.config_store.load_config()
+    data_dir = app.state.services.data_dir
+    with app.state.session_factory() as session:
+        queued = queue_refresh_if_stale(session, config, data_dir)
+        assert queued is not None and queued.task_type == imdb.REFRESH_TASK
+        assert queue_refresh_if_stale(session, config, data_dir) == queued
+        session.rollback()
+    _imdb_dataset(app, "tt0133093\t8.7\t2100000\n")
+    with app.state.session_factory() as session:
+        assert queue_refresh_if_stale(session, config, data_dir) is None
 
 
 def test_failing_extra_source_does_not_fail_scrape(

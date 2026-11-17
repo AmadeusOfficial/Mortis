@@ -1,11 +1,18 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from mortis.api.deps import ServicesDep
+from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
+from mortis.db.models import Task
 from mortis.errors import UserError
 from mortis.plugin_api import SourceError
 from mortis.plugins.host import open_host
+from mortis.sources import imdb
 from mortis.sources.builtin import source_status
+from mortis.tasks import repo as task_repo
 
 router = APIRouter(prefix="/api/sources")
 
@@ -46,6 +53,47 @@ def list_sources(services: ServicesDep, data_type: str = Query(min_length=1)) ->
         SourceOut(id=plugin.id, name=plugin.name, data_type=plugin.data_type)
         for plugin in services.plugins.sources(data_type)
     ]
+
+
+class ImdbDatasetOut(BaseModel):
+    imported_at: datetime | None
+    count: int | None
+    stale: bool
+    task_id: int | None
+    """正在排队或运行的更新任务。"""
+
+
+class Enqueued(BaseModel):
+    task_id: int
+
+
+def _active_refresh(session: Session) -> int | None:
+    return session.scalar(
+        select(Task.id).where(
+            Task.task_type == imdb.REFRESH_TASK,
+            Task.status.in_((task_repo.QUEUED, task_repo.RUNNING)),
+        )
+    )
+
+
+@router.get("/imdb/dataset", response_model=ImdbDatasetOut)
+def imdb_dataset(services: ServicesDep, session: SessionDep) -> ImdbDatasetOut:
+    settings = imdb.settings_of(services.config_store.load_config())
+    info = imdb.dataset_info(services.data_dir)
+    return ImdbDatasetOut(
+        imported_at=info.imported_at if info else None,
+        count=info.count if info else None,
+        stale=imdb.is_stale(services.data_dir, settings.refresh_days),
+        task_id=_active_refresh(session),
+    )
+
+
+@router.post("/imdb/dataset/refresh", response_model=Enqueued)
+def refresh_imdb_dataset(session: SessionDep, runner: RunnerDep) -> Enqueued:
+    task = imdb.queue_refresh(session)
+    session.commit()
+    runner.wake()
+    return Enqueued(task_id=task.id)
 
 
 @router.get("/{source_id}/search", response_model=list[HitOut])

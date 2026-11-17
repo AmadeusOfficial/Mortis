@@ -29,6 +29,7 @@ from mortis.errors import UserError
 from mortis.plugins.registry import PluginRegistry, plugin_folders
 from mortis.services import Services
 from mortis.settings import Settings
+from mortis.sources import imdb
 from mortis.sources.builtin import seed_builtin_orders
 from mortis.tasks import repo as task_repo
 from mortis.tasks.registry import builtin_handlers
@@ -69,6 +70,7 @@ def create_app(
         ensure_builtin_types(session)
         seed_builtin_orders(session)
         plugins.sync_catalog(session)
+        imdb.queue_refresh_if_stale(session, startup_config, resolved.data_dir)
         session.commit()
         task_repo.recover_running(session)
         task_repo.prune(

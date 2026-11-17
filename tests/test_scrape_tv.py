@@ -183,6 +183,7 @@ def test_result_records_tmdb_and_seasons(app: FastAPI, show_id: int) -> None:
     first = _scrape(app, show_id)
     assert json.loads(first.result or "{}")["sources"] == [
         {"id": "tmdb", "name": "TMDB 剧集", "outcome": "ok", "detail": None},
+        {"id": "imdb", "name": "IMDb", "outcome": "skipped", "detail": "评分数据还没下载"},
         {"id": "tmdb_season_1", "name": "TMDB 第 1 季", "outcome": "ok", "detail": None},
         {"id": "tmdb_season_2", "name": "TMDB 第 2 季", "outcome": "ok", "detail": None},
         {"id": "tmdb_season_3", "name": "TMDB 第 3 季", "outcome": "ok", "detail": None},
@@ -190,6 +191,7 @@ def test_result_records_tmdb_and_seasons(app: FastAPI, show_id: int) -> None:
     second = _scrape(app, show_id)
     assert [(s["id"], s["outcome"]) for s in json.loads(second.result or "{}")["sources"]] == [
         ("tmdb", "cached"),
+        ("imdb", "skipped"),
         ("tmdb_season_1", "cached"),
         ("tmdb_season_2", "cached"),
         ("tmdb_season_3", "cached"),

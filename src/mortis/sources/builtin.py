@@ -1,7 +1,8 @@
 """内置来源的登记表：TMDB、Fanart.tv、TVDB、IMDb 评分和烂番茄。来源插件不在这里。"""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 import httpx2 as httpx
@@ -13,9 +14,10 @@ from mortis.config.models import AppConfig, MovieScrapeConfig, Secrets, TvScrape
 from mortis.db.models import SourceOrder
 from mortis.plugins.registry import seed_orders
 from mortis.services import Services
+from mortis.sources import imdb
 from mortis.sources.tmdb.client import open_tmdb
-from mortis.sources.tmdb.movie import fetch_movie, movie_candidates
-from mortis.sources.tmdb.tv import fetch_show, show_candidates
+from mortis.sources.tmdb.movie import fetch_movie, movie_candidates, movie_external_ids
+from mortis.sources.tmdb.tv import fetch_show, show_candidates, show_external_ids
 
 FieldKind = Literal["text", "images", "rating"]
 NOT_IMPLEMENTED = "还没实现"
@@ -29,7 +31,8 @@ class FetchRequest:
     services: Services
     data_type_id: str
     config: MovieScrapeConfig | TvScrapeConfig
-    ids: Mapping[str, str]
+    ids: dict[str, str]
+    """前面的来源报出的外部编号会补进来，后面的来源就能用上（比如 TMDB 给出的 IMDb 编号）。"""
     http: httpx.Client
     log: Callable[[str], None]
 
@@ -59,14 +62,21 @@ class BuiltinSource:
     fetcher: Fetcher | None = None
     primary: bool = False
     """主源失败时整个刮削失败；其余来源失败只记下来。"""
+    ready: Callable[[Path], str | None] | None = None
+    """依赖数据目录里本地数据的来源，数据还没准备好时返回原因。"""
 
-    def disabled_reason(self, config: AppConfig, secrets: Secrets) -> str | None:
+    def disabled_reason(
+        self, config: AppConfig, secrets: Secrets, data_dir: Path | None = None
+    ) -> str | None:
         if self.fetcher is None:
             return NOT_IMPLEMENTED
-        return self.check(config, secrets)
+        reason = self.check(config, secrets)
+        if reason is None and self.ready is not None and data_dir is not None:
+            reason = self.ready(data_dir)
+        return reason
 
-    def enabled(self, config: AppConfig, secrets: Secrets) -> bool:
-        return self.disabled_reason(config, secrets) is None
+    def enabled(self, config: AppConfig, secrets: Secrets, data_dir: Path | None = None) -> bool:
+        return self.disabled_reason(config, secrets, data_dir) is None
 
 
 class _TmdbFetcher:
@@ -83,6 +93,11 @@ class _TmdbFetcher:
         if isinstance(request.config, TvScrapeConfig):
             return show_candidates(raw, request.config)
         return movie_candidates(raw, request.config)
+
+    def external_ids(self, raw: dict[str, Any], request: FetchRequest) -> dict[str, str]:
+        if isinstance(request.config, TvScrapeConfig):
+            return show_external_ids(raw)
+        return movie_external_ids(raw)
 
 
 def _tmdb_check(_config: AppConfig, secrets: Secrets) -> str | None:
@@ -104,7 +119,15 @@ SOURCES: tuple[BuiltinSource, ...] = (
     ),
     BuiltinSource("fanart", "Fanart.tv", ALL_TYPES, frozenset({"images"})),
     BuiltinSource("tvdb", "TVDB", SERIES_TYPES, frozenset({"text", "images"})),
-    BuiltinSource("imdb", "IMDb", ALL_TYPES, frozenset({"rating"})),
+    BuiltinSource(
+        "imdb",
+        "IMDb",
+        ALL_TYPES,
+        frozenset({"rating"}),
+        check=imdb.check,
+        fetcher=imdb.FETCHER,
+        ready=imdb.ready,
+    ),
     BuiltinSource("ratings_rt", "烂番茄", ALL_TYPES, frozenset({"rating"})),
 )
 BY_ID = {source.id: source for source in SOURCES}
@@ -130,7 +153,7 @@ def source_status(services: Services, data_type_id: str) -> list[tuple[BuiltinSo
     config = services.config_store.load_config()
     secrets = services.config_store.load_secrets()
     return [
-        (source, source.disabled_reason(config, secrets))
+        (source, source.disabled_reason(config, secrets, services.data_dir))
         for source in builtin_sources(data_type_id)
     ]
 

@@ -131,7 +131,7 @@ def gather_sources(
         if source.fetcher is None:
             continue
         name = labels.get(source.id, source.name)
-        reason = source.disabled_reason(config, secrets)
+        reason = source.disabled_reason(config, secrets, ctx.services.data_dir)
         if reason is not None:
             if source.primary:
                 raise TaskError(f"{name} 不可用：{reason}")
@@ -152,6 +152,9 @@ def gather_sources(
                 gathered.record(source.id, name, "not_found", message)
                 continue
             values = source.fetcher.candidates(raw, request)
+            reported = getattr(source.fetcher, "external_ids", None)
+            if reported is not None:
+                request.ids.update(reported(raw, request))
         except TaskCancelled:
             raise
         except Exception as error:
