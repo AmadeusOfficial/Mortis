@@ -22,14 +22,24 @@ import {
   updateLibrary,
 } from "../api";
 import { LibraryCard } from "../components/libraries/LibraryCard";
+import {
+  AutomationFields,
+  type AutomationValue,
+  automationValue,
+} from "../components/libraries/automation";
 import { PathPicker } from "../components/PathPicker";
 import { PageHeader, Pill } from "../components/ui";
-import { fileUnit, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
+import { fileUnit, isPluginType, isSeriesType, itemUnit, useDataTypes } from "../dataTypes";
 import { IconPlus } from "../icons";
 import classes from "./LibrariesPage.module.css";
 
 export function LibrariesPage() {
-  const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
+  // 定时刷新，好让卡片上的下次扫描时间和监听状态跟上后台。
+  const libraries = useQuery({
+    queryKey: ["libraries"],
+    queryFn: fetchLibraries,
+    refetchInterval: 30_000,
+  });
   const dataTypes = useDataTypes();
   const [editing, setEditing] = useState<Library | "new" | null>(null);
   const [deleting, setDeleting] = useState<Library | null>(null);
@@ -137,12 +147,20 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
   const setPathAt = (index: number, value: string) =>
     setPaths((current) => current.map((path, i) => (i === index ? value : path)));
   const dataTypeName = dataTypes.data?.find((type) => type.id === dataTypeId)?.name ?? "";
+  const [automation, setAutomation] = useState<AutomationValue>(() => automationValue(library));
+  const seriesType = isSeriesType(dataTypes.data, dataTypeId ?? "");
   const save = useMutation({
     mutationFn: () => {
       const filled = paths.map((path) => path.trim()).filter((path) => path !== "");
+      const scan = {
+        automation: automation.automation,
+        schedule_cron: automation.automation === "schedule" ? automation.cron.trim() : null,
+        refresh_running:
+          automation.automation === "schedule" && seriesType && automation.refreshRunning,
+      };
       return library === null
-        ? createLibrary({ name, data_type_id: dataTypeId ?? "", paths: filled })
-        : updateLibrary(library.id, { name, paths: filled });
+        ? createLibrary({ name, data_type_id: dataTypeId ?? "", paths: filled, ...scan })
+        : updateLibrary(library.id, { name, paths: filled, ...scan });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
@@ -216,6 +234,7 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
             </Group>
           </Stack>
         </Input.Wrapper>
+        <AutomationFields value={automation} onChange={setAutomation} seriesType={seriesType} />
         {save.isError && (
           <Alert color="red" title="保存失败">
             {save.error.message}

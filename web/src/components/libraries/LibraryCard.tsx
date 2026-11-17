@@ -13,6 +13,7 @@ import {
   updateLibrary,
 } from "../../api";
 import { ArrangePreviewModal } from "../ArrangePreviewModal";
+import { automationSummary } from "./automation";
 import {
   DataTypeIcon,
   IconEdit,
@@ -27,12 +28,6 @@ import classes from "../../pages/LibrariesPage.module.css";
 import { useTaskWatcher } from "../../useTaskWatcher";
 
 type ActionKind = "organize" | "scrape" | "arrange";
-
-const AUTOMATION_LABELS: Record<string, string> = {
-  manual: "只手动扫描",
-  watch: "发现新文件就整理",
-  schedule: "定时扫描",
-};
 
 const START_MESSAGES: Record<ActionKind, string> = {
   organize: "已开始扫描",
@@ -168,7 +163,7 @@ export function LibraryCard({
   const issueCount = library.issue_count ?? 0;
   const unscrapedCount = Math.max(0, library.item_count - scrapedCount);
   const needAttention = issueCount + unscrapedCount;
-  const automationLabel = AUTOMATION_LABELS[library.automation] ?? library.automation;
+  const automation = automationSummary(library);
   const hasPosters = samplePosters.length > 0;
 
   return (
@@ -243,7 +238,19 @@ export function LibraryCard({
                 },
               }}
             />
-            <span className={classes.autoMode}>· {automationLabel}</span>
+            <span
+              className={[
+                classes.autoMode,
+                automation.tone === "ok" ? classes.autoOk : "",
+                automation.tone === "bad" ? classes.autoBad : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              title={automation.title}
+              aria-label="扫描方式"
+            >
+              · {automation.text}
+            </span>
           </div>
 
           <div className={classes.actions}>

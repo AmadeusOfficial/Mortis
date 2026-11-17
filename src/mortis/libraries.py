@@ -17,9 +17,11 @@ from mortis.db.models import (
 from mortis.errors import UserError
 from mortis.items.detail import image_url
 from mortis.tasks import repo as task_repo
+from mortis.tasks import schedule
 
 MAX_NAME_LENGTH = 50
 SAMPLE_POSTERS = 8
+AUTOMATIONS = ("manual", "watch", "schedule")
 
 
 class LibraryError(UserError):
@@ -206,7 +208,47 @@ def library_stats(session: Session, library_ids: list[int]) -> dict[int, Library
     }
 
 
-def create_library(session: Session, *, name: str, data_type_id: str, paths: list[str]) -> Library:
+def _apply_automation(
+    session: Session,
+    library: Library,
+    *,
+    automation: str | None,
+    schedule_cron: str | None,
+    refresh_running: bool | None,
+) -> None:
+    """没传的项沿用库现在的计划；改成别的方式时删掉计划行。"""
+    if automation is not None:
+        if automation not in AUTOMATIONS:
+            raise LibraryError(f"没有这种扫描方式：{automation}", status_code=422)
+        library.automation = automation
+    current = schedule.library_schedules(session, library.id)
+    if schedule_cron is not None:
+        try:
+            cron = schedule.check_cron(schedule_cron)
+        except schedule.CronError as error:
+            raise LibraryError(f"定时规则不对：{error}", status_code=422) from None
+    elif schedule.SCAN in current:
+        cron = current[schedule.SCAN].cron
+    else:
+        cron = schedule.DEFAULT_CRON
+    refresh = schedule.REFRESH_RUNNING in current if refresh_running is None else refresh_running
+    if refresh and library.data_type.structure != "series":
+        if refresh_running:
+            raise LibraryError("只有剧和动漫库能刷新连载中的剧", status_code=422)
+        refresh = False
+    schedule.sync_library_schedules(session, library, cron=cron, refresh_running=refresh)
+
+
+def create_library(
+    session: Session,
+    *,
+    name: str,
+    data_type_id: str,
+    paths: list[str],
+    automation: str = "manual",
+    schedule_cron: str | None = None,
+    refresh_running: bool = False,
+) -> Library:
     cleaned_name = _clean_name(name)
     data_type = session.get(DataType, data_type_id)
     if data_type is None or not data_type.is_enabled:
@@ -223,7 +265,16 @@ def create_library(session: Session, *, name: str, data_type_id: str, paths: lis
         updated_at=now,
     )
     library.paths = [LibraryPath(path=path) for path in normalized]
+    library.data_type = data_type
     session.add(library)
+    session.flush()
+    _apply_automation(
+        session,
+        library,
+        automation=automation,
+        schedule_cron=schedule_cron,
+        refresh_running=refresh_running,
+    )
     session.commit()
     return library
 
@@ -235,6 +286,9 @@ def update_library(
     name: str | None = None,
     paths: list[str] | None = None,
     is_auto_scrape: bool | None = None,
+    automation: str | None = None,
+    schedule_cron: str | None = None,
+    refresh_running: bool | None = None,
 ) -> Library:
     library = get_library(session, library_id)
     if name is not None:
@@ -248,14 +302,22 @@ def update_library(
         library.paths.extend(LibraryPath(path=path) for path in normalized)
     if is_auto_scrape is not None:
         library.is_auto_scrape = int(is_auto_scrape)
+    _apply_automation(
+        session,
+        library,
+        automation=automation,
+        schedule_cron=schedule_cron,
+        refresh_running=refresh_running,
+    )
     library.updated_at = utc_now()
     session.commit()
     return library
 
 
 def delete_library(session: Session, library_id: int) -> None:
-    """连同库里的条目和文件记录一起删；硬盘上的文件不动。"""
+    """连同库里的条目、文件记录和定时计划一起删；硬盘上的文件不动。"""
     library = get_library(session, library_id)
+    schedule.delete_library_schedules(session, library.id)
     session.execute(delete(MediaFile).where(MediaFile.library_id == library.id))
     session.execute(delete(Item).where(Item.library_id == library.id))
     session.delete(library)

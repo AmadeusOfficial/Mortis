@@ -25,6 +25,7 @@ import {
   scrapeLibrary,
 } from "../api";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
+import { automationSummary } from "../components/libraries/automation";
 import { PosterCard } from "../components/PosterCard";
 import { FilterChip, PageHeader, Pill } from "../components/ui";
 import { fileUnit, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
@@ -47,12 +48,6 @@ const SORTS = [
   { value: "release_date:asc", label: "上映日期（旧到新）" },
   { value: "created_at:desc", label: "最近加入" },
 ];
-
-const AUTOMATION_LABELS: Record<string, string> = {
-  manual: "只手动扫描",
-  watch: "发现新文件就整理",
-  schedule: "定时扫描",
-};
 
 type ActionKind = "organize" | "scrape" | "arrange";
 type StatusFilter = "all" | "scraped" | "unscraped" | "issue";
@@ -295,7 +290,9 @@ export function LibraryWallPage() {
                 {libData.file_count} {filesUnit}
               </span>
               <span aria-hidden="true">·</span>
-              <span>{AUTOMATION_LABELS[libData.automation] ?? libData.automation}</span>
+              <span title={automationSummary(libData).title}>
+                {automationSummary(libData).text}
+              </span>
               <span aria-hidden="true">·</span>
               <span>{libData.is_auto_scrape ? "扫描后自动刮削" : "只扫描不自动刮削"}</span>
             </span>

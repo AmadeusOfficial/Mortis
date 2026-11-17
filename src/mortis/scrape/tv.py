@@ -2,7 +2,7 @@
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -260,7 +260,10 @@ def _show_config(ctx: TaskContext, item_id: int) -> TvScrapeConfig:
     return section if isinstance(section, TvScrapeConfig) else config.types.tv
 
 
-def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any]:
+def scrape_show(
+    ctx: TaskContext, item_id: int, *, force: bool, refresh: Collection[str] = ()
+) -> dict[str, Any]:
+    """refresh 里的来源当作没有快照重新请求，其余来源照常用已有快照。"""
     services = ctx.services
     config = _show_config(ctx, item_id)
     store = ImageStore(services.data_dir)
@@ -276,8 +279,10 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         data_type_id = show.data_type_id
         ids = external_ids(session, show.id)
         snapshots = load_snapshots(session, show.id, force)
+        for source in refresh:
+            snapshots.pop(source, None)
         season_raws = {
-            row.index_number: load_snapshot(session, row.id, force)
+            row.index_number: load_snapshot(session, row.id, force or SOURCE in refresh)
             for row in session.scalars(
                 select(Item).where(Item.parent_id == show.id, Item.kind == "season")
             )

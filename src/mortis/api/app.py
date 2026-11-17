@@ -17,6 +17,7 @@ from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import output as output_routes
 from mortis.api.routes import play as play_routes
 from mortis.api.routes import plugins as plugin_routes
+from mortis.api.routes import schedules as schedule_routes
 from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import sources as source_routes
 from mortis.api.routes import tasks as task_routes
@@ -27,6 +28,7 @@ from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
 from mortis.errors import UserError
+from mortis.organize import watch
 from mortis.plugins.launch import Launcher, SystemLauncher
 from mortis.plugins.registry import PluginRegistry, plugin_folders
 from mortis.services import Services
@@ -34,6 +36,7 @@ from mortis.settings import Settings
 from mortis.sources import imdb
 from mortis.sources.builtin import seed_builtin_orders
 from mortis.tasks import repo as task_repo
+from mortis.tasks import schedule
 from mortis.tasks.registry import builtin_handlers
 from mortis.tasks.runner import TaskRunner
 from mortis.version import get_version
@@ -58,7 +61,12 @@ def create_app(
     http_transport: httpx.BaseTransport | None = None,
     start_worker: bool = True,
     launcher: Launcher | None = None,
+    start_automation: bool | None = None,
+    watch_debounce: float = watch.DEBOUNCE_SECONDS,
+    watch_retry: float = watch.RETRY_SECONDS,
+    schedule_interval: float = schedule.CHECK_SECONDS,
 ) -> FastAPI:
+    """start_automation 不给时跟着 start_worker：定时检查和目录监听一起开关。"""
     resolved = settings if settings is not None else Settings()
     resolved.data_dir.mkdir(parents=True, exist_ok=True)
     db_path = resolved.data_dir / DB_FILE
@@ -94,14 +102,24 @@ def create_app(
         builtin_handlers(),
         concurrency=startup_config.tasks.concurrency,
     )
+    scheduler = schedule.Scheduler(session_factory, runner.wake, interval=schedule_interval)
+    watcher = watch.WatchManager(
+        session_factory, config_store, runner.wake, debounce=watch_debounce, retry=watch_retry
+    )
+    automation = start_worker if start_automation is None else start_automation
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if start_worker:
             runner.start()
+        if automation:
+            scheduler.start()
+            watcher.start()
         try:
             yield
         finally:
+            watcher.stop()
+            scheduler.stop()
             runner.stop()
             engine.dispose()
 
@@ -113,6 +131,8 @@ def create_app(
     app.state.http_transport = http_transport
     app.state.services = services
     app.state.task_runner = runner
+    app.state.scheduler = scheduler
+    app.state.watch_manager = watcher
 
     @app.exception_handler(UserError)
     async def _user_error(_request: Request, error: UserError) -> JSONResponse:
@@ -133,6 +153,7 @@ def create_app(
     app.include_router(settings_routes.router)
     app.include_router(data_type_routes.router)
     app.include_router(library_routes.router)
+    app.include_router(schedule_routes.router)
     app.include_router(task_routes.router)
     app.include_router(item_routes.router)
     app.include_router(output_routes.router)

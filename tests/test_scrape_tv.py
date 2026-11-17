@@ -338,6 +338,43 @@ def test_season_gone_from_tmdb_is_dropped(app: FastAPI, show_id: int, fake: Fake
         assert session.scalar(select(func.count()).select_from(Item)) == 1 + 2 + 20
 
 
+def test_refresh_running_shows_refetches_only_tmdb(
+    app: FastAPI, show_id: int, fake: FakeTmdb
+) -> None:
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        show = session.get(Item, show_id)
+        assert show is not None
+        library_id = show.library_id
+        show.fields = json.dumps({**json.loads(show.fields), "status": "连载中"})
+        ended = Item(
+            library_id=library_id,
+            data_type_id="tv",
+            kind="work",
+            title="完结的剧",
+            fields=json.dumps({"status": "已完结"}),
+            created_at=show.created_at,
+            updated_at=show.updated_at,
+        )
+        session.add(ended)
+        session.flush()
+        session.add(ItemExternalId(item_id=ended.id, provider="tmdb", external_id="1"))
+        session.commit()
+    before = len([p for p in fake.paths() if p.startswith("/3/tv/")])
+
+    task = _run(app, "refresh_running_shows", {"library_id": library_id})
+    assert task.status == "succeeded", task.error
+    assert json.loads(task.result or "{}") == {"scrape_queued": 1}
+    with app.state.session_factory() as session:
+        child = session.scalars(select(Task).where(Task.parent_task_id == task.id)).one()
+        assert child.status == "succeeded", child.error
+        assert json.loads(child.payload or "{}") == {"item_id": show_id, "refresh": ["tmdb"]}
+        sources = {s["id"]: s["outcome"] for s in json.loads(child.result or "{}")["sources"]}
+    assert sources["tmdb"] == "ok"
+    assert sources["tmdb_season_1"] == "ok"
+    assert len([p for p in fake.paths() if p.startswith("/3/tv/")]) == before * 2
+
+
 def test_episode_runtime_comes_from_tmdb(app: FastAPI, show_id: int) -> None:
     _scrape(app, show_id)
     with app.state.session_factory() as session:

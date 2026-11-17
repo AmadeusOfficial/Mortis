@@ -367,7 +367,7 @@ export interface Library {
   name: string;
   data_type_id: string;
   data_type_name: string;
-  automation: string;
+  automation: Automation;
   is_auto_scrape: boolean;
   item_count: number;
   file_count: number;
@@ -375,20 +375,38 @@ export interface Library {
   issue_count: number;
   sample_posters: string[];
   paths: string[];
+  schedule_cron: string | null;
+  refresh_running: boolean;
+  next_scan_at: string | null;
+  watch_state: "watching" | "failed" | null;
+  watch_error: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type Automation = "manual" | "watch" | "schedule";
 
 export interface LibraryCreate {
   name: string;
   data_type_id: string;
   paths: string[];
+  automation?: Automation;
+  schedule_cron?: string | null;
+  refresh_running?: boolean;
 }
 
 export interface LibraryUpdate {
   name?: string;
   paths?: string[];
   is_auto_scrape?: boolean;
+  automation?: Automation;
+  schedule_cron?: string | null;
+  refresh_running?: boolean;
+}
+
+export interface CronPreview {
+  cron: string;
+  next_runs: string[];
 }
 
 export interface Enqueued {
@@ -597,6 +615,8 @@ export const organizeLibrary = (id: number, scrape: boolean | null = null) =>
   request<Enqueued>("POST", `/api/libraries/${id}/organize`, { scrape });
 export const scrapeLibrary = (id: number, force = false) =>
   request<Enqueued>("POST", `/api/libraries/${id}/scrape`, { force });
+export const previewCron = (cron: string) =>
+  request<CronPreview>("GET", `/api/schedules/preview?${new URLSearchParams({ cron }).toString()}`);
 
 export const TASK_PAGE_SIZE = 50;
 export const fetchTasks = (filter: TaskFilter, offset = 0) => {

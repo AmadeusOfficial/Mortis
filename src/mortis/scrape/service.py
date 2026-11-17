@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.orm import Session, aliased
 
 from mortis.config.models import MovieScrapeConfig
@@ -224,7 +224,7 @@ def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
         return TaskResult(result=scrape_item(ctx, item_id, force=force))
     config = ctx.services.config_store.load_config()
     if structure == "series":
-        result = scrape_show(ctx, item_id, force=force)
+        result = scrape_show(ctx, item_id, force=force, refresh=payload.get("refresh") or ())
     else:
         result = scrape_movie(ctx, item_id, force=force)
     config_section = arrange_config(config, data_type_id)
@@ -261,4 +261,41 @@ def handle_scrape_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResu
     return TaskResult(
         result={"scrape_queued": len(ids)},
         followups=[Followup("scrape", {"item_id": item_id, "force": force}) for item_id in ids],
+    )
+
+
+RUNNING_STATUS = "连载中"
+
+
+def handle_refresh_running_shows(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
+    """库里状态是连载中、有 TMDB 编号的剧各排一次只重取 TMDB 的刮削，补上新播出的集。"""
+    library_id = int(payload["library_id"])
+    with ctx.session_factory() as session:
+        library = session.get(Library, library_id)
+        if library is None:
+            raise TaskError("媒体库不存在，可能已被删除")
+        data_type = session.get(DataType, library.data_type_id)
+        if data_type is None or data_type.structure != "series":
+            raise TaskError("只有剧和动漫库能刷新连载中的剧")
+        has_tmdb = exists().where(
+            ItemExternalId.item_id == Item.id, ItemExternalId.provider == SOURCE
+        )
+        ids = list(
+            session.scalars(
+                select(Item.id)
+                .where(
+                    Item.library_id == library_id,
+                    Item.kind == "work",
+                    func.json_extract(Item.fields, "$.status") == RUNNING_STATUS,
+                    has_tmdb,
+                )
+                .order_by(Item.id)
+            )
+        )
+    ctx.log(f"「{library.name}」有 {len(ids)} 部连载中的剧，各排一次刮削")
+    return TaskResult(
+        result={"scrape_queued": len(ids)},
+        followups=[
+            Followup("scrape", {"item_id": item_id, "refresh": [SOURCE]}) for item_id in ids
+        ],
     )

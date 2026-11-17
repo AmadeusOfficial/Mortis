@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from mortis.config.store import ConfigStore
+from mortis.organize.watch import WatchManager
 from mortis.services import Services
 from mortis.tasks.runner import TaskRunner
 
@@ -26,7 +27,12 @@ def get_runner(request: Request) -> TaskRunner:
     return request.app.state.task_runner
 
 
+def get_watch_manager(request: Request) -> WatchManager:
+    return request.app.state.watch_manager
+
+
 SessionDep = Annotated[Session, Depends(get_session)]
+WatchDep = Annotated[WatchManager, Depends(get_watch_manager)]
 ConfigStoreDep = Annotated[ConfigStore, Depends(get_config_store)]
 ServicesDep = Annotated[Services, Depends(get_services)]
 RunnerDep = Annotated[TaskRunner, Depends(get_runner)]

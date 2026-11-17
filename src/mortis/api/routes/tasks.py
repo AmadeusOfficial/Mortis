@@ -22,6 +22,7 @@ TYPE_LABELS = {
     "write_files": "写出文件",
     "rename": "重命名",
     "refresh_imdb": "更新 IMDb 评分数据",
+    "refresh_running_shows": "刷新连载中的剧",
 }
 
 
