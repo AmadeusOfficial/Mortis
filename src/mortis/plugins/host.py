@@ -24,9 +24,22 @@ _pace_guard = threading.Lock()
 _next_slot: dict[str, float] = {}
 
 
+EXECUTABLES = "executables"
+"""game 播放插件设置里记住的启动程序，宿主读写，设置页不显示也不能改。"""
+
+
 def plugin_settings(config: AppConfig, plugin: SourcePlugin | PlayerPlugin) -> BaseModel:
+    values = dict(config.sources.get(plugin.id, {}))
+    if EXECUTABLES in values:
+        # 宿主写的这一项被手改坏时只丢掉坏的条目，不让整份设置回到默认值。
+        old = values[EXECUTABLES]
+        values[EXECUTABLES] = (
+            {k: v for k, v in old.items() if isinstance(k, str) and isinstance(v, str)}
+            if isinstance(old, dict)
+            else {}
+        )
     try:
-        return plugin.Settings.model_validate(config.sources.get(plugin.id, {}))
+        return plugin.Settings.model_validate(values)
     except ValidationError:
         return plugin.Settings()
 

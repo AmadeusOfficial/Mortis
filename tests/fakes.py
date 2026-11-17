@@ -82,13 +82,15 @@ class FakeLauncher:
 
     def __init__(self) -> None:
         self.launched: list[tuple[str, list[str]]] = []
+        self.cwds: list[str | None] = []
         self.opened: list[str] = []
         self.fail: OSError | None = None
 
-    def launch(self, executable: str, args: list[str]) -> None:
+    def launch(self, executable: str, args: list[str], cwd: str | None = None) -> None:
         if self.fail is not None:
             raise self.fail
         self.launched.append((executable, args))
+        self.cwds.append(cwd)
 
     def open_default(self, path: str) -> None:
         if self.fail is not None:

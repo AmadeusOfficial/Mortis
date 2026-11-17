@@ -9,8 +9,8 @@
 - images：`{"url", "language", "width", "height"}` 的列表，排第一的会被选用。
 - rating：`{"source", "rating", "max_rating", "vote_count"}` 的列表。
 
-播放插件只调用本机播放器打开本地文件，经 `PlayerHost.launch` 或 `open_default` 启动，
-不自己 import subprocess，不转码，也不向浏览器输出视频。
+播放插件用本机播放器打开本地视频，或启动游戏文件夹里的程序，经 `PlayerHost.launch` 或
+`open_default` 启动，不自己 import subprocess，不转码，也不向浏览器输出视频。
 """
 
 from abc import ABC, abstractmethod
@@ -182,12 +182,15 @@ class DataTypePlugin:
     """数据类型插件。default_orders 的键是 ""（整体）或字段键，值是来源 id 的顺序。
 
     sources 是这个数据类型自带的来源插件，每个的 data_type 必须等于本插件 spec.id。
+    players 是它自带的播放插件，比如启动游戏的程序。两者的 id 都要列进 plugin.toml 的
+    [[sources]]、[[players]]，停用本插件时一起停用。
     """
 
     spec: DataTypeSpec
     default_orders: dict[str, list[str]] = field(default_factory=dict)
     scan: Literal["folder"] = "folder"
     sources: tuple[SourcePlugin, ...] = ()
+    players: tuple[PlayerPlugin, ...] = ()
 
 
 class PlayerHost(Protocol):
@@ -195,8 +198,12 @@ class PlayerHost(Protocol):
 
     settings: BaseModel
 
-    def launch(self, executable: str, args: list[str]) -> None:
-        """不经 shell 启动程序，不等它结束，也不接管它的输出。失败时抛 PlayerError。"""
+    def launch(self, executable: str, args: list[str], cwd: str | None = None) -> None:
+        """不经 shell 启动程序，不等它结束，也不接管它的输出。失败时抛 PlayerError。
+
+        cwd 是程序的工作目录，为 None 时沿用宿主的。游戏通常要传 exe 所在的文件夹，
+        否则找不到自己的资源。程序要求管理员权限时宿主改用系统的方式打开，会弹出提权确认。
+        """
         ...
 
     def open_default(self, path: str) -> None:
@@ -207,11 +214,19 @@ class PlayerHost(Protocol):
 
 
 class PlayerPlugin(ABC):
-    """播放插件：用本机播放器打开一个本地视频文件。"""
+    """播放插件：用本机播放器打开一个本地视频文件，或启动游戏文件夹里的程序。
+
+    file_kinds 声明能打开哪种本地文件：`video` 是视频文件，`game` 是整个游戏文件夹。
+    打开 game 的插件实现 targets 给出可启动的程序；宿主只有一个候选时直接启动，
+    多个时交给页面选。选过的记在本插件设置的 `executables` 里（键是游戏文件夹的绝对路径，
+    值是相对它的程序路径），由宿主读写，设置页不显示；Settings 里声明
+    `executables: dict[str, str] = {}` 才会记住。
+    """
 
     id: ClassVar[str]
     name: ClassVar[str]
     Settings: ClassVar[type[BaseModel]] = NoSettings
+    file_kinds: ClassVar[tuple[str, ...]] = ("video",)
 
     def available(self, host: PlayerHost) -> bool:
         return self.unavailable_reason(host) is None
@@ -224,6 +239,16 @@ class PlayerPlugin(ABC):
         """实际会启动的程序路径，设置页显示；不适用时返回 None。"""
         return None
 
+    def targets(self, host: PlayerHost, folder: str) -> list[str]:
+        """game 插件：folder 里可以启动的程序，返回相对 folder 的路径，最可能的排在前面。
+
+        宿主会丢掉不在 folder 里或不存在的路径。
+        """
+        return []
+
     @abstractmethod
     def play(self, host: PlayerHost, path: str) -> None:
-        """打开 path。宿主已确认文件存在。失败时抛 PlayerError。"""
+        """打开 path。宿主已确认文件存在。失败时抛 PlayerError。
+
+        video 插件收到视频文件的绝对路径；game 插件收到要启动的程序的绝对路径。
+        """

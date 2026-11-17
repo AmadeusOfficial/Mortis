@@ -105,6 +105,21 @@ class ConfigStore:
             _write(self.config_path, raw)
             return config
 
+    def update_plugin_settings(
+        self, plugin_id: str, change: Callable[[dict[str, Any]], dict[str, Any]]
+    ) -> AppConfig:
+        """在锁里读出 `[sources.<id>]`、交给 change 改，再整节写回；别的节原样保留。"""
+        with self._lock:
+            raw = self._config_raw()
+            sources = raw.get("sources")
+            sources = dict(sources) if isinstance(sources, dict) else {}
+            old = sources.get(plugin_id)
+            sources[plugin_id] = change(dict(old) if isinstance(old, dict) else {})
+            raw["sources"] = sources
+            config = _validate(self.config_path, raw, AppConfig)
+            _write(self.config_path, raw)
+            return config
+
     def load_secrets(self) -> Secrets:
         with self._lock:
             return _validate(self.secrets_path, self._secrets_raw(), Secrets)

@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from mortis.api.deps import ConfigStoreDep, SessionDep
+from mortis.api.deps import ConfigStoreDep, ServicesDep, SessionDep
 from mortis.config.models import (
     SECRET_KEYS,
     AppConfig,
@@ -22,6 +22,7 @@ from mortis.config.models import (
 from mortis.db.models import DataType
 from mortis.errors import UserError
 from mortis.net.http import build_client
+from mortis.plugins.player import video_player_problem
 from mortis.sources.tmdb.check import TmdbCheck, check_tmdb_key
 
 router = APIRouter(prefix="/api")
@@ -68,7 +69,14 @@ def write_tasks(section: TasksConfig, store: ConfigStoreDep) -> AppConfig:
 
 
 @router.put("/settings/playback", response_model=AppConfig)
-def write_playback(section: PlaybackConfig, store: ConfigStoreDep) -> AppConfig:
+def write_playback(
+    section: PlaybackConfig, store: ConfigStoreDep, services: ServicesDep
+) -> AppConfig:
+    """留空表示自动选；选了的插件必须存在、已启用并且能播放视频。"""
+    if section.player:
+        problem = video_player_problem(services.plugins, section.player)
+        if problem is not None:
+            raise UserError(problem[0], status_code=400)
     return store.save_section("playback", section)
 
 

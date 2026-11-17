@@ -9,7 +9,13 @@ from mortis.api.deps import ServicesDep
 from mortis.config.models import validation_problems
 from mortis.errors import UserError
 from mortis.plugin_api import Account, PlayerPlugin, SourceAuthError, SourceError, SourcePlugin
-from mortis.plugins.host import PluginHost, open_host, plugin_secrets, plugin_settings
+from mortis.plugins.host import (
+    EXECUTABLES,
+    PluginHost,
+    open_host,
+    plugin_secrets,
+    plugin_settings,
+)
 from mortis.plugins.oauth import OAuthStates, authorize_url, client_values, exchange_code
 from mortis.plugins.player import player_host, unavailable_reason
 from mortis.plugins.registry import PluginInfo
@@ -19,6 +25,8 @@ router = APIRouter(prefix="/api")
 _states = OAuthStates()
 TOKEN_KEYS = frozenset({"refresh_token", "expires_at", "redirect_uri"})
 """宿主登录时写的键，设置页不显示也不能改。"""
+PLAYER_HOST_KEYS = frozenset({EXECUTABLES})
+"""播放插件设置里由宿主写的键，设置页不显示，保存设置时保留原值。"""
 
 
 class PluginOut(BaseModel):
@@ -46,6 +54,7 @@ class PluginOut(BaseModel):
     # 只有播放插件有：能不能用，以及实际会启动的程序路径。
     available: bool | None = None
     detected_path: str | None = None
+    file_kinds: list[str] | None = None
 
 
 class AccountOut(BaseModel):
@@ -109,8 +118,21 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
 
 def _player_out(services: Services, plugin: PlayerPlugin, out: PluginOut) -> PluginOut:
     host = player_host(plugin, services.launcher, services.config_store)
-    out.settings_schema = plugin.Settings.model_json_schema()
-    out.settings = host.settings.model_dump(mode="json")
+    schema = plugin.Settings.model_json_schema()
+    schema["properties"] = {
+        key: value
+        for key, value in schema.get("properties", {}).items()
+        if key not in PLAYER_HOST_KEYS
+    }
+    if "required" in schema:
+        schema["required"] = [key for key in schema["required"] if key not in PLAYER_HOST_KEYS]
+    out.settings_schema = schema
+    out.settings = {
+        key: value
+        for key, value in host.settings.model_dump(mode="json").items()
+        if key not in PLAYER_HOST_KEYS
+    }
+    out.file_kinds = list(plugin.file_kinds)
     out.notice = unavailable_reason(plugin, host)
     out.available = out.notice is None
     try:
@@ -160,11 +182,23 @@ def update_plugin(
         raise UserError("这个插件没有密钥")
     if update.settings is not None:
         assert isinstance(plugin, SourcePlugin | PlayerPlugin)
+        submitted = update.settings
+        if isinstance(plugin, PlayerPlugin):
+            submitted = {k: v for k, v in submitted.items() if k not in PLAYER_HOST_KEYS}
         try:
-            values = plugin.Settings.model_validate(update.settings).model_dump(mode="json")
+            values = plugin.Settings.model_validate(submitted).model_dump(mode="json")
         except ValidationError as error:
             raise UserError(f"设置不合法：{validation_problems(error)}") from None
-        store.save_plugin(plugin_id, values=values)
+        if isinstance(plugin, PlayerPlugin):
+            kept = PLAYER_HOST_KEYS & set(values)
+
+            def keep_host_keys(current: dict[str, Any]) -> dict[str, Any]:
+                mine = {k: v for k, v in values.items() if k not in kept}
+                return {**mine, **{k: current[k] for k in kept if k in current}}
+
+            store.update_plugin_settings(plugin_id, keep_host_keys)
+        else:
+            store.save_plugin(plugin_id, values=values)
     if update.secrets is not None:
         assert isinstance(plugin, SourcePlugin)
         allowed = set(_secret_keys(plugin))

@@ -18,6 +18,7 @@ from mortis.plugin_api import DataTypePlugin, PlayerPlugin, SourcePlugin
 from mortis.plugins.loader import (
     Kind,
     Manifest,
+    ManifestSource,
     PluginLoadError,
     check_imports,
     import_plugin,
@@ -52,12 +53,23 @@ class PluginInfo:
         return self.enabled and self.plugin is not None
 
 
-def _validate_player(manifest: Manifest, plugin: object) -> PlayerPlugin:
+FILE_KINDS = frozenset({"video", "game"})
+
+
+def _validate_player_object(plugin: object, label: str = "PLUGIN") -> PlayerPlugin:
     if not isinstance(plugin, PlayerPlugin):
-        raise PluginLoadError("PLUGIN 不是 PlayerPlugin")
+        raise PluginLoadError(f"{label} 不是 PlayerPlugin")
     for attribute in ("id", "name"):
         if not isinstance(getattr(plugin, attribute, None), str) or not getattr(plugin, attribute):
-            raise PluginLoadError(f"PLUGIN 缺少 {attribute}")
+            raise PluginLoadError(f"{label} 缺少 {attribute}")
+    kinds = plugin.file_kinds
+    if not isinstance(kinds, tuple) or not kinds or any(kind not in FILE_KINDS for kind in kinds):
+        raise PluginLoadError(f"{plugin.id} 的 file_kinds 只能是 video、game 组成的元组")
+    return plugin
+
+
+def _validate_player(manifest: Manifest, plugin: object) -> PlayerPlugin:
+    plugin = _validate_player_object(plugin)
     if plugin.id != manifest.id:
         raise PluginLoadError(f"PLUGIN.id 是 {plugin.id}，和 plugin.toml 里的 {manifest.id} 不一致")
     return plugin
@@ -106,6 +118,32 @@ def _validate_bundled_sources(manifest: Manifest, plugin: DataTypePlugin) -> Non
         )
 
 
+def _validate_bundled_players(manifest: Manifest, plugin: DataTypePlugin) -> None:
+    """数据类型自带的播放插件：必须是 PlayerPlugin、id 合法、包内不重名，
+    对象的 id 列表和 plugin.toml 的 [[players]] 名单完全一致。"""
+    if not isinstance(plugin.players, tuple):
+        raise PluginLoadError("DataTypePlugin.players 必须是元组")
+    taken = {plugin.spec.id, manifest.id, *(source.id for source in plugin.sources)}
+    seen: set[str] = set()
+    for player in plugin.players:
+        player = _validate_player_object(player, "子播放插件")
+        if not _ID.fullmatch(player.id):
+            raise PluginLoadError(f"子播放插件 id「{player.id}」只能用小写字母、数字和下划线")
+        if player.id in taken or player.id in seen:
+            raise PluginLoadError(f"子播放插件 {player.id} 重名")
+        seen.add(player.id)
+    listed = {entry.id for entry in manifest.players}
+    if listed != seen:
+        detail = []
+        if seen - listed:
+            detail.append(f"plugin.toml 少了 {'、'.join(sorted(seen - listed))}")
+        if listed - seen:
+            detail.append(f"plugin.toml 多了 {'、'.join(sorted(listed - seen))}")
+        raise PluginLoadError(
+            "plugin.toml 的 players 名单和 DataTypePlugin.players 不一致：" + "；".join(detail)
+        )
+
+
 def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlugin | PlayerPlugin:
     if manifest.kind == "player":
         return _validate_player(manifest, plugin)
@@ -118,6 +156,7 @@ def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlug
         if errors:
             raise PluginLoadError("字段目录不合格：" + "；".join(errors))
         _validate_bundled_sources(manifest, plugin)
+        _validate_bundled_players(manifest, plugin)
         return plugin
     source = _validate_source_object(plugin)
     if source.id != manifest.id:
@@ -128,55 +167,63 @@ def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlug
 def _bundled_source_infos(
     manifest: Manifest, origin: Origin, error: str | None
 ) -> list[PluginInfo]:
-    """父插件停用或导入失败时不 import，用 plugin.toml 的 [[sources]] 名单把子来源列成停用项。
+    """父插件停用或导入失败时不 import，用 plugin.toml 的 [[sources]]、[[players]] 名单
+    把子来源和子播放插件列成停用项。
 
-    父插件导入失败时，子来源带上父插件的错误并保持停用，不显示为启用。
+    父插件导入失败时，它们带上父插件的错误并保持停用，不显示为启用。
     """
-    infos: list[PluginInfo] = []
-    for entry in manifest.sources:
-        infos.append(
-            PluginInfo(
-                entry.id,
-                entry.name,
-                manifest.version,
-                "source",
-                manifest.folder,
-                origin,
-                False,
-                error=error,
-                parent=manifest.id,
-            )
+    children: list[tuple[Kind, ManifestSource]] = [
+        *(("source", entry) for entry in manifest.sources),
+        *(("player", entry) for entry in manifest.players),
+    ]
+    return [
+        PluginInfo(
+            entry.id,
+            entry.name,
+            manifest.version,
+            kind,
+            manifest.folder,
+            origin,
+            False,
+            error=error,
+            parent=manifest.id,
         )
-    return infos
+        for kind, entry in children
+    ]
 
 
 def _active_source_infos(
     manifest: Manifest, plugin: DataTypePlugin, origin: Origin, disabled: set[str]
 ) -> list[PluginInfo]:
-    """父插件启用并导入成功时，从 DataTypePlugin.sources 取来源对象，各自可单独停用。"""
+    """父插件启用并导入成功时，从 DataTypePlugin.sources、players 取对象，各自可单独停用。"""
+    children: list[tuple[Kind, SourcePlugin | PlayerPlugin]] = [
+        *(("source", source) for source in plugin.sources),
+        *(("player", player) for player in plugin.players),
+    ]
     infos: list[PluginInfo] = []
-    for source in plugin.sources:
-        enabled = source.id not in disabled
+    for kind, child in children:
+        enabled = child.id not in disabled
         infos.append(
             PluginInfo(
-                source.id,
-                source.name,
+                child.id,
+                child.name,
                 manifest.version,
-                "source",
+                kind,
                 manifest.folder,
                 origin,
                 enabled,
-                plugin=source if enabled else None,
+                plugin=child if enabled else None,
                 parent=manifest.id,
             )
         )
     return infos
 
 
-def _dupe_message_for(primary_id: str, clash_id: str, owner: str) -> str:
-    if clash_id == primary_id:
+def _dupe_message_for(manifest: Manifest, clash_id: str, owner: str) -> str:
+    if clash_id == manifest.id:
         return f"id {clash_id} 和插件 {owner} 重名，整包加载失败"
-    return f"子来源 {clash_id} 和插件 {owner} 重名，整包加载失败"
+    label = "子播放插件" if any(entry.id == clash_id for entry in manifest.players) else "子来源"
+    return f"{label} {clash_id} 和插件 {owner} 重名，整包加载失败"
 
 
 def _place(
@@ -219,8 +266,12 @@ def _place(
 
 
 def _manifest_ids(manifest: Manifest) -> list[str]:
-    """这个包会占用的全部 id：父 id 加 [[sources]] 里的子来源 id（仅凭 manifest，不 import）。"""
-    return [manifest.id, *(entry.id for entry in manifest.sources)]
+    """这个包会占用的全部 id：父 id 加 [[sources]]、[[players]] 的 id，仅凭 manifest，不 import。"""
+    return [
+        manifest.id,
+        *(entry.id for entry in manifest.sources),
+        *(entry.id for entry in manifest.players),
+    ]
 
 
 def _build_infos(manifest: Manifest, origin: Origin, disabled: set[str]) -> list[PluginInfo]:
@@ -311,7 +362,7 @@ class PluginRegistry:
                 folder,
                 origin,
                 False,
-                error=_dupe_message_for(manifest.id, clash_id, owner),
+                error=_dupe_message_for(manifest, clash_id, owner),
             )
 
         _place(

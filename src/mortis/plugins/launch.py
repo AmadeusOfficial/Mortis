@@ -8,10 +8,12 @@ from typing import Protocol
 _DETACHED = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
     subprocess, "CREATE_NEW_PROCESS_GROUP", 0
 )
+ERROR_ELEVATION_REQUIRED = 740
+"""程序清单要求管理员权限时 CreateProcess 报的错，只有经 ShellExecute 才会弹出提权确认。"""
 
 
 class Launcher(Protocol):
-    def launch(self, executable: str, args: list[str]) -> None: ...
+    def launch(self, executable: str, args: list[str], cwd: str | None = None) -> None: ...
 
     def open_default(self, path: str) -> None: ...
 
@@ -22,19 +24,33 @@ class SystemLauncher:
         # Popen 对象在进程没退出时被回收会报 ResourceWarning，留着引用直到它退出。
         self._children: list[subprocess.Popen[bytes]] = []
 
-    def launch(self, executable: str, args: list[str]) -> None:
-        child = subprocess.Popen(
-            [executable, *args],
-            shell=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            creationflags=_DETACHED,
-        )
+    def launch(self, executable: str, args: list[str], cwd: str | None = None) -> None:
+        try:
+            child = subprocess.Popen(
+                [executable, *args],
+                shell=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=_DETACHED,
+                cwd=cwd,
+            )
+        except OSError as error:
+            if getattr(error, "winerror", None) != ERROR_ELEVATION_REQUIRED:
+                raise
+            self._start_elevated(executable, args, cwd)
+            return
         with self._guard:
             self._children = [old for old in self._children if old.poll() is None]
             self._children.append(child)
+
+    @staticmethod
+    def _start_elevated(executable: str, args: list[str], cwd: str | None) -> None:
+        startfile = getattr(os, "startfile", None)
+        if startfile is None:
+            raise OSError("这个程序要管理员权限，这个系统不能提权启动")
+        startfile(executable, arguments=subprocess.list2cmdline(args), cwd=cwd)
 
     def open_default(self, path: str) -> None:
         startfile = getattr(os, "startfile", None)

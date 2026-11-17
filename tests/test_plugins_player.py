@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from mortis.config.models import AppConfig
 from mortis.plugin_api import PlayerError, PlayerPlugin
 from mortis.plugins import launch as launch_module
+from mortis.plugins.host import plugin_settings
 from mortis.plugins.launch import SystemLauncher
 from mortis.plugins.loader import PluginLoadError, import_plugin, read_manifest
 from mortis.plugins.player import PluginPlayerHost
@@ -171,6 +172,89 @@ def test_system_launcher_never_uses_shell(monkeypatch: pytest.MonkeyPatch) -> No
     assert argv == [r"C:\p\PotPlayerMini64.exe", r"D:\a b\c.mkv"]
     assert kwargs["shell"] is False
     assert kwargs["stdout"] is subprocess.DEVNULL and kwargs["stderr"] is subprocess.DEVNULL
+
+
+def test_system_launcher_passes_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class FakePopen:
+        def __init__(self, argv: list[str], **kwargs: Any) -> None:
+            calls.append(kwargs)
+
+        def poll(self) -> int | None:
+            return None
+
+    monkeypatch.setattr(launch_module.subprocess, "Popen", FakePopen)
+    SystemLauncher().launch(r"D:\游戏\g\game.exe", [], cwd=r"D:\游戏\g")
+    SystemLauncher().launch(r"C:\p\play.exe", ["a"])
+    assert calls[0]["cwd"] == r"D:\游戏\g"
+    assert calls[1]["cwd"] is None
+
+
+def test_system_launcher_falls_back_to_startfile_when_elevation_needed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def needs_admin(argv: list[str], **kwargs: Any) -> None:
+        raise OSError(22, "请求的操作需要提升。", None, 740)
+
+    started: list[tuple[str, dict[str, Any]]] = []
+
+    def startfile(path: str, *args: Any, **kwargs: Any) -> None:
+        started.append((path, kwargs))
+
+    monkeypatch.setattr(launch_module.subprocess, "Popen", needs_admin)
+    monkeypatch.setattr(launch_module.os, "startfile", startfile, raising=False)
+    SystemLauncher().launch(r"D:\游戏\g\game.exe", ["-w", "a b"], cwd=r"D:\游戏\g")
+    assert started == [(r"D:\游戏\g\game.exe", {"arguments": '-w "a b"', "cwd": r"D:\游戏\g"})]
+
+
+def test_system_launcher_other_errors_are_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing(argv: list[str], **kwargs: Any) -> None:
+        raise FileNotFoundError(2, "系统找不到指定的文件。")
+
+    started: list[str] = []
+    monkeypatch.setattr(launch_module.subprocess, "Popen", missing)
+    monkeypatch.setattr(launch_module.os, "startfile", started.append, raising=False)
+    with pytest.raises(FileNotFoundError):
+        SystemLauncher().launch(r"C:\没有.exe", [])
+    assert started == []
+
+
+def test_host_launch_passes_cwd(tmp_path: Path) -> None:
+    _write(tmp_path, "fake_player", "player", PLAYER)
+    registry = PluginRegistry([(tmp_path, "builtin")])
+    registry.load()
+    plugin = registry.player("fake_player")
+    assert plugin is not None
+    launcher = FakeLauncher()
+    host = PluginPlayerHost(plugin, launcher, _config("fake_player", {}), lambda _m: None)
+    host.launch(r"D:\游戏\g\game.exe", [], cwd=r"D:\游戏\g")
+    host.launch(r"C:\p\play.exe", ["x"])
+    assert launcher.launched == [(r"D:\游戏\g\game.exe", []), (r"C:\p\play.exe", ["x"])]
+    assert launcher.cwds == [r"D:\游戏\g", None]
+    with pytest.raises(PlayerError, match="工作目录"):
+        host.launch(r"C:\p\play.exe", [], cwd=3)  # type: ignore[arg-type]
+
+
+def test_plugin_settings_drops_bad_executables_only() -> None:
+    class GameSettings(BaseModel):
+        note: str = ""
+        executables: dict[str, str] = {}
+
+    class Game(PlayerPlugin):
+        id = "game_player"
+        name = "游戏"
+        file_kinds = ("game",)
+        Settings = GameSettings
+
+        def play(self, host: Any, path: str) -> None:
+            pass
+
+    values = {"note": "保留", "executables": {r"D:\g": "g.exe", r"D:\h": 3, "4": None}}
+    settings = plugin_settings(_config("game_player", values), Game())
+    assert settings.model_dump() == {"note": "保留", "executables": {r"D:\g": "g.exe"}}
+    broken = plugin_settings(_config("game_player", {"note": "x", "executables": "坏"}), Game())
+    assert broken.model_dump() == {"note": "x", "executables": {}}
 
 
 def test_system_launcher_open_default_uses_startfile(monkeypatch: pytest.MonkeyPatch) -> None:
