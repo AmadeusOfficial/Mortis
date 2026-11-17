@@ -1,8 +1,14 @@
 import json
+import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import httpx2 as httpx
+import pytest
+
+from mortis.files.trash import remove_permanently
 
 FIXTURES = Path(__file__).parent / "fixtures" / "tmdb"
 
@@ -96,6 +102,44 @@ class FakeLauncher:
         if self.fail is not None:
             raise self.fail
         self.opened.append(path)
+
+
+def make_junction(link: Path, target: Path) -> None:
+    """用 mklink /J 建目录联接，建不了就跳过这个测试。"""
+    if sys.platform != "win32":
+        pytest.skip("只有 Windows 有目录联接")
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0 or not link.exists():
+        pytest.skip("建不了目录联接")
+
+
+class FakeTrash:
+    """直接删掉临时目录里的文件，记下（路径，是否永久删除），不碰系统回收站。
+
+    fail 里的路径删除时报错。
+    """
+
+    def __init__(self, *, permanent: bool = False) -> None:
+        self.permanent = permanent
+        self.removed: list[tuple[Path, bool]] = []
+        self.fail: set[Path] = set()
+        self.before_remove: Callable[[Path], None] | None = None
+
+    def is_permanent(self, path: Path) -> bool:
+        return self.permanent
+
+    def remove(self, path: Path) -> None:
+        if self.before_remove is not None:
+            self.before_remove(path)
+        if path in self.fail:
+            raise PermissionError(f"文件正被占用：{path}")
+        remove_permanently(path)
+        self.removed.append((path, self.permanent))
 
 
 def tv_hit(tmdb_id: int, name: str, date: str, original: str | None = None) -> dict[str, Any]:

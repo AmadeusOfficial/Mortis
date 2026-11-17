@@ -28,6 +28,7 @@ from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
 from mortis.errors import UserError
+from mortis.files.trash import SystemTrash, Trash
 from mortis.organize import watch
 from mortis.plugins.launch import Launcher, SystemLauncher
 from mortis.plugins.registry import PluginRegistry, plugin_folders
@@ -61,6 +62,7 @@ def create_app(
     http_transport: httpx.BaseTransport | None = None,
     start_worker: bool = True,
     launcher: Launcher | None = None,
+    trash: Trash | None = None,
     start_automation: bool | None = None,
     watch_debounce: float = watch.DEBOUNCE_SECONDS,
     watch_retry: float = watch.RETRY_SECONDS,
@@ -95,6 +97,7 @@ def create_app(
         http_transport,
         plugins=plugins,
         launcher=launcher if launcher is not None else SystemLauncher(),
+        trash=trash if trash is not None else SystemTrash(),
     )
     runner = TaskRunner(
         session_factory,

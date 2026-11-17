@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -189,6 +191,31 @@ def test_library_arrange(app: FastAPI, client: TestClient, root: Path) -> None:
     assert client.post(f"/api/libraries/{library_id}/arrange").status_code == 202
     app.state.task_runner.run_until_idle()
     assert (root / "matrix" / "movie.nfo").is_file()
+    assert _statuses(app)["arrange_library"] == "succeeded"
+
+
+def test_library_arrange_holds_library_lock(
+    app: FastAPI, client: TestClient, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """和整理、删除条目同一把库锁；后续的单条整理只拿 catalog-write，不会互相等。"""
+    _configure(app, organize_after_scrape=False)
+    library_id, item_id = _setup(app, root)
+    _scrape(app, item_id)
+    locks = app.state.services.locks
+    original = locks.hold
+    held: list[str] = []
+
+    @contextmanager
+    def recording(key: str) -> Iterator[None]:
+        held.append(key)
+        with original(key):
+            yield
+
+    monkeypatch.setattr(locks, "hold", recording)
+    assert client.post(f"/api/libraries/{library_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+    assert f"library:{library_id}" in held
+    assert _statuses(app)["arrange"] == "succeeded"
     assert _statuses(app)["arrange_library"] == "succeeded"
 
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.db.models import Item, Library, MediaFile
+from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
 from mortis.items.identity import ExternalRef, MovieRef
@@ -169,6 +170,55 @@ class Bound(BaseModel):
     task_id: int
 
 
+class Unregistered(BaseModel):
+    """独占文件夹里会一起删的未登记文件。sample 是前几个的相对路径。"""
+
+    count: int
+    total_size: int
+    sample: list[str]
+
+
+class DeletePreview(BaseModel):
+    item_id: int
+    title: str
+    library_id: int
+    folders: list[str]
+    files: list[str]
+    """不含 folders 里已经包括的文件。"""
+    file_count: int
+    """磁盘上要删的文件总数，含文件夹里的。"""
+    total_size: int
+    permanent: bool
+    """所在盘没有回收站，会永久删除。"""
+    unregistered: Unregistered
+    reasons: list[str]
+
+
+class DeleteExpected(BaseModel):
+    """照预览原样交回来，执行时重新算出来的任一项不一样就 409。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    folders: list[str]
+    files: list[str]
+    file_count: int
+    total_size: int
+    permanent: bool
+    unregistered_count: int
+
+
+class DeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirm_title: str
+    expected: DeleteExpected
+
+
+class Deleted(BaseModel):
+    deleted: bool
+    library_id: int
+
+
 class UnmatchedFile(BaseModel):
     id: int
     library_id: int
@@ -263,6 +313,54 @@ def list_items(
 @router.get("/items/{item_id}", response_model=ItemDetail)
 def read_item(item_id: int, session: SessionDep) -> dict[str, Any]:
     return item_detail(session, get_item(session, item_id))
+
+
+@router.get("/items/{item_id}/delete-preview", response_model=DeletePreview)
+def preview_delete(item_id: int, session: SessionDep, services: ServicesDep) -> DeletePreview:
+    item = get_item(session, item_id)
+    plan = plan_delete(session, item, services.trash, _video_extensions(services))
+    return DeletePreview(
+        item_id=item.id,
+        title=item.title,
+        library_id=item.library_id,
+        folders=plan.folders,
+        files=plan.files,
+        file_count=plan.file_count,
+        total_size=plan.total_size,
+        permanent=plan.permanent,
+        unregistered=Unregistered(
+            count=plan.unregistered_count,
+            total_size=plan.unregistered_size,
+            sample=plan.unregistered_sample,
+        ),
+        reasons=plan.reasons,
+    )
+
+
+@router.delete("/items/{item_id}", response_model=Deleted)
+def remove_item(
+    item_id: int, body: DeleteRequest, session: SessionDep, services: ServicesDep
+) -> Deleted:
+    """部分文件没删掉时返回 409：已删的已从库里去掉，前端重新取预览让用户再确认一次。"""
+    item = get_item(session, item_id)
+    check_deletable(session, item)
+    if body.confirm_title.strip() != item.title.strip():
+        raise ItemError("输入的标题和条目不一致", status_code=400)
+    library_id = delete_item(
+        session,
+        item,
+        services.trash,
+        Expected(**body.expected.model_dump()),
+        video_extensions=_video_extensions(services),
+        data_dir=services.data_dir,
+        locks=services.locks,
+    )
+    return Deleted(deleted=True, library_id=library_id)
+
+
+def _video_extensions(services: Services) -> frozenset[str]:
+    config = services.config_store.load_config()
+    return frozenset(ext.lower() for ext in config.files.video_extensions)
 
 
 @router.patch("/items/{item_id}/fields", response_model=ItemDetail)

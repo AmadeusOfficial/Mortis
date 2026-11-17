@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx2 as httpx
 
 from mortis.config.store import ConfigStore
+from mortis.files.trash import SystemTrash, Trash
 from mortis.net.http import build_client
 from mortis.plugins.launch import Launcher, SystemLauncher
 from mortis.plugins.registry import PluginRegistry
@@ -37,6 +38,7 @@ class Services:
     locks: KeyedLocks = field(default_factory=KeyedLocks)
     plugins: PluginRegistry = field(default_factory=PluginRegistry)
     launcher: Launcher = field(default_factory=SystemLauncher)
+    trash: Trash = field(default_factory=SystemTrash)
 
     def http_client(self) -> httpx.Client:
         return build_client(

@@ -199,7 +199,7 @@ def arrangeable_items(session: Session, library_id: int) -> list[int]:
 
 def handle_arrange_library(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     library_id = int(payload["library_id"])
-    with ctx.session_factory() as session:
+    with ctx.services.locks.hold(f"library:{library_id}"), ctx.session_factory() as session:
         if session.get(Library, library_id) is None:
             raise TaskError("媒体库不存在，可能已被删除")
         ids = arrangeable_items(session, library_id)
