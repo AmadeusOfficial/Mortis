@@ -18,7 +18,6 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_PLUGINS = 7
 TIMEOUT = 60
 
 
@@ -100,7 +99,12 @@ def _check(base: str, expected: str, proc: subprocess.Popen[bytes], data: Path) 
     assert isinstance(plugins, list)
     broken = [f"{p['id']}：{p['error']}" for p in plugins if p.get("error")]
     assert not broken, f"插件加载失败：{broken}"
-    assert len(plugins) == EXPECTED_PLUGINS, f"插件数是 {len(plugins)}，应为 {EXPECTED_PLUGINS}"
+    top = sorted(p["id"] for p in plugins if p.get("parent") is None)
+    assert top == ["galgame", "system_player"], f"顶层插件不对：{top}"
+    galgame_sources = sorted(p["id"] for p in plugins if p.get("parent") == "galgame")
+    assert galgame_sources == ["bangumi", "cngal", "vndb", "ymgal"], (
+        f"galgame 的来源不对：{galgame_sources}"
+    )
     print(f"插件：{', '.join(p['id'] for p in plugins)}")
 
     status, body = _get(f"{base}/libraries")

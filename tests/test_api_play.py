@@ -32,25 +32,71 @@ class Broken(PlayerPlugin):
 PLUGIN = Broken()
 """
 
+FAKE = """
+import os
+
+from pydantic import BaseModel, Field
+
+from mortis.plugin_api import PlayerPlugin
+
+
+class Settings(BaseModel):
+    executable: str = Field(default="", title="播放器路径")
+
+
+class FakePlayer(PlayerPlugin):
+    id = "fake_player"
+    name = "假播放器"
+    Settings = Settings
+
+    def _found(self, host):
+        exe = host.settings.executable
+        return exe if exe and os.path.isfile(exe) else None
+
+    def unavailable_reason(self, host):
+        exe = host.settings.executable
+        if exe and not os.path.isfile(exe):
+            return f"填的路径找不到：{exe}"
+        return None
+
+    def detected_path(self, host):
+        return self._found(host)
+
+    def play(self, host, path):
+        host.launch(host.settings.executable or "play.exe", [path])
+
+
+PLUGIN = FakePlayer()
+"""
+
+
+def _plugin(data: Path, plugin_id: str, name: str, code: str) -> None:
+    folder = data / "plugins" / plugin_id
+    folder.mkdir(parents=True)
+    (folder / "plugin.toml").write_text(
+        f'id = "{plugin_id}"\nname = "{name}"\nversion = "1.0"\nkind = "player"\n',
+        encoding="utf-8",
+    )
+    (folder / "__init__.py").write_text(textwrap.dedent(code), encoding="utf-8")
+
 
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
-    folder = tmp_path / "data" / "plugins" / "broken_player"
-    folder.mkdir(parents=True)
-    (folder / "plugin.toml").write_text(
-        'id = "broken_player"\nname = "坏播放器"\nversion = "1.0"\nkind = "player"\n',
-        encoding="utf-8",
-    )
-    (folder / "__init__.py").write_text(textwrap.dedent(BROKEN), encoding="utf-8")
-    return tmp_path / "data"
+    data = tmp_path / "data"
+    _plugin(data, "broken_player", "坏播放器", BROKEN)
+    _plugin(data, "fake_player", "假播放器", FAKE)
+    return data
 
 
 @pytest.fixture
-def potplayer_exe(tmp_path: Path, data_dir: Path) -> Path:
-    exe = tmp_path / "PotPlayer" / "PotPlayerMini64.exe"
+def fake_player(data_dir: Path) -> Path:
+    """把默认播放器设成记录到 launcher.launched 的假播放器。"""
+    exe = data_dir.parent / "播放器" / "play.exe"
     exe.parent.mkdir(parents=True)
     exe.write_bytes(b"")
-    ConfigStore(data_dir).save_plugin("potplayer", values={"executable": str(exe)})
+    store = ConfigStore(data_dir)
+    store.save_plugin("fake_player", values={"executable": str(exe)})
+    store.save_section("playback", PlaybackConfig(player="fake_player"))
     return exe
 
 
@@ -60,7 +106,7 @@ def launcher() -> FakeLauncher:
 
 
 @pytest.fixture
-def app(data_dir: Path, launcher: FakeLauncher, potplayer_exe: Path) -> FastAPI:
+def app(data_dir: Path, launcher: FakeLauncher) -> FastAPI:
     return create_app(Settings(data_dir=data_dir), start_worker=False, launcher=launcher)
 
 
@@ -121,14 +167,15 @@ def movies(app: FastAPI, client: TestClient, tmp_path: Path) -> tuple[int, int]:
     return _library(client, tmp_path, "电影", "movie"), _library(client, tmp_path, "剧", "tv")
 
 
-def test_single_video_plays_with_potplayer(
+def test_single_video_plays_with_system_player(
     app: FastAPI,
     client: TestClient,
     movies: tuple[int, int],
     tmp_path: Path,
     launcher: FakeLauncher,
-    potplayer_exe: Path,
+    data_dir: Path,
 ) -> None:
+    ConfigStore(data_dir).save_section("playback", PlaybackConfig(player="system_player"))
     library, _ = movies
     movie = _item(app, library, "movie", "work")
     video = tmp_path / "电影" / "黑客帝国 (1999)" / "m.mkv"
@@ -137,13 +184,13 @@ def test_single_video_plays_with_potplayer(
     response = client.post(f"/api/items/{movie}/play")
     assert response.status_code == 200, response.text
     assert response.json() == {
-        "player": "potplayer",
-        "player_name": "PotPlayer",
+        "player": "system_player",
+        "player_name": "系统默认播放器",
         "file_id": file_id,
         "path": str(video),
     }
-    assert launcher.launched == [(str(potplayer_exe), [str(video)])]
-    assert launcher.opened == []
+    assert launcher.opened == [str(video)]
+    assert launcher.launched == []
 
 
 def test_multiple_versions_return_candidates(
@@ -152,6 +199,7 @@ def test_multiple_versions_return_candidates(
     movies: tuple[int, int],
     tmp_path: Path,
     launcher: FakeLauncher,
+    fake_player: Path,
 ) -> None:
     library, _ = movies
     movie = _item(app, library, "movie", "work")
@@ -192,6 +240,7 @@ def test_missing_file_is_404(
     movies: tuple[int, int],
     tmp_path: Path,
     launcher: FakeLauncher,
+    fake_player: Path,
 ) -> None:
     library, _ = movies
     movie = _item(app, library, "movie", "work")
@@ -214,6 +263,7 @@ def test_show_season_and_collection_cannot_play(
     movies: tuple[int, int],
     tmp_path: Path,
     launcher: FakeLauncher,
+    fake_player: Path,
 ) -> None:
     library, tv = movies
     show = _item(app, tv, "tv", "work")
@@ -253,6 +303,7 @@ def test_system_player_and_plugin_errors(
     _video(app, library, movie, video)
     store = ConfigStore(data_dir)
 
+    assert client.get("/api/settings").json()["playback"] == {"player": ""}
     saved = client.put("/api/settings/playback", json={"player": "system_player"})
     assert saved.status_code == 200 and saved.json()["playback"] == {"player": "system_player"}
     response = client.post(f"/api/items/{movie}/play")
@@ -270,13 +321,11 @@ def test_system_player_and_plugin_errors(
     assert response.status_code == 502
     assert response.json()["detail"] == "坏播放器 出错：RuntimeError: 炸了"
 
-    store.save_section("playback", PlaybackConfig(player="potplayer"))
+    store.save_section("playback", PlaybackConfig(player="fake_player"))
     launcher.fail = PermissionError(13, "拒绝访问。")
     response = client.post(f"/api/items/{movie}/play")
     assert response.status_code == 502
-    assert (
-        response.json()["detail"] == "PotPlayer 没能打开：启动 PotPlayerMini64.exe 失败：拒绝访问。"
-    )
+    assert response.json()["detail"] == "假播放器 没能打开：启动 play.exe 失败：拒绝访问。"
 
 
 def test_unavailable_or_unknown_player(
@@ -292,10 +341,11 @@ def test_unavailable_or_unknown_player(
     _video(app, library, movie, tmp_path / "电影" / "m.mkv")
     store = ConfigStore(data_dir)
 
-    store.save_plugin("potplayer", values={"executable": str(tmp_path / "没有.exe")})
+    store.save_plugin("fake_player", values={"executable": str(tmp_path / "没有.exe")})
+    store.save_section("playback", PlaybackConfig(player="fake_player"))
     response = client.post(f"/api/items/{movie}/play")
     assert response.status_code == 503
-    assert response.json()["detail"] == f"PotPlayer 不可用：填的路径找不到：{tmp_path / '没有.exe'}"
+    assert response.json()["detail"] == f"假播放器 不可用：填的路径找不到：{tmp_path / '没有.exe'}"
 
     store.save_section("playback", PlaybackConfig(player="vlc"))
     response = client.post(f"/api/items/{movie}/play")
@@ -315,28 +365,28 @@ def test_unavailable_or_unknown_player(
 
 
 def test_plugins_list_shows_player_status(
-    client: TestClient, potplayer_exe: Path, tmp_path: Path
+    client: TestClient, fake_player: Path, tmp_path: Path
 ) -> None:
     plugins = {plugin["id"]: plugin for plugin in client.get("/api/plugins").json()}
-    pot = plugins["potplayer"]
-    assert pot["kind"] == "player"
-    assert pot["available"] is True and pot["notice"] is None
-    assert pot["detected_path"] == str(potplayer_exe)
-    assert pot["settings"] == {"executable": str(potplayer_exe)}
-    assert pot["settings_schema"]["properties"]["executable"]["title"] == "播放器路径"
+    fake = plugins["fake_player"]
+    assert fake["kind"] == "player"
+    assert fake["available"] is True and fake["notice"] is None
+    assert fake["detected_path"] == str(fake_player)
+    assert fake["settings"] == {"executable": str(fake_player)}
+    assert fake["settings_schema"]["properties"]["executable"]["title"] == "播放器路径"
     assert plugins["system_player"]["available"] is True
     assert plugins["vndb"]["available"] is None
 
     saved = client.put(
-        "/api/plugins/potplayer", json={"settings": {"executable": str(tmp_path / "x.exe")}}
+        "/api/plugins/fake_player", json={"settings": {"executable": str(tmp_path / "x.exe")}}
     ).json()
     assert saved["available"] is False
     assert saved["notice"] == f"填的路径找不到：{tmp_path / 'x.exe'}"
     assert saved["detected_path"] is None
-    rejected = client.put("/api/plugins/potplayer", json={"secrets": {"a": "b"}})
+    rejected = client.put("/api/plugins/fake_player", json={"secrets": {"a": "b"}})
     assert rejected.status_code == 422
     assert rejected.json()["detail"] == "这个插件没有密钥"
 
-    assert client.get("/api/settings").json()["playback"] == {"player": "potplayer"}
+    assert client.get("/api/settings").json()["playback"] == {"player": "fake_player"}
     bad = client.put("/api/settings/playback", json={"player": "Bad Id"})
     assert bad.status_code == 422

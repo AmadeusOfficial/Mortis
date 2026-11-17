@@ -198,6 +198,13 @@ def migrate_config(raw: dict[str, Any]) -> dict[str, Any] | None:
             if name not in unique:
                 unique.append(name)
         migrated["plugins"] = {"disabled": unique}
+
+    playback = migrated.get("playback")
+    if isinstance(playback, dict) and playback.get("player") == "potplayer":
+        # 旧默认播放器是 PotPlayer，现在改成空（自动选第一个可用的播放插件）。
+        playback = dict(playback)
+        playback["player"] = ""
+        migrated["playback"] = playback
     return migrated
 
 
@@ -240,6 +247,10 @@ def migrate_secrets(raw: dict[str, Any]) -> dict[str, Any] | None:
 
 def _config_is_old(raw: dict[str, Any]) -> bool:
     if any(key in raw for key in (*OLD_TYPE_SECTIONS, "disabled_plugins")):
+        return True
+    playback = raw.get("playback")
+    if isinstance(playback, dict) and playback.get("player") == "potplayer":
+        # 旧默认播放器 PotPlayer 要迁移成空。
         return True
     plugins = raw.get("plugins")
     # 新结构的 [plugins] 只有 disabled 一项，其余键都是旧版按插件 id 分的节。

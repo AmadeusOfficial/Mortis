@@ -418,6 +418,19 @@ def test_new_keys_win_over_old(tmp_path: Path) -> None:
     assert "tmdb_api_key" not in raw and raw["sources"]["tmdb"]["api_key"] == "new"
 
 
+def test_playback_potplayer_migrates_to_default(tmp_path: Path) -> None:
+    store = ConfigStore(tmp_path)
+    store.config_path.write_text('[playback]\nplayer = "potplayer"\n', encoding="utf-8")
+
+    assert store.load_config().playback.player == ""
+
+    assert (tmp_path / "config.toml.bak").read_text(encoding="utf-8") == (
+        '[playback]\nplayer = "potplayer"\n'
+    )
+    raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
+    assert raw["playback"] == {"player": ""}
+
+
 def test_migration_does_not_leak_secrets_in_errors(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path)
     store.secrets_path.write_text(

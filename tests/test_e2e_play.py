@@ -18,13 +18,16 @@ from tests.fakes import FakeLauncher
 pytestmark = pytest.mark.e2e
 
 FAKE_PLAYER = """
-from pydantic import BaseModel
+import os
+
+from pydantic import BaseModel, Field
 
 from mortis.plugin_api import PlayerPlugin
 
 
 class Settings(BaseModel):
     record: str = ""
+    executable: str = Field(default="", title="播放器路径")
 
 
 class FakePlayer(PlayerPlugin):
@@ -33,7 +36,16 @@ class FakePlayer(PlayerPlugin):
     Settings = Settings
 
     def unavailable_reason(self, host):
-        return None if host.settings.record else "没设记录文件"
+        exe = host.settings.executable
+        if exe and not os.path.isfile(exe):
+            return f"填的路径找不到：{exe}"
+        if not host.settings.record:
+            return "没设记录文件"
+        return None
+
+    def detected_path(self, host):
+        exe = host.settings.executable
+        return exe if exe and os.path.isfile(exe) else None
 
     def play(self, host, path):
         with open(host.settings.record, "a", encoding="utf-8") as handle:
@@ -115,12 +127,11 @@ def world(tmp_path: Path) -> Iterator[tuple[World, str]]:
     )
     (plugin / "__init__.py").write_text(textwrap.dedent(FAKE_PLAYER), encoding="utf-8")
     record = tmp_path / "played.txt"
+    exe = tmp_path / "播放器" / "play.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"")
     store = ConfigStore(data_dir)
-    store.save_plugin("fake_player", values={"record": str(record)})
-    potplayer = tmp_path / "PotPlayer" / "PotPlayerMini64.exe"
-    potplayer.parent.mkdir()
-    potplayer.write_bytes(b"")
-    store.save_plugin("potplayer", values={"executable": str(potplayer)})
+    store.save_plugin("fake_player", values={"record": str(record), "executable": str(exe)})
     store.save_section("playback", PlaybackConfig(player="fake_player"))
     app = create_app(
         Settings(data_dir=data_dir, web_dist=WEB_DIST), start_worker=False, launcher=FakeLauncher()
@@ -213,19 +224,19 @@ def test_playback_settings(page: Page, world: tuple[World, str], tmp_path: Path)
     page.goto(f"{url}/settings?section=playback")
     expect(page.get_by_role("heading", name="播放", exact=True)).to_be_visible()
     expect(page.get_by_label("默认播放器")).to_have_value("假播放器")
-    expect(page.get_by_role("heading", name="PotPlayer", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="假播放器", exact=True)).to_be_visible()
     expect(page.get_by_role("heading", name="系统默认播放器", exact=True)).to_be_visible()
-    exe = tmp_path / "PotPlayer" / "PotPlayerMini64.exe"
-    expect(page.get_by_label("PotPlayer 会启动的程序")).to_have_text(str(exe))
+    exe = tmp_path / "播放器" / "play.exe"
+    expect(page.get_by_label("假播放器 会启动的程序")).to_have_text(str(exe))
 
-    missing = tmp_path / "没有" / "PotPlayerMini64.exe"
+    missing = tmp_path / "没有" / "play.exe"
     page.get_by_label("播放器路径").fill(str(missing))
-    page.get_by_role("button", name="保存 PotPlayer 设置").click()
+    page.get_by_role("button", name="保存 假播放器 设置").click()
     expect(page.get_by_text(f"填的路径找不到：{missing}").first).to_be_visible()
-    expect(page.get_by_label("PotPlayer 会启动的程序")).to_have_count(0)
+    expect(page.get_by_label("假播放器 会启动的程序")).to_have_count(0)
 
     page.get_by_label("默认播放器").click()
-    page.get_by_role("option", name="系统默认播放器").click()
+    page.get_by_role("option", name="系统默认播放器", exact=True).click()
     page.get_by_role("button", name="保存播放设置").click()
     expect(page.get_by_text("播放设置已保存")).to_be_visible()
     page.reload()

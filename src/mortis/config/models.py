@@ -471,7 +471,7 @@ class PluginsConfig(BaseModel):
 class PlaybackConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    player: str = Field(default="potplayer", pattern=r"^([a-z][a-z0-9_]*)?$")
+    player: str = Field(default="", pattern=r"^([a-z][a-z0-9_]*)?$")
     """播放插件 id；空字符串表示用第一个可用的播放插件。"""
 
 

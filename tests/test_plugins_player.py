@@ -180,74 +180,8 @@ def test_system_launcher_open_default_uses_startfile(monkeypatch: pytest.MonkeyP
     assert opened == [r"D:\电影\m.mkv"]
 
 
-@pytest.fixture
-def potplayer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
-    module = _bundled("potplayer")
-    for variable in module.PROGRAM_FILES_VARS:
-        monkeypatch.setenv(variable, str(tmp_path / "nowhere" / variable))
-    monkeypatch.setattr(module, "registry_candidates", lambda: [])
-    return module
-
-
 def _host(plugin: PlayerPlugin, values: dict[str, Any], launcher: FakeLauncher) -> PluginPlayerHost:
     return PluginPlayerHost(plugin, launcher, _config(plugin.id, values), lambda _m: None)
-
-
-def test_potplayer_not_found(potplayer: ModuleType) -> None:
-    plugin = potplayer.PLUGIN
-    host = _host(plugin, {}, FakeLauncher())
-    assert not plugin.available(host)
-    assert plugin.unavailable_reason(host) == "没找到 PotPlayer，在设置里填路径"
-    assert plugin.detected_path(host) is None
-    with pytest.raises(PlayerError, match="没找到 PotPlayer"):
-        plugin.play(host, r"D:\m.mkv")
-
-
-def test_potplayer_found_in_program_files(
-    potplayer: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    program_files = tmp_path / "Program Files"
-    exe = program_files / "DAUM" / "PotPlayer" / "PotPlayerMini64.exe"
-    exe.parent.mkdir(parents=True)
-    exe.write_bytes(b"")
-    monkeypatch.setenv("ProgramFiles", str(program_files))
-    plugin = potplayer.PLUGIN
-    launcher = FakeLauncher()
-    host = _host(plugin, {}, launcher)
-    assert plugin.available(host)
-    assert plugin.detected_path(host) == str(exe)
-    plugin.play(host, r"D:\电影\m.mkv")
-    assert launcher.launched == [(str(exe), [r"D:\电影\m.mkv"])]
-
-
-def test_potplayer_found_in_registry(
-    potplayer: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    exe = tmp_path / "自定义" / "PotPlayerMini64.exe"
-    exe.parent.mkdir(parents=True)
-    exe.write_bytes(b"")
-    monkeypatch.setattr(potplayer, "registry_candidates", lambda: [exe])
-    host = _host(potplayer.PLUGIN, {}, FakeLauncher())
-    assert potplayer.PLUGIN.detected_path(host) == str(exe)
-
-
-def test_potplayer_configured_path_wins(
-    potplayer: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    installed = tmp_path / "Program Files" / "DAUM" / "PotPlayer" / "PotPlayerMini64.exe"
-    installed.parent.mkdir(parents=True)
-    installed.write_bytes(b"")
-    monkeypatch.setenv("ProgramFiles", str(tmp_path / "Program Files"))
-    mine = tmp_path / "绿色版" / "PotPlayerMini64.exe"
-    mine.parent.mkdir(parents=True)
-    mine.write_bytes(b"")
-    plugin = potplayer.PLUGIN
-    launcher = FakeLauncher()
-    plugin.play(_host(plugin, {"executable": f'"{mine}"'}, launcher), "a.mkv")
-    assert launcher.launched == [(str(mine), ["a.mkv"])]
-
-    missing = _host(plugin, {"executable": str(tmp_path / "没有.exe")}, launcher)
-    assert plugin.unavailable_reason(missing) == f"填的路径找不到：{tmp_path / '没有.exe'}"
 
 
 def test_system_player_opens_with_default_program() -> None:
@@ -263,12 +197,11 @@ def test_system_player_opens_with_default_program() -> None:
 def test_bundled_players_pass_import_check() -> None:
     registry = PluginRegistry([(BUNDLED, "builtin")])
     registry.load()
-    for plugin_id in ("potplayer", "system_player"):
-        info = registry.get(plugin_id)
-        assert info is not None and info.kind == "player", plugin_id
-        assert info.error is None, info.error
-        assert isinstance(info.plugin, PlayerPlugin)
-        assert issubclass(info.plugin.Settings, BaseModel)
+    info = registry.get("system_player")
+    assert info is not None and info.kind == "player"
+    assert info.error is None, info.error
+    assert isinstance(info.plugin, PlayerPlugin)
+    assert issubclass(info.plugin.Settings, BaseModel)
 
 
 def test_unknown_kind_message(tmp_path: Path) -> None:

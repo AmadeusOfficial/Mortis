@@ -24,7 +24,7 @@ Get-ChildItem (Join-Path $App "plugins") -Recurse -Directory -Filter "__pycache_
     Remove-Item -Recurse -Force
 Copy-Item (Join-Path $Root "LICENSE") $App
 
-foreach ($path in "Mortis.exe", "onedir\Mortis.Server.exe", "web\dist\index.html", "plugins\potplayer\plugin.toml") {
+foreach ($path in "Mortis.exe", "onedir\Mortis.Server.exe", "web\dist\index.html", "plugins\system_player\plugin.toml") {
     if (-not (Test-Path (Join-Path $App $path))) { throw "组装后缺 $path" }
 }
 
