@@ -14,9 +14,12 @@ MANIFEST = "plugin.toml"
 PACKAGE = "mortis_plugins"
 ALLOWED_PACKAGES = frozenset({"pydantic"})
 ALLOWED_MORTIS = "mortis.plugin_api"
+DENIED_STDLIB = frozenset({"subprocess"})
+"""启动程序只能经宿主的 launch，插件不自己开进程。"""
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 
-Kind = Literal["data_type", "source"]
+Kind = Literal["data_type", "source", "player"]
+KINDS: tuple[Kind, ...] = ("data_type", "source", "player")
 
 
 class PluginLoadError(Exception):
@@ -43,8 +46,8 @@ def read_manifest(folder: Path) -> Manifest:
     plugin_id = str(data["id"])
     if not _ID.fullmatch(plugin_id):
         raise PluginLoadError(f"插件 id「{plugin_id}」只能用小写字母、数字和下划线")
-    if data["kind"] not in ("data_type", "source"):
-        raise PluginLoadError(f"插件种类只能是 data_type 或 source，不是「{data['kind']}」")
+    if data["kind"] not in KINDS:
+        raise PluginLoadError(f"插件种类只能是 data_type、source 或 player，不是「{data['kind']}」")
     return Manifest(plugin_id, str(data["name"]), str(data["version"]), data["kind"], folder)
 
 
@@ -52,6 +55,8 @@ def _allowed(module: str) -> bool:
     top = module.split(".")[0]
     if top == "mortis":
         return module == ALLOWED_MORTIS
+    if top in DENIED_STDLIB:
+        return False
     return top in sys.stdlib_module_names or top in ALLOWED_PACKAGES
 
 

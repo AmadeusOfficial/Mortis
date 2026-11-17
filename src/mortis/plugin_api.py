@@ -8,6 +8,9 @@
   `external_id` 是这个来源里的人物编号，宿主按「来源 + 编号」认人。
 - images：`{"url", "language", "width", "height"}` 的列表，排第一的会被选用。
 - rating：`{"source", "rating", "max_rating", "vote_count"}` 的列表。
+
+播放插件只调用本机播放器打开本地文件，经 `PlayerHost.launch` 或 `open_default` 启动，
+不自己 import subprocess，不转码，也不向浏览器输出视频。
 """
 
 from abc import ABC, abstractmethod
@@ -28,6 +31,9 @@ __all__ = [
     "NoSecrets",
     "NoSettings",
     "OAuth",
+    "PlayerError",
+    "PlayerHost",
+    "PlayerPlugin",
     "SourceAuthError",
     "SourceError",
     "SourcePlugin",
@@ -44,6 +50,14 @@ class SourceError(Exception):
 
 class SourceAuthError(SourceError):
     """来源拒绝了令牌或密钥。"""
+
+
+class PlayerError(Exception):
+    """播放器没能打开文件。消息给用户看。"""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class NoSettings(BaseModel):
@@ -170,3 +184,42 @@ class SourcePlugin(ABC):
 
     @abstractmethod
     def candidates(self, raw: dict[str, Any]) -> dict[str, Any]: ...
+
+
+class PlayerHost(Protocol):
+    """宿主给播放插件的能力：读设置、启动本机程序。"""
+
+    settings: BaseModel
+
+    def launch(self, executable: str, args: list[str]) -> None:
+        """不经 shell 启动程序，不等它结束，也不接管它的输出。失败时抛 PlayerError。"""
+        ...
+
+    def open_default(self, path: str) -> None:
+        """用系统给这种文件设的默认程序打开。失败时抛 PlayerError。"""
+        ...
+
+    def log(self, message: str) -> None: ...
+
+
+class PlayerPlugin(ABC):
+    """播放插件：用本机播放器打开一个本地视频文件。"""
+
+    id: ClassVar[str]
+    name: ClassVar[str]
+    Settings: ClassVar[type[BaseModel]] = NoSettings
+
+    def available(self, host: PlayerHost) -> bool:
+        return self.unavailable_reason(host) is None
+
+    def unavailable_reason(self, host: PlayerHost) -> str | None:
+        """不可用时给用户看的原因，比如「没找到播放器」。"""
+        return None
+
+    def detected_path(self, host: PlayerHost) -> str | None:
+        """实际会启动的程序路径，设置页显示；不适用时返回 None。"""
+        return None
+
+    @abstractmethod
+    def play(self, host: PlayerHost, path: str) -> None:
+        """打开 path。宿主已确认文件存在。失败时抛 PlayerError。"""

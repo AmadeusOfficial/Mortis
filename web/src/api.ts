@@ -1,10 +1,13 @@
 export class ApiError extends Error {
   readonly status: number;
+  // 后端返回的整份 JSON，409 候选这类带额外内容的错误要用。
+  readonly data: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, data: unknown = undefined) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -51,7 +54,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     }
   }
   if (!response.ok) {
-    throw new ApiError(errorMessage(data, response.status), response.status);
+    throw new ApiError(errorMessage(data, response.status), response.status, data);
   }
   return data as T;
 }
@@ -199,10 +202,12 @@ export interface AppConfig {
   // 每个来源或插件自己的设置，按插件 id 分节。
   sources: Record<string, Record<string, unknown>>;
   plugins: { disabled: string[] };
+  // 默认播放插件的 id；空字符串表示用第一个可用的。
+  playback: { player: string };
 }
 
-// 只有这三节是通用的；每种数据类型的设置在 types 下，用 saveTypeSettings 存。
-export type SettingsSection = "network" | "files" | "tasks";
+// 这几节是通用的；每种数据类型的设置在 types 下，用 saveTypeSettings 存。
+export type SettingsSection = "network" | "files" | "tasks" | "playback";
 
 export function isBuiltinSection(
   value: TypeSection,
@@ -257,7 +262,7 @@ export interface PluginInfo {
   id: string;
   name: string;
   version: string;
-  kind: "data_type" | "source";
+  kind: "data_type" | "source" | "player";
   origin: "builtin" | "user";
   enabled: boolean;
   error: string | null;
@@ -276,6 +281,9 @@ export interface PluginInfo {
   // Unix 秒
   expires_at: number | null;
   notice: string | null;
+  // 只有播放插件有：能不能用，以及实际会启动的程序路径。
+  available: boolean | null;
+  detected_path: string | null;
 }
 
 export interface PluginAccount {
@@ -490,6 +498,8 @@ export interface EpisodeInfo {
   title: string;
   air_date: string | null;
   has_file: boolean;
+  // 视频绑在这一集上，可以直接播放；连播两集共用文件时只有绑定的那集是 true。
+  playable: boolean;
   still_url: string | null;
 }
 
@@ -698,6 +708,36 @@ export const rematchItemToSource = (id: number, source: string, externalId: stri
 // 给插件类型的条目补一个来源，主编号不变。
 export const addItemSource = (id: number, source: string, externalId: string) =>
   request<Enqueued>("POST", `/api/items/${id}/sources`, { source, external_id: externalId });
+export interface PlayCandidate {
+  file_id: number;
+  path: string;
+  name: string;
+  size: number | null;
+  exists: boolean;
+}
+
+export interface PlayResult {
+  player: string;
+  player_name: string;
+  file_id: number;
+  path: string;
+}
+
+export const playItem = (id: number, fileId: number | null = null) =>
+  request<PlayResult>("POST", `/api/items/${id}/play`, fileId === null ? {} : { file_id: fileId });
+
+// 多个视频时后端回 409 和候选，不替人选；其他错误返回 null。
+export function playCandidates(error: unknown): PlayCandidate[] | null {
+  if (!(error instanceof ApiError) || error.status !== 409) {
+    return null;
+  }
+  const data = error.data;
+  if (typeof data === "object" && data !== null && "candidates" in data && Array.isArray(data.candidates)) {
+    return data.candidates as PlayCandidate[];
+  }
+  return null;
+}
+
 export const fetchItemArrangePreview = (id: number) =>
   request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
 export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);

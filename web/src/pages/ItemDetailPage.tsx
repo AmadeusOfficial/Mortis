@@ -25,6 +25,7 @@ import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { FieldActions } from "../components/detail/FieldActions";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
+import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonList } from "../components/SeasonList";
 import { SourceSearchModal } from "../components/SourceSearchModal";
@@ -41,6 +42,7 @@ import {
   IconInfo,
   IconLink,
   IconOrganize,
+  IconPlay,
   IconRefresh,
   IconScrape,
   IconStar,
@@ -151,6 +153,7 @@ export function ItemDetailPage() {
         : { color: "red", title: `${task.type_label}失败`, message: task.error ?? "任务没有完成" },
     );
   });
+  const player = usePlayItem();
   const scrape = useMutation({
     mutationFn: () => scrapeItem(id, true),
     onSuccess: ({ task_id }) => watcher.watch(task_id),
@@ -258,6 +261,10 @@ export function ItemDetailPage() {
   // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
   const isWork = detail.kind === "work";
   const canArrange = isWork && hasVideo && detail.scraped_at !== null;
+  // 剧、季和系列不能直接播放；电影、集和单条目有视频文件才显示。
+  const canPlay =
+    (detail.kind === "episode" || (isWork && !series)) &&
+    detail.files.some((file) => file.file_kind === "video");
   const landscape = detail.kind === "episode";
 
   const peopleFields = allFields.filter((field) => field.value_type === "people");
@@ -364,28 +371,42 @@ export function ItemDetailPage() {
           )}
           {metaPills.length > 0 && <div className={classes.meta}>{metaPills}</div>}
           {tagline !== null && <div className={classes.tagline}>「{tagline}」</div>}
-          {isWork && (
+          {(isWork || canPlay) && (
             <div className={classes.actions}>
-              <Button
-                leftSection={<IconScrape size={16} />}
-                loading={busy && !arranging}
-                disabled={busy}
-                onClick={() => scrape.mutate()}
-              >
-                刮削
-              </Button>
-              <Button
-                variant="default"
-                leftSection={<IconRefresh size={16} />}
-                disabled={busy}
-                onClick={() => {
-                  rematch.reset();
-                  setRematching(true);
-                }}
-              >
-                重新匹配
-              </Button>
-              {pluginType && (
+              {canPlay && (
+                <Button
+                  leftSection={<IconPlay size={16} />}
+                  loading={player.playingId === detail.id}
+                  onClick={() => player.play(detail.id, detail.title)}
+                >
+                  播放
+                </Button>
+              )}
+              {isWork && (
+                <Button
+                  variant={canPlay ? "default" : "filled"}
+                  leftSection={<IconScrape size={16} />}
+                  loading={busy && !arranging}
+                  disabled={busy}
+                  onClick={() => scrape.mutate()}
+                >
+                  刮削
+                </Button>
+              )}
+              {isWork && (
+                <Button
+                  variant="default"
+                  leftSection={<IconRefresh size={16} />}
+                  disabled={busy}
+                  onClick={() => {
+                    rematch.reset();
+                    setRematching(true);
+                  }}
+                >
+                  重新匹配
+                </Button>
+              )}
+              {isWork && pluginType && (
                 <Button
                   variant="default"
                   leftSection={<IconLink size={16} />}
@@ -529,7 +550,7 @@ export function ItemDetailPage() {
       {detail.seasons.length > 0 && (
         <div className={classes.section}>
           {sectionHead("季和集", <small>{detail.seasons.length} 季</small>)}
-          <SeasonList seasons={detail.seasons} />
+          <SeasonList seasons={detail.seasons} onPlay={player.play} playingId={player.playingId} />
         </div>
       )}
       {mainCast !== undefined && !isEmpty(mainCast.value) && (
@@ -655,6 +676,7 @@ export function ItemDetailPage() {
         <IconBack size={14} /> {detail.library_name}
       </Link>
       {hero}
+      {player.chooser}
       <div className={classes.body}>
         <Tabs value={tab} onChange={setTab} keepMounted={false}>
           <Tabs.List mb="lg">

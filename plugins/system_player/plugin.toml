@@ -1,0 +1,4 @@
+id = "system_player"
+name = "系统默认播放器"
+version = "0.1.0"
+kind = "player"

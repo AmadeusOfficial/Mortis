@@ -8,9 +8,10 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from mortis.api.deps import ServicesDep
 from mortis.config.models import validation_problems
 from mortis.errors import UserError
-from mortis.plugin_api import Account, SourceAuthError, SourceError, SourcePlugin
+from mortis.plugin_api import Account, PlayerPlugin, SourceAuthError, SourceError, SourcePlugin
 from mortis.plugins.host import PluginHost, open_host, plugin_secrets, plugin_settings
 from mortis.plugins.oauth import OAuthStates, authorize_url, client_values, exchange_code
+from mortis.plugins.player import player_host, unavailable_reason
 from mortis.plugins.registry import PluginInfo
 from mortis.services import Services
 
@@ -41,6 +42,9 @@ class PluginOut(BaseModel):
     logged_in: bool = False
     expires_at: int | None = None
     notice: str | None = None
+    # 只有播放插件有：能不能用，以及实际会启动的程序路径。
+    available: bool | None = None
+    detected_path: str | None = None
 
 
 class AccountOut(BaseModel):
@@ -71,6 +75,8 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
         error=info.error,
     )
     plugin = info.plugin
+    if isinstance(plugin, PlayerPlugin):
+        return _player_out(services, plugin, out)
     if not isinstance(plugin, SourcePlugin):
         return out
     store = services.config_store
@@ -96,6 +102,19 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
     with services.http_client() as client:
         host = PluginHost(plugin, client, store, lambda _message: None)
         out.notice = plugin.disabled_reason(host)
+    return out
+
+
+def _player_out(services: Services, plugin: PlayerPlugin, out: PluginOut) -> PluginOut:
+    host = player_host(plugin, services.launcher, services.config_store)
+    out.settings_schema = plugin.Settings.model_json_schema()
+    out.settings = host.settings.model_dump(mode="json")
+    out.notice = unavailable_reason(plugin, host)
+    out.available = out.notice is None
+    try:
+        out.detected_path = plugin.detected_path(host)
+    except Exception:
+        out.detected_path = None
     return out
 
 
@@ -133,12 +152,12 @@ def update_plugin(
         raise UserError("插件不存在", status_code=404)
     store = services.config_store
     plugin = info.plugin
-    if (update.settings is not None or update.secrets is not None) and not isinstance(
-        plugin, SourcePlugin
-    ):
+    if update.settings is not None and not isinstance(plugin, SourcePlugin | PlayerPlugin):
         raise UserError("这个插件没有可改的设置")
+    if update.secrets is not None and not isinstance(plugin, SourcePlugin):
+        raise UserError("这个插件没有密钥")
     if update.settings is not None:
-        assert isinstance(plugin, SourcePlugin)
+        assert isinstance(plugin, SourcePlugin | PlayerPlugin)
         try:
             values = plugin.Settings.model_validate(update.settings).model_dump(mode="json")
         except ValidationError as error:

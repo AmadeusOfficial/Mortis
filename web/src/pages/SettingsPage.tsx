@@ -11,7 +11,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
-import { type DataType, checkTmdb, fetchPlugins, fetchSecretsStatus } from "../api";
+import { type DataType, checkTmdb, fetchPlugins, fetchSecretsStatus, fetchSettings } from "../api";
 import type { LoginResult } from "../components/PluginsSection";
 import { PluginsSection, SourcePluginSettings } from "../components/PluginsSection";
 import {
@@ -28,6 +28,7 @@ import {
   isBuiltinSourceSection,
   useBuiltinSources,
 } from "../components/settings/BuiltinSources";
+import { PlaybackSection } from "../components/settings/PlaybackSection";
 import { SettingCard } from "../components/settings/SettingLayout";
 import { TypeSettings } from "../components/settings/TypeSettings";
 import { PageHeader, Pill } from "../components/ui";
@@ -54,6 +55,7 @@ export function SettingsPage() {
   const dataTypes = useDataTypes();
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
   const secrets = useQuery({ queryKey: ["secrets"], queryFn: fetchSecretsStatus });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const builtinSources = useBuiltinSources();
   const [searchParams, setSearchParams] = useSearchParams();
   const narrow = useMediaQuery("(max-width: 62em)");
@@ -91,6 +93,17 @@ export function SettingsPage() {
       { replace: true },
     );
   }, [loginPlugin, hasSection, setSearchParams]);
+
+  const players = (plugins.data ?? []).filter(
+    (plugin) => plugin.kind === "player" && plugin.enabled && plugin.available === true,
+  );
+  const chosenPlayer = settings.data?.playback.player;
+  const playbackReady =
+    plugins.data === undefined || chosenPlayer === undefined
+      ? undefined
+      : chosenPlayer === ""
+        ? players.length > 0
+        : players.some((plugin) => plugin.id === chosenPlayer);
 
   const groups: GroupDef[] = [
     {
@@ -131,6 +144,10 @@ export function SettingsPage() {
           })),
       ],
     },
+    {
+      group: "播放",
+      entries: [{ key: "playback", label: "播放器", available: playbackReady }],
+    },
     { group: "插件", entries: [{ key: "plugins", label: "插件管理" }] },
   ];
 
@@ -138,7 +155,10 @@ export function SettingsPage() {
   const requested = searchParams.get("section");
   // 分区名可能是插件或类型列表还没读到时给的，形状对就先按它渲染，免得先闪一下默认页。
   const knownShape = (key: string): boolean =>
-    keys.includes(key) || key === "plugins" || /^(general|type|source)\.[A-Za-z0-9_-]+$/.test(key);
+    keys.includes(key) ||
+    key === "plugins" ||
+    key === "playback" ||
+    /^(general|type|source)\.[A-Za-z0-9_-]+$/.test(key);
   // 登录跳回来时先落到那个插件的来源页。
   const loginSection = loginPlugin === null ? null : `source.${loginPlugin}`;
   const current =
@@ -242,6 +262,9 @@ function Section({
   }
   if (current === "plugins") {
     return <PluginsSection />;
+  }
+  if (current === "playback") {
+    return <PlaybackSection />;
   }
   if (current === "source.tmdb") {
     return <TmdbSection />;

@@ -39,6 +39,7 @@ import { Pill } from "./ui";
 const KIND_LABELS: Record<PluginInfo["kind"], string> = {
   data_type: "数据类型",
   source: "来源",
+  player: "播放",
 };
 
 const ORIGIN_LABELS: Record<PluginInfo["origin"], string> = {
@@ -136,7 +137,7 @@ export function PluginsSection() {
   return (
     <SettingCard
       title="插件"
-      description="插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里。"
+      description="插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里，播放插件的设置在「播放」里。"
       actions={
         <Button
           variant="default"
@@ -195,8 +196,13 @@ export function PluginsSection() {
               )}
             </Stack>
             <Group gap="md" wrap="nowrap" style={{ flexShrink: 0 }}>
-              {plugin.kind === "source" && (
-                <Anchor component={Link} to={`/settings?section=source.${plugin.id}`} size="sm" fw={600}>
+              {(plugin.kind === "source" || plugin.kind === "player") && (
+                <Anchor
+                  component={Link}
+                  to={plugin.kind === "player" ? "/settings?section=playback" : `/settings?section=source.${plugin.id}`}
+                  size="sm"
+                  fw={600}
+                >
                   去设置
                 </Anchor>
               )}
@@ -390,7 +396,17 @@ function PluginSchemaField({
   );
 }
 
-function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
+export function PluginSettingsForm({
+  plugin,
+  onChanged,
+  title = "设置",
+  saveLabel = "保存设置",
+}: {
+  plugin: PluginInfo;
+  onChanged: () => void;
+  title?: string;
+  saveLabel?: string;
+}) {
   const [draft, setDraft] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(
       schemaEntries(plugin.settings_schema).map(([key, property]) => [
@@ -409,7 +425,7 @@ function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChang
   const entries = schemaEntries(plugin.settings_schema);
   if (entries.length === 0) {
     return (
-      <SettingCard title="设置">
+      <SettingCard title={title}>
         <div className={styles.cardBody}>
           <Text size="sm" c="var(--mo-dim)">
             {plugin.name} 没有可改的设置。
@@ -421,7 +437,7 @@ function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChang
   const set = (key: string, value: unknown) => setDraft({ ...draft, [key]: value });
 
   return (
-    <SettingCard title="设置" description={`配置 ${plugin.name} 的运行参数`}>
+    <SettingCard title={title} description={`配置 ${plugin.name} 的运行参数`}>
       <div className={styles.fieldList}>
         {entries.map(([key, property]) => (
           <PluginSchemaField
@@ -442,7 +458,7 @@ function PluginSettingsForm({ plugin, onChanged }: { plugin: PluginInfo; onChang
           )}
           <Group>
             <Button variant="filled" loading={save.isPending} onClick={() => save.mutate(draft)}>
-              保存设置
+              {saveLabel}
             </Button>
           </Group>
         </Stack>

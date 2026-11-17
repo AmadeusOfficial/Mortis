@@ -77,6 +77,25 @@ def hit(
     }
 
 
+class FakeLauncher:
+    """记下宿主要启动的程序和要用默认程序打开的文件，不真的启动任何东西。"""
+
+    def __init__(self) -> None:
+        self.launched: list[tuple[str, list[str]]] = []
+        self.opened: list[str] = []
+        self.fail: OSError | None = None
+
+    def launch(self, executable: str, args: list[str]) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.launched.append((executable, args))
+
+    def open_default(self, path: str) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.opened.append(path)
+
+
 def tv_hit(tmdb_id: int, name: str, date: str, original: str | None = None) -> dict[str, Any]:
     return {
         "id": tmdb_id,

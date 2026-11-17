@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from mortis.catalog.install import BUILTIN_TYPES, InvalidDataType, install_data_type
 from mortis.catalog.spec import validate_data_type
 from mortis.db.models import DataType, SourceOrder
-from mortis.plugin_api import DataTypePlugin, SourcePlugin
+from mortis.plugin_api import DataTypePlugin, PlayerPlugin, SourcePlugin
 from mortis.plugins.loader import (
     Kind,
     Manifest,
@@ -38,14 +38,27 @@ class PluginInfo:
     origin: Origin
     enabled: bool
     error: str | None = None
-    plugin: DataTypePlugin | SourcePlugin | None = None
+    plugin: DataTypePlugin | SourcePlugin | PlayerPlugin | None = None
 
     @property
     def active(self) -> bool:
         return self.enabled and self.plugin is not None
 
 
-def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlugin:
+def _validate_player(manifest: Manifest, plugin: object) -> PlayerPlugin:
+    if not isinstance(plugin, PlayerPlugin):
+        raise PluginLoadError("PLUGIN 不是 PlayerPlugin")
+    for attribute in ("id", "name"):
+        if not isinstance(getattr(plugin, attribute, None), str) or not getattr(plugin, attribute):
+            raise PluginLoadError(f"PLUGIN 缺少 {attribute}")
+    if plugin.id != manifest.id:
+        raise PluginLoadError(f"PLUGIN.id 是 {plugin.id}，和 plugin.toml 里的 {manifest.id} 不一致")
+    return plugin
+
+
+def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlugin | PlayerPlugin:
+    if manifest.kind == "player":
+        return _validate_player(manifest, plugin)
     if manifest.kind == "data_type":
         if not isinstance(plugin, DataTypePlugin):
             raise PluginLoadError("PLUGIN 不是 DataTypePlugin")
@@ -132,6 +145,19 @@ class PluginRegistry:
     def source(self, source_id: str) -> SourcePlugin | None:
         info = self.get(source_id)
         if info is not None and info.active and isinstance(info.plugin, SourcePlugin):
+            return info.plugin
+        return None
+
+    def players(self) -> list[PlayerPlugin]:
+        return [
+            info.plugin
+            for info in self.all()
+            if info.active and isinstance(info.plugin, PlayerPlugin)
+        ]
+
+    def player(self, player_id: str) -> PlayerPlugin | None:
+        info = self.get(player_id)
+        if info is not None and info.active and isinstance(info.plugin, PlayerPlugin):
             return info.plugin
         return None
 

@@ -10,6 +10,7 @@ from mortis.config.models import (
     FilesConfig,
     MovieScrapeConfig,
     NetworkConfig,
+    PlaybackConfig,
     PluginTypeConfig,
     Secrets,
     TasksConfig,
@@ -64,6 +65,11 @@ def write_files(section: FilesConfig, store: ConfigStoreDep) -> AppConfig:
 @router.put("/settings/tasks", response_model=AppConfig)
 def write_tasks(section: TasksConfig, store: ConfigStoreDep) -> AppConfig:
     return store.save_section("tasks", section)
+
+
+@router.put("/settings/playback", response_model=AppConfig)
+def write_playback(section: PlaybackConfig, store: ConfigStoreDep) -> AppConfig:
+    return store.save_section("playback", section)
 
 
 @router.put("/settings/types/{type_id}", response_model=AppConfig)

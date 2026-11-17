@@ -15,6 +15,7 @@ from mortis.api.routes import images as image_routes
 from mortis.api.routes import items as item_routes
 from mortis.api.routes import libraries as library_routes
 from mortis.api.routes import output as output_routes
+from mortis.api.routes import play as play_routes
 from mortis.api.routes import plugins as plugin_routes
 from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import sources as source_routes
@@ -26,6 +27,7 @@ from mortis.config.store import ConfigError, ConfigStore
 from mortis.db.engine import create_db_engine, make_session_factory
 from mortis.db.migrate import upgrade_database
 from mortis.errors import UserError
+from mortis.plugins.launch import Launcher, SystemLauncher
 from mortis.plugins.registry import PluginRegistry, plugin_folders
 from mortis.services import Services
 from mortis.settings import Settings
@@ -55,6 +57,7 @@ def create_app(
     *,
     http_transport: httpx.BaseTransport | None = None,
     start_worker: bool = True,
+    launcher: Launcher | None = None,
 ) -> FastAPI:
     resolved = settings if settings is not None else Settings()
     resolved.data_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +81,13 @@ def create_app(
         )
     # 启动安装用过的连接不留在池里；没进 lifespan 的调用方（只读静态页的测试）也不会漏连接。
     engine.dispose()
-    services = Services(resolved.data_dir, config_store, http_transport, plugins=plugins)
+    services = Services(
+        resolved.data_dir,
+        config_store,
+        http_transport,
+        plugins=plugins,
+        launcher=launcher if launcher is not None else SystemLauncher(),
+    )
     runner = TaskRunner(
         session_factory,
         services,
@@ -127,6 +136,7 @@ def create_app(
     app.include_router(task_routes.router)
     app.include_router(item_routes.router)
     app.include_router(output_routes.router)
+    app.include_router(play_routes.router)
     app.include_router(image_routes.router)
     app.include_router(tmdb_routes.router)
     app.include_router(plugin_routes.router)

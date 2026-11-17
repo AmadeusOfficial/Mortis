@@ -1,6 +1,7 @@
-import { Accordion, Badge, Group, Image, Paper, Table, Text } from "@mantine/core";
+import { Accordion, ActionIcon, Badge, Group, Image, Paper, Table, Text } from "@mantine/core";
 import { useNavigate } from "react-router";
 import type { SeasonInfo } from "../api";
+import { IconPlay } from "../icons";
 
 // 季标题行：有海报才显示小缩略图。
 function SeasonLabel({ season }: { season: SeasonInfo }) {
@@ -16,7 +17,15 @@ function SeasonLabel({ season }: { season: SeasonInfo }) {
   );
 }
 
-export function SeasonList({ seasons }: { seasons: SeasonInfo[] }) {
+export function SeasonList({
+  seasons,
+  onPlay,
+  playingId,
+}: {
+  seasons: SeasonInfo[];
+  onPlay: (episodeId: number, title: string) => void;
+  playingId: number | null;
+}) {
   const navigate = useNavigate();
   return (
     <Accordion multiple variant="separated">
@@ -34,6 +43,9 @@ export function SeasonList({ seasons }: { seasons: SeasonInfo[] }) {
                     <Table.Th w={120}>缩略图</Table.Th>
                     <Table.Th>标题</Table.Th>
                     <Table.Th w={120}>播出日期</Table.Th>
+                    <Table.Th w={56}>
+                      <span className="mo-sr-only">播放</span>
+                    </Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -70,6 +82,21 @@ export function SeasonList({ seasons }: { seasons: SeasonInfo[] }) {
                         <Text size="sm" c="dimmed">
                           {episode.air_date ?? "—"}
                         </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        {episode.playable && (
+                          <ActionIcon
+                            variant="subtle"
+                            aria-label={`播放第 ${episode.number ?? "?"} 集 ${episode.title}`}
+                            loading={playingId === episode.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPlay(episode.id, `${season.title} 第 ${episode.number ?? "?"} 集`);
+                            }}
+                          >
+                            <IconPlay size={16} />
+                          </ActionIcon>
+                        )}
                       </Table.Td>
                     </Table.Tr>
                   ))}

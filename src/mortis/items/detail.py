@@ -183,12 +183,14 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
     )
     by_id = {e.id: e for e in episodes}
     covered: set[tuple[int | None, int | None]] = set()
+    owners: set[int] = set()
     for item_id, path in session.execute(
         select(MediaFile.item_id, MediaFile.path).where(
             MediaFile.item_id.in_(by_id), MediaFile.file_kind == "video"
         )
     ):
         episode = by_id[item_id]
+        owners.add(item_id)
         stem = os.path.splitext(os.path.basename(path))[0]
         parsed = parse_episode(stem, os.path.basename(os.path.dirname(path)))
         first = episode.index_number or 0
@@ -205,6 +207,7 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
                 "title": episode.title,
                 "air_date": episode.release_date,
                 "has_file": (episode.parent_id, episode.index_number) in covered,
+                "playable": episode.id in owners,
                 "still_url": image_url(thumbs.get(episode.id)),
             }
         )

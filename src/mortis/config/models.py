@@ -468,6 +468,13 @@ class PluginsConfig(BaseModel):
     disabled: list[str] = []
 
 
+class PlaybackConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    player: str = Field(default="potplayer", pattern=r"^([a-z][a-z0-9_]*)?$")
+    """播放插件 id；空字符串表示用第一个可用的播放插件。"""
+
+
 class AppConfig(BaseModel):
     """普通设置。每种数据类型的设置在 types 下，插件自己的设置和密钥都在 sources 下。"""
 
@@ -480,12 +487,14 @@ class AppConfig(BaseModel):
     sources: dict[str, dict[str, Any]] = {}
     """每个来源或插件一节，按插件自己的 Settings 模型校验。"""
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
+    playback: PlaybackConfig = Field(default_factory=PlaybackConfig)
 
 
 CONFIG_SECTIONS: dict[str, type[BaseModel]] = {
     "network": NetworkConfig,
     "files": FilesConfig,
     "tasks": TasksConfig,
+    "playback": PlaybackConfig,
 }
 
 TYPES_PREFIX = "types."

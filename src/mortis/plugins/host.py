@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from mortis.config.models import AppConfig, Secrets
 from mortis.config.store import ConfigStore
-from mortis.plugin_api import SourceAuthError, SourceError, SourcePlugin
+from mortis.plugin_api import PlayerPlugin, SourceAuthError, SourceError, SourcePlugin
 from mortis.services import Services
 
 REFRESH_BEFORE_SECONDS = 24 * 3600
@@ -24,7 +24,7 @@ _pace_guard = threading.Lock()
 _next_slot: dict[str, float] = {}
 
 
-def plugin_settings(config: AppConfig, plugin: SourcePlugin) -> BaseModel:
+def plugin_settings(config: AppConfig, plugin: SourcePlugin | PlayerPlugin) -> BaseModel:
     try:
         return plugin.Settings.model_validate(config.sources.get(plugin.id, {}))
     except ValidationError:
