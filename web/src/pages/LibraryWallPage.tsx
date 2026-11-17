@@ -468,7 +468,7 @@ export function LibraryWallPage() {
       )}
 
       {wall.isSuccess && filteredItems.length > 0 && (
-        <section className={styles.wallColumns} aria-label="海报墙">
+        <section className={styles.wallGrid} aria-label="海报墙">
           {filteredItems.map((item) => (
             <div key={item.id} className={styles.wallItem}>
               <PosterCard item={item} />

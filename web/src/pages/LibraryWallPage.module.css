@@ -149,18 +149,19 @@
   color: var(--mo-text);
 }
 
-/* CSS columns 瀑布流：按列宽自适应约 5~7 列，窄屏少列 */
-.wallColumns {
-  column-width: 172px;
-  column-gap: 16px;
+/* 最小列宽跟窗口走：1900 宽约 6 列，1280 宽约 5 列，手机 2 列 */
+.wallGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 13vw, 240px), 1fr));
+  gap: 16px;
 }
 
 .wallItem {
-  display: inline-block;
-  width: 100%;
-  break-inside: avoid;
-  page-break-inside: avoid;
-  margin-bottom: 16px;
+  min-width: 0;
+}
+
+.wallItem > * {
+  height: 100%;
 }
 
 .emptyBox {
@@ -180,12 +181,8 @@
     width: 100%;
   }
 
-  .wallColumns {
-    column-width: 148px;
-    column-gap: 12px;
-  }
-
-  .wallItem {
-    margin-bottom: 12px;
+  .wallGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
   }
 }
