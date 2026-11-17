@@ -9,12 +9,12 @@
   background: var(--mo-surface);
   border: 1px solid var(--mo-line);
   border-radius: 12px;
-  padding: 12px 10px;
+  padding: 10px 8px;
   position: sticky;
   top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .navGroup {
@@ -23,16 +23,105 @@
   gap: 2px;
 }
 
-.navGroupTitle {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--mo-muted);
-  padding: 10px 10px 4px;
+.navGroup + .navGroup {
+  padding-top: 8px;
+  border-top: 1px solid var(--mo-line);
 }
 
-.navGroup:first-child .navGroupTitle {
-  padding-top: 2px;
+.navGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--mo-text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.navGroupHeader:hover {
+  background: var(--mo-surface-2);
+}
+
+.navGroupHeader:focus-visible {
+  outline: 2px solid var(--mo-accent);
+  outline-offset: -2px;
+}
+
+.navGroupLead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.navGroupIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--mo-dim);
+}
+
+.navGroupHeader[data-has-active="true"] .navGroupIcon {
+  color: var(--mo-accent-hi);
+}
+
+.navGroupTitle {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mo-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navGroupMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.navGroupCount {
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mo-muted);
+  background: var(--mo-surface-2);
+  border: 1px solid var(--mo-line);
+  border-radius: 99px;
+  padding: 0 6px;
+  line-height: 1.5;
+}
+
+.navGroupChevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--mo-muted);
+  transition: color 120ms ease;
+}
+
+.navGroupHeader:hover .navGroupChevron {
+  color: var(--mo-dim);
+}
+
+.navGroupItems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 1px solid var(--mo-line);
 }
 
 .navLink {
@@ -40,8 +129,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
   border: 1px solid transparent;
   font-size: 13px;
   font-weight: 500;

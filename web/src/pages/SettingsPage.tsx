@@ -9,7 +9,7 @@
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { type DataType, checkTmdb, fetchPlugins, fetchSecretsStatus, fetchSettings } from "../api";
 import type { LoginResult } from "../components/PluginsSection";
@@ -33,12 +33,66 @@ import { SettingCard } from "../components/settings/SettingLayout";
 import { TypeSettings } from "../components/settings/TypeSettings";
 import { PageHeader, Pill } from "../components/ui";
 import { useDataTypes } from "../dataTypes";
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconLibraries,
+  IconNetwork,
+  IconPlay,
+  IconPlugin,
+  IconSettings,
+} from "../icons";
 import styles from "./SettingsPage.module.css";
 
 export const DEFAULT_SECTION = "general.network";
+const COLLAPSED_STORAGE_KEY = "mortis-settings-collapsed";
 
 type Entry = { key: string; label: string; available?: boolean };
-type GroupDef = { group: string; entries: Entry[] };
+type GroupDef = { group: string; icon: ReactNode; entries: Entry[] };
+
+function readCollapsedGroups(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value === true) {
+        result[key] = true;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function writeCollapsedGroups(collapsed: Record<string, boolean>): void {
+  try {
+    const keys = Object.keys(collapsed).filter((key) => collapsed[key]);
+    if (keys.length === 0) {
+      window.localStorage.removeItem(COLLAPSED_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+    }
+  } catch {
+    // 忽略隐私模式或禁用存储时的写入异常
+  }
+}
+
+function formatGroupCount(entries: Entry[]): string {
+  const hasAvailability = entries.some((entry) => entry.available !== undefined);
+  if (hasAvailability) {
+    const okCount = entries.filter((entry) => entry.available === true).length;
+    return `${okCount}/${entries.length}`;
+  }
+  return String(entries.length);
+}
 
 const BUILTIN_ORDER = ["movie", "tv", "anime"];
 
@@ -108,6 +162,7 @@ export function SettingsPage() {
   const groups: GroupDef[] = [
     {
       group: "通用",
+      icon: <IconSettings size={14} />,
       entries: [
         { key: "general.network", label: "网络" },
         { key: "general.files", label: "文件" },
@@ -117,6 +172,7 @@ export function SettingsPage() {
     },
     {
       group: "数据类型",
+      icon: <IconLibraries size={14} />,
       entries: [...(dataTypes.data ?? [])].sort(byBuiltinFirst).map((type) => ({
         key: `type.${type.id}`,
         label: type.name,
@@ -124,6 +180,7 @@ export function SettingsPage() {
     },
     {
       group: "来源",
+      icon: <IconNetwork size={14} />,
       entries: [
         {
           key: "source.tmdb",
@@ -146,9 +203,14 @@ export function SettingsPage() {
     },
     {
       group: "播放",
+      icon: <IconPlay size={14} />,
       entries: [{ key: "playback", label: "播放器", available: playbackReady }],
     },
-    { group: "插件", entries: [{ key: "plugins", label: "插件管理" }] },
+    {
+      group: "插件",
+      icon: <IconPlugin size={14} />,
+      entries: [{ key: "plugins", label: "插件管理" }],
+    },
   ];
 
   const keys = groups.flatMap((group) => group.entries.map((entry) => entry.key));
@@ -169,6 +231,40 @@ export function SettingsPage() {
         : keys.includes(DEFAULT_SECTION)
           ? DEFAULT_SECTION
           : (keys[0] ?? DEFAULT_SECTION);
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsedGroups);
+  const activeGroup = groups.find((group) =>
+    group.entries.some((entry) => entry.key === current),
+  )?.group;
+
+  // 当前选中的分区在某个分组里时，自动展开该分组，避免选中项被藏起来。
+  useEffect(() => {
+    if (activeGroup === undefined) {
+      return;
+    }
+    setCollapsed((prev) => {
+      if (!prev[activeGroup]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[activeGroup];
+      writeCollapsedGroups(next);
+      return next;
+    });
+  }, [activeGroup]);
+
+  const toggleGroup = (groupName: string) => {
+    setCollapsed((prev) => {
+      const next = { ...prev };
+      if (next[groupName]) {
+        delete next[groupName];
+      } else {
+        next[groupName] = true;
+      }
+      writeCollapsedGroups(next);
+      return next;
+    });
+  };
 
   const select = (key: string) => {
     setSearchParams(
@@ -201,28 +297,61 @@ export function SettingsPage() {
           />
         ) : (
           <nav className={styles.sideNav} aria-label="设置分区">
-            {groups.map((group) => (
-              <div key={group.group} className={styles.navGroup}>
-                <div className={styles.navGroupTitle}>{group.group}</div>
-                {group.entries.map((entry) => (
-                  <Link
-                    key={entry.key}
-                    to={`/settings?section=${entry.key}`}
-                    className={styles.navLink}
-                    data-active={current === entry.key ? "true" : "false"}
+            {groups.map((group) => {
+              const isCollapsed = collapsed[group.group] === true;
+              const hasActive = group.entries.some((entry) => entry.key === current);
+              return (
+                <div key={group.group} className={styles.navGroup}>
+                  <button
+                    type="button"
+                    className={styles.navGroupHeader}
+                    aria-expanded={!isCollapsed}
+                    data-has-active={hasActive ? "true" : "false"}
+                    onClick={() => toggleGroup(group.group)}
                   >
-                    <span className={styles.navLabel}>{entry.label}</span>
-                    {entry.available !== undefined && (
-                      <span
-                        className={styles.navDot}
-                        data-ok={entry.available ? "true" : "false"}
-                        aria-hidden="true"
-                      />
-                    )}
-                  </Link>
-                ))}
-              </div>
-            ))}
+                    <span className={styles.navGroupLead}>
+                      <span className={styles.navGroupIcon}>{group.icon}</span>
+                      <span className={styles.navGroupTitle}>{group.group}</span>
+                    </span>
+                    <span className={styles.navGroupMeta}>
+                      {isCollapsed && (
+                        <span className={styles.navGroupCount}>
+                          {formatGroupCount(group.entries)}
+                        </span>
+                      )}
+                      <span className={styles.navGroupChevron}>
+                        {isCollapsed ? (
+                          <IconChevronRight size={14} />
+                        ) : (
+                          <IconChevronDown size={14} />
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className={styles.navGroupItems}>
+                      {group.entries.map((entry) => (
+                        <Link
+                          key={entry.key}
+                          to={`/settings?section=${entry.key}`}
+                          className={styles.navLink}
+                          data-active={current === entry.key ? "true" : "false"}
+                        >
+                          <span className={styles.navLabel}>{entry.label}</span>
+                          {entry.available !== undefined && (
+                            <span
+                              className={styles.navDot}
+                              data-ok={entry.available ? "true" : "false"}
+                              aria-hidden="true"
+                            />
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         )}
         <div className={styles.content}>
