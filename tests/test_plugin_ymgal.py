@@ -20,16 +20,14 @@ GID = "10957"
 ORG_ID = "10256"
 
 
-def load(plugin_id):
-    folder = ROOT / "plugins" / plugin_id
-    name = f"mortis_plugins_test.{plugin_id}"
-    spec = importlib.util.spec_from_file_location(
-        name, folder / "__init__.py", submodule_search_locations=[str(folder)]
-    )
+def load_module(source_id):
+    folder = ROOT / "plugins" / "galgame" / "sources"
+    name = f"mortis_plugins_test_source.{source_id}"
+    spec = importlib.util.spec_from_file_location(name, folder / f"{source_id}.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
-    return module.PLUGIN
+    return module
 
 
 def fixture(name: str) -> Any:
@@ -102,8 +100,7 @@ class FakeHost:
 
 @pytest.fixture
 def module():
-    load("ymgal")
-    return sys.modules["mortis_plugins_test.ymgal"]
+    return load_module("ymgal")
 
 
 @pytest.fixture

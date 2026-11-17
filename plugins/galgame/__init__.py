@@ -1,5 +1,10 @@
 from mortis.plugin_api import DataTypePlugin, DataTypeSpec, FieldSpec
 
+from .sources.bangumi import BangumiSource
+from .sources.cngal import CngalSource
+from .sources.vndb import VndbSource
+from .sources.ymgal import YmgalSource
+
 BASIC = "基本信息"
 CREW = "制作人员"
 IMAGES = "图片"
@@ -96,4 +101,5 @@ PLUGIN = DataTypePlugin(
         "poster": ["vndb", "bangumi", "ymgal", "cngal"],
         "tags": ["bangumi", "vndb"],
     },
+    sources=(BangumiSource(), VndbSource(), YmgalSource(), CngalSource()),
 )

@@ -29,6 +29,7 @@ class PluginOut(BaseModel):
     origin: str
     enabled: bool
     error: str | None
+    parent: str | None = None
     data_type: str | None = None
     settings_schema: dict[str, Any] | None = None
     settings: dict[str, Any] | None = None
@@ -73,6 +74,7 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
         origin=info.origin,
         enabled=info.enabled,
         error=info.error,
+        parent=info.parent,
     )
     plugin = info.plugin
     if isinstance(plugin, PlayerPlugin):

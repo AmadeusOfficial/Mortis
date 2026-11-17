@@ -141,15 +141,6 @@ class Host(Protocol):
     def log(self, message: str) -> None: ...
 
 
-@dataclass(frozen=True)
-class DataTypePlugin:
-    """数据类型插件。default_orders 的键是 ""（整体）或字段键，值是来源 id 的顺序。"""
-
-    spec: DataTypeSpec
-    default_orders: dict[str, list[str]] = field(default_factory=dict)
-    scan: Literal["folder"] = "folder"
-
-
 class SourcePlugin(ABC):
     """元数据来源插件，只给一种数据类型填字段。"""
 
@@ -184,6 +175,19 @@ class SourcePlugin(ABC):
 
     @abstractmethod
     def candidates(self, raw: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@dataclass(frozen=True)
+class DataTypePlugin:
+    """数据类型插件。default_orders 的键是 ""（整体）或字段键，值是来源 id 的顺序。
+
+    sources 是这个数据类型自带的来源插件，每个的 data_type 必须等于本插件 spec.id。
+    """
+
+    spec: DataTypeSpec
+    default_orders: dict[str, list[str]] = field(default_factory=dict)
+    scan: Literal["folder"] = "folder"
+    sources: tuple[SourcePlugin, ...] = ()
 
 
 class PlayerHost(Protocol):

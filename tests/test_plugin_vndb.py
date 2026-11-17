@@ -14,19 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "vndb"
 
 
-def load(plugin_id):
-    folder = ROOT / "plugins" / plugin_id
-    name = f"mortis_plugins_test.{plugin_id}"
-    spec = importlib.util.spec_from_file_location(
-        name, folder / "__init__.py", submodule_search_locations=[str(folder)]
-    )
+def load_module(source_id):
+    folder = ROOT / "plugins" / "galgame" / "sources"
+    name = f"mortis_plugins_test_source.{source_id}"
+    spec = importlib.util.spec_from_file_location(name, folder / f"{source_id}.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
-    return module.PLUGIN
+    return module
 
 
-PLUGIN = load("vndb")
+VNDB_MODULE = load_module("vndb")
+PLUGIN = VNDB_MODULE.PLUGIN
 
 
 def fixture(name: str) -> dict[str, Any]:
@@ -213,7 +212,7 @@ def test_candidates_use_main_title_when_no_chinese_title():
 
 
 def test_clean_bbcode_keeps_link_text_and_drops_spoilers():
-    module = sys.modules["mortis_plugins_test.vndb"]
+    module = VNDB_MODULE
     text = (
         "开头\n\n"
         "[url=https://example.com/x]官网[/url]\n"
@@ -232,7 +231,7 @@ def test_clean_bbcode_keeps_link_text_and_drops_spoilers():
 
 
 def test_clean_bbcode_squeezes_blank_lines_and_strips():
-    module = sys.modules["mortis_plugins_test.vndb"]
+    module = VNDB_MODULE
 
     assert module.clean_bbcode("\n\n第一段\n\n\n\n第二段\n\n") == "第一段\n\n第二段"
     assert module.clean_bbcode("") == ""
@@ -240,7 +239,7 @@ def test_clean_bbcode_squeezes_blank_lines_and_strips():
 
 
 def test_play_time_converts_minutes_to_hours():
-    module = sys.modules["mortis_plugins_test.vndb"]
+    module = VNDB_MODULE
 
     assert module._play_time(4950) == 82.5
     assert module._play_time(90) == 1.5

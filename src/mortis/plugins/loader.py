@@ -47,12 +47,19 @@ class PluginLoadError(Exception):
 
 
 @dataclass(frozen=True)
+class ManifestSource:
+    id: str
+    name: str
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     name: str
     version: str
     kind: Kind
     folder: Path
+    sources: tuple[ManifestSource, ...] = ()
 
 
 def read_manifest(folder: Path) -> Manifest:
@@ -68,7 +75,32 @@ def read_manifest(folder: Path) -> Manifest:
         raise PluginLoadError(f"插件 id「{plugin_id}」只能用小写字母、数字和下划线")
     if data["kind"] not in KINDS:
         raise PluginLoadError(f"插件种类只能是 data_type、source 或 player，不是「{data['kind']}」")
-    return Manifest(plugin_id, str(data["name"]), str(data["version"]), data["kind"], folder)
+    sources = _read_sources(data.get("sources", []))
+    if sources and data["kind"] != "data_type":
+        raise PluginLoadError(f"只有 data_type 插件能声明 [[sources]]，{data['kind']} 不能")
+    return Manifest(
+        plugin_id, str(data["name"]), str(data["version"]), data["kind"], folder, sources
+    )
+
+
+def _read_sources(raw: object) -> tuple[ManifestSource, ...]:
+    """plugin.toml 的 [[sources]] 表，每项要有合法的 id 和非空 name，id 不能重复。"""
+    if not isinstance(raw, list) or any(not isinstance(item, dict) for item in raw):
+        raise PluginLoadError(f"{MANIFEST} 的 sources 必须是 [[sources]] 表")
+    sources: list[ManifestSource] = []
+    seen: set[str] = set()
+    for item in raw:
+        source_id = str(item.get("id", ""))
+        name = str(item.get("name", "")).strip()
+        if not _ID.fullmatch(source_id):
+            raise PluginLoadError(f"子来源 id「{source_id}」只能用小写字母、数字和下划线")
+        if not name:
+            raise PluginLoadError(f"子来源 {source_id} 缺少 name")
+        if source_id in seen:
+            raise PluginLoadError(f"子来源 {source_id} 在 plugin.toml 里重复")
+        seen.add(source_id)
+        sources.append(ManifestSource(source_id, name))
+    return tuple(sources)
 
 
 def _allowed(module: str) -> bool:

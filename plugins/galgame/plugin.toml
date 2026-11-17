@@ -2,3 +2,19 @@ id = "galgame"
 name = "Galgame"
 version = "0.1.0"
 kind = "data_type"
+
+[[sources]]
+id = "bangumi"
+name = "Bangumi"
+
+[[sources]]
+id = "vndb"
+name = "VNDB"
+
+[[sources]]
+id = "ymgal"
+name = "月幕 Galgame"
+
+[[sources]]
+id = "cngal"
+name = "CnGal"
