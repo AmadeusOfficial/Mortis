@@ -24,6 +24,7 @@ from mortis.db.models import (
     Task,
     utc_now,
 )
+from mortis.scrape import tv as tv_scrape
 from mortis.scrape.apply import field_orders, level_fields, plan_values
 from mortis.settings import Settings
 from mortis.sources import builtin, imdb
@@ -209,9 +210,9 @@ def test_source_orders_api_lists_builtin_sources(app: FastAPI) -> None:
     body = client.get("/api/data-types/movie/source-orders").json()
     assert [(s["id"], s["available"], s["reason"]) for s in body["sources"]] == [
         ("tmdb", True, None),
-        ("fanart", False, "还没实现"),
+        ("fanart", False, "Key 未填"),
         ("imdb", False, "评分数据还没下载"),
-        ("ratings_rt", False, "还没实现"),
+        ("ratings_rt", True, None),
     ]
     assert [e["source"] for e in body["whole"]] == ["tmdb", "fanart", "imdb", "ratings_rt"]
 
@@ -297,7 +298,12 @@ def _work(app: FastAPI, data_type_id: str, tmdb_id: int, title: str) -> int:
 
 
 def _outcomes(task: Task) -> list[tuple[str, str]]:
-    return [(s["id"], s["outcome"]) for s in json.loads(task.result or "{}")["sources"]]
+    """烂番茄和 Fanart.tv 在这些测试里一个没 key、一个连到假 TMDB 上报 404，结果里不看它们。"""
+    return [
+        (s["id"], s["outcome"])
+        for s in json.loads(task.result or "{}")["sources"]
+        if s["id"] not in ("fanart", "ratings_rt")
+    ]
 
 
 def _ratings(app: FastAPI, item_id: int) -> dict[str, float]:
@@ -381,6 +387,44 @@ def test_startup_queues_imdb_refresh_only_when_stale(app: FastAPI) -> None:
     _imdb_dataset(app, "tt0133093\t8.7\t2100000\n")
     with app.state.session_factory() as session:
         assert queue_refresh_if_stale(session, config, data_dir) is None
+
+
+def test_show_sources_fill_seasons_and_episodes(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install(monkeypatch, "fanart", FakeFetcher({}))
+    _install(monkeypatch, "tvdb", FakeFetcher({}))
+    banner = {"url": "https://image.tmdb.org/t/p/original/banner1.jpg", "language": None}
+    monkeypatch.setattr(
+        tv_scrape.fanart,
+        "season_candidates",
+        lambda _raw, number, _language: {"banner": [banner]} if number == 1 else {},
+    )
+    monkeypatch.setattr(
+        tv_scrape.tvdb,
+        "episode_candidates",
+        lambda _raw, season, episode: {"overview": f"TVDB 剧情 {season}x{episode}"},
+    )
+    client = TestClient(app, base_url=LOCAL)
+    response = client.put(
+        "/api/data-types/tv/source-orders",
+        json={"orders": {"overview": [{"source": "tvdb"}, {"source": "tmdb"}]}},
+    )
+    assert response.status_code == 200
+    show_id = _work(app, "tv", 80968, "Narcos: Mexico")
+    task = _run(app, show_id)
+    assert task.status == "succeeded", task.error
+    with app.state.session_factory() as session:
+        season = session.scalar(
+            select(Item).where(Item.parent_id == show_id, Item.index_number == 1)
+        )
+        assert season is not None
+        assert json.loads(season.field_sources)["banner"] == "fanart"
+        episode = session.scalar(
+            select(Item).where(Item.parent_id == season.id, Item.index_number == 1)
+        )
+        assert episode is not None and episode.overview == "TVDB 剧情 1x1"
+        assert json.loads(episode.field_sources)["overview"] == "tvdb"
 
 
 def test_failing_extra_source_does_not_fail_scrape(

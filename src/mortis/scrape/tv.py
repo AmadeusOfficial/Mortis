@@ -31,6 +31,7 @@ from mortis.scrape.common import (
     tmdb_id_of,
 )
 from mortis.scrape.images import ImageStore
+from mortis.sources import fanart, tvdb
 from mortis.sources.builtin import FetchRequest, builtin_ids
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.search import similarity
@@ -42,8 +43,17 @@ from mortis.sources.tmdb.tv import (
 )
 from mortis.tasks.base import TaskContext, TaskError
 
-SHOW_IMAGES = {"poster": "poster", "fanart": "fanart", "clearlogo": "clearlogo", "keyart": "keyart"}
-SEASON_IMAGES = {"poster": "season_poster"}
+SHOW_IMAGES = {
+    "poster": "poster",
+    "fanart": "fanart",
+    "clearlogo": "clearlogo",
+    "keyart": "keyart",
+    "banner": "banner",
+    "clearart": "clearart",
+    "thumb": "thumb",
+    "characterart": "characterart",
+}
+SEASON_IMAGES = {"poster": "season_poster", "banner": "season_banner", "thumb": "season_thumb"}
 EPISODE_IMAGES = {"thumb": "episode_thumb"}
 SEASON_NAME_MATCH = 0.6
 SAME_TITLE = 0.95
@@ -221,6 +231,26 @@ def _bind(session: Session, files: list[MediaFile], targets: dict[str, int], sho
     return bound
 
 
+def _season_extras(
+    raws: Mapping[str, dict[str, Any]], number: int, config: TvScrapeConfig
+) -> dict[str, dict[str, Any]]:
+    """作品层取到的其他来源给这一季的候选值。季和集只由 TMDB 决定有没有，这里只补值。"""
+    extras: dict[str, dict[str, Any]] = {}
+    if "fanart" in raws:
+        extras["fanart"] = fanart.season_candidates(raws["fanart"], number, config.language)
+    if "tvdb" in raws:
+        extras["tvdb"] = tvdb.season_candidates(raws["tvdb"], number)
+    return extras
+
+
+def _episode_extras(
+    raws: Mapping[str, dict[str, Any]], season: int, episode: int
+) -> dict[str, dict[str, Any]]:
+    if "tvdb" not in raws:
+        return {}
+    return {"tvdb": tvdb.episode_candidates(raws["tvdb"], season, episode)}
+
+
 def _show_config(ctx: TaskContext, item_id: int) -> TvScrapeConfig:
     """电视剧和动漫各用自己的一节设置。"""
     config = ctx.services.config_store.load_config()
@@ -315,9 +345,17 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
             actor for values in by_source.values() for actor in values.get("actors", [])
         ]
         for season in seasons:
-            urls += image_urls(season_fields, {SOURCE: season.values}, season_skip)
-            for values in season.episodes.values():
-                urls += image_urls(episode_fields, {SOURCE: values}, episode_skip)
+            season_values = {
+                SOURCE: season.values,
+                **_season_extras(gathered.raws, season.number, config),
+            }
+            urls += image_urls(season_fields, season_values, season_skip)
+            for number, values in season.episodes.items():
+                episode_values = {
+                    SOURCE: values,
+                    **_episode_extras(gathered.raws, season.number, number),
+                }
+                urls += image_urls(episode_fields, episode_values, episode_skip)
                 people += values.get("actors", [])
         if config.images.actor_images:
             with ctx.session_factory() as session:
@@ -347,7 +385,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                 session,
                 season_row,
                 "season",
-                {SOURCE: season.values},
+                {SOURCE: season.values, **_season_extras(gathered.raws, season.number, config)},
                 SEASON_IMAGES,
                 config,
                 order,
@@ -361,7 +399,7 @@ def scrape_show(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
                     session,
                     episode_row,
                     "episode",
-                    {SOURCE: values},
+                    {SOURCE: values, **_episode_extras(gathered.raws, season.number, number)},
                     EPISODE_IMAGES,
                     config,
                     order,

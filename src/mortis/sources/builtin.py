@@ -14,7 +14,7 @@ from mortis.config.models import AppConfig, MovieScrapeConfig, Secrets, TvScrape
 from mortis.db.models import SourceOrder
 from mortis.plugins.registry import seed_orders
 from mortis.services import Services
-from mortis.sources import imdb
+from mortis.sources import fanart, imdb, ratings_rt, tvdb
 from mortis.sources.tmdb.client import open_tmdb
 from mortis.sources.tmdb.movie import fetch_movie, movie_candidates, movie_external_ids
 from mortis.sources.tmdb.tv import fetch_show, show_candidates, show_external_ids
@@ -117,8 +117,22 @@ SOURCES: tuple[BuiltinSource, ...] = (
         fetcher=_TmdbFetcher(),
         primary=True,
     ),
-    BuiltinSource("fanart", "Fanart.tv", ALL_TYPES, frozenset({"images"})),
-    BuiltinSource("tvdb", "TVDB", SERIES_TYPES, frozenset({"text", "images"})),
+    BuiltinSource(
+        "fanart",
+        "Fanart.tv",
+        ALL_TYPES,
+        frozenset({"images"}),
+        check=fanart.check,
+        fetcher=fanart.FETCHER,
+    ),
+    BuiltinSource(
+        "tvdb",
+        "TVDB",
+        SERIES_TYPES,
+        frozenset({"text", "images"}),
+        check=tvdb.check,
+        fetcher=tvdb.FETCHER,
+    ),
     BuiltinSource(
         "imdb",
         "IMDb",
@@ -128,7 +142,14 @@ SOURCES: tuple[BuiltinSource, ...] = (
         fetcher=imdb.FETCHER,
         ready=imdb.ready,
     ),
-    BuiltinSource("ratings_rt", "烂番茄", ALL_TYPES, frozenset({"rating"})),
+    BuiltinSource(
+        "ratings_rt",
+        "烂番茄",
+        ALL_TYPES,
+        frozenset({"rating"}),
+        check=ratings_rt.check,
+        fetcher=ratings_rt.FETCHER,
+    ),
 )
 BY_ID = {source.id: source for source in SOURCES}
 

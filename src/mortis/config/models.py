@@ -164,6 +164,12 @@ class MovieImages(BaseModel):
     fanart: bool = True
     clearlogo: bool = True
     keyart: bool = True
+    banner: bool = True
+    clearart: bool = True
+    discart: bool = True
+    thumb: bool = True
+    extrafanart: bool = False
+    extrafanart_count: int = Field(default=5, ge=1, le=20)
     collection_poster: bool = True
     collection_fanart: bool = True
     actor_images: bool = True
@@ -311,7 +317,13 @@ class TvImages(BaseModel):
     fanart: bool = True
     clearlogo: bool = True
     keyart: bool = True
+    banner: bool = True
+    clearart: bool = True
+    thumb: bool = True
+    characterart: bool = True
     season_poster: bool = True
+    season_banner: bool = True
+    season_thumb: bool = True
     episode_thumb: bool = True
     actor_images: bool = False
 

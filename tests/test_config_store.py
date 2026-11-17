@@ -201,7 +201,9 @@ def test_new_sections_default_to_local_tmm() -> None:
     assert movie.skip_folders == ["MAKEMKV"]
     assert (movie.poster_size, movie.fanart_size) == ("w780", "original")
     assert movie.prefer_textless_fanart is True
-    assert all(movie.images.model_dump().values())
+    images = movie.images.model_dump()
+    assert images.pop("extrafanart") is False and images.pop("extrafanart_count") == 5
+    assert all(images.values())
     assert config.tasks.concurrency == 3
     assert config.tasks.keep_days == 30
 

@@ -76,13 +76,24 @@ def test_scrape_records_each_source(app: FastAPI, item_id: int) -> None:
     assert first.status == "succeeded", first.error
     assert json.loads(first.result or "{}")["sources"] == [
         {"id": "tmdb", "name": "TMDB 电影", "outcome": "ok", "detail": None},
+        {"id": "fanart", "name": "Fanart.tv", "outcome": "skipped", "detail": "Key 未填"},
         {"id": "imdb", "name": "IMDb", "outcome": "skipped", "detail": "评分数据还没下载"},
+        {
+            "id": "ratings_rt",
+            "name": "烂番茄",
+            "outcome": "failed",
+            "detail": "烂番茄 出错，跳过：Wikidata 返回 HTTP 404",
+        },
         {"id": "tmdb_collection", "name": "TMDB 系列", "outcome": "ok", "detail": None},
     ]
     second = _scrape(app, item_id)
-    assert [(s["id"], s["outcome"]) for s in json.loads(second.result or "{}")["sources"]] == [
+    tmdb_only = [
+        (s["id"], s["outcome"])
+        for s in json.loads(second.result or "{}")["sources"]
+        if s["id"].startswith("tmdb")
+    ]
+    assert tmdb_only == [
         ("tmdb", "cached"),
-        ("imdb", "skipped"),
         ("tmdb_collection", "cached"),
     ]
 

@@ -181,17 +181,23 @@ def test_scrape_builds_seasons_episodes_and_binds_files(
 
 def test_result_records_tmdb_and_seasons(app: FastAPI, show_id: int) -> None:
     first = _scrape(app, show_id)
-    assert json.loads(first.result or "{}")["sources"] == [
+    first_sources = json.loads(first.result or "{}")["sources"]
+    assert [s for s in first_sources if s["id"].startswith("tmdb")] == [
         {"id": "tmdb", "name": "TMDB 剧集", "outcome": "ok", "detail": None},
-        {"id": "imdb", "name": "IMDb", "outcome": "skipped", "detail": "评分数据还没下载"},
         {"id": "tmdb_season_1", "name": "TMDB 第 1 季", "outcome": "ok", "detail": None},
         {"id": "tmdb_season_2", "name": "TMDB 第 2 季", "outcome": "ok", "detail": None},
         {"id": "tmdb_season_3", "name": "TMDB 第 3 季", "outcome": "ok", "detail": None},
     ]
-    second = _scrape(app, show_id)
-    assert [(s["id"], s["outcome"]) for s in json.loads(second.result or "{}")["sources"]] == [
-        ("tmdb", "cached"),
+    assert [(s["id"], s["outcome"]) for s in first_sources[1:5]] == [
+        ("tvdb", "skipped"),
+        ("fanart", "skipped"),
         ("imdb", "skipped"),
+        ("ratings_rt", "failed"),
+    ]
+    second = _scrape(app, show_id)
+    second_sources = json.loads(second.result or "{}")["sources"]
+    assert [(s["id"], s["outcome"]) for s in second_sources if s["id"].startswith("tmdb")] == [
+        ("tmdb", "cached"),
         ("tmdb_season_1", "cached"),
         ("tmdb_season_2", "cached"),
         ("tmdb_season_3", "cached"),

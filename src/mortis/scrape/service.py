@@ -44,7 +44,16 @@ from mortis.sources.tmdb.movie import (
 from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
 
 # 图片字段 → 设置里控制它的开关。不在表里的图片种类 TMDB 不提供，先跳过。
-WORK_IMAGES = {"poster": "poster", "fanart": "fanart", "clearlogo": "clearlogo", "keyart": "keyart"}
+WORK_IMAGES = {
+    "poster": "poster",
+    "fanart": "fanart",
+    "clearlogo": "clearlogo",
+    "keyart": "keyart",
+    "banner": "banner",
+    "clearart": "clearart",
+    "discart": "discart",
+    "thumb": "thumb",
+}
 COLLECTION_IMAGES = {"poster": "collection_poster", "fanart": "collection_fanart"}
 
 
