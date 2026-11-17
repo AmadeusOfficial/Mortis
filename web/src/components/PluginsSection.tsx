@@ -103,6 +103,24 @@ export function usePlugins() {
   return { plugins, dataTypes, typeName };
 }
 
+// 启用/停用一个插件：成功后刷新插件、数据类型和相关列表。
+function useToggleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updatePlugin(id, { enabled }),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      void queryClient.invalidateQueries({ queryKey: ["data-types"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["source-orders"] });
+      notifications.show({
+        message: saved.enabled ? `已启用 ${saved.name}` : `已停用 ${saved.name}`,
+      });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+}
+
 // 插件页：只管理启用、重载和加载错误，设置表单在各来源和类型页里。
 export function PluginsSection() {
   const { plugins, typeName } = usePlugins();
@@ -120,19 +138,7 @@ export function PluginsSection() {
     onError: (error) => notifications.show({ color: "red", message: error.message }),
   });
 
-  const toggle = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updatePlugin(id, { enabled }),
-    onSuccess: (saved) => {
-      void queryClient.invalidateQueries({ queryKey: ["plugins"] });
-      void queryClient.invalidateQueries({ queryKey: ["data-types"] });
-      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
-      void queryClient.invalidateQueries({ queryKey: ["source-orders"] });
-      notifications.show({
-        message: saved.enabled ? `已启用 ${saved.name}` : `已停用 ${saved.name}`,
-      });
-    },
-    onError: (error) => notifications.show({ color: "red", message: error.message }),
-  });
+  const toggle = useToggleMutation();
 
   return (
     <SettingCard
@@ -171,58 +177,124 @@ export function PluginsSection() {
           </Text>
         </div>
       )}
-      {plugins.data?.map((plugin) => (
-        <div key={plugin.id} className={styles.listRowCol}>
-          <Group justify="space-between" align="flex-start" wrap="nowrap" gap="md">
-            <Stack gap={4} style={{ minWidth: 0 }}>
-              <Group gap="xs" wrap="wrap">
-                <Text size="sm" fw={600}>
-                  {plugin.name}
-                </Text>
-                {plugin.version !== "" && (
-                  <Pill tone="neutral">
-                    <span className="mo-mono">{plugin.version}</span>
-                  </Pill>
-                )}
-                <Pill tone={plugin.kind === "source" ? "accent" : "neutral"}>
-                  {KIND_LABELS[plugin.kind]}
-                </Pill>
-                <Pill tone="neutral">{ORIGIN_LABELS[plugin.origin]}</Pill>
-              </Group>
-              {plugin.kind === "source" && (
-                <Text size="xs" c="var(--mo-muted)">
-                  服务的数据类型：{typeName(plugin.data_type)}
-                </Text>
-              )}
-            </Stack>
-            <Group gap="md" wrap="nowrap" style={{ flexShrink: 0 }}>
-              {(plugin.kind === "source" || plugin.kind === "player") && (
-                <Anchor
-                  component={Link}
-                  to={plugin.kind === "player" ? "/settings?section=playback" : `/settings?section=source.${plugin.id}`}
-                  size="sm"
-                  fw={600}
-                >
-                  去设置
-                </Anchor>
-              )}
-              <Switch
-                label="启用"
-                checked={plugin.enabled}
-                disabled={toggle.isPending && toggle.variables?.id === plugin.id}
-                onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+      {plugins.data
+        ?.filter((plugin) => plugin.parent === null)
+        .map((plugin) => {
+          const children = (plugins.data ?? []).filter((item) => item.parent === plugin.id);
+          return (
+            <div key={plugin.id} className={styles.listRowCol}>
+              <PluginRow
+                plugin={plugin}
+                typeName={typeName}
+                toggle={toggle}
               />
-            </Group>
-          </Group>
-          {plugin.error !== null && (
-            <Alert color="red" title="加载失败">
-              {plugin.error}
-            </Alert>
-          )}
-          {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
-        </div>
-      ))}
+              {children.length > 0 && (
+                <div className={styles.childSources}>
+                  {children.map((child) => (
+                    <PluginRow
+                      key={child.id}
+                      plugin={child}
+                      typeName={typeName}
+                      toggle={toggle}
+                      parentPlugin={plugin}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
     </SettingCard>
+  );
+}
+
+// 插件页里的一行：顶层插件或缩进在数据类型下的子来源。
+function PluginRow({
+  plugin,
+  typeName,
+  toggle,
+  parentPlugin,
+}: {
+  plugin: PluginInfo;
+  typeName: (id: string | null) => string;
+  toggle: ReturnType<typeof useToggleMutation>;
+  parentPlugin?: PluginInfo;
+}) {
+  // 父插件停用时，子来源整行变灰、开关禁用，状态随父恢复。
+  const parentDisabled = parentPlugin !== undefined && !parentPlugin.enabled;
+  // 父插件正在切换时也锁住子来源开关，避免并发竞态。
+  const parentToggling =
+    parentPlugin !== undefined && toggle.isPending && toggle.variables?.id === parentPlugin.id;
+  // 父插件自身有加载错误时，子来源的 error 一律不显示：后端会给子错误带「父插件…加载失败」
+  // 前缀，字符串比较去不了重，所以只要父有 error 就当作同一个问题，不在子行重复报。
+  const showError =
+    plugin.error !== null && (parentPlugin === undefined || parentPlugin.error === null);
+  return (
+    <>
+      <Group
+        justify="space-between"
+        align="flex-start"
+        wrap="nowrap"
+        gap="md"
+        style={parentDisabled ? { opacity: 0.55 } : undefined}
+      >
+        <Stack gap={4} style={{ minWidth: 0 }}>
+          <Group gap="xs" wrap="wrap">
+            <Text size="sm" fw={600}>
+              {plugin.name}
+            </Text>
+            {plugin.version !== "" && (
+              <Pill tone="neutral">
+                <span className="mo-mono">{plugin.version}</span>
+              </Pill>
+            )}
+            <Pill tone={plugin.kind === "source" ? "accent" : "neutral"}>
+              {KIND_LABELS[plugin.kind]}
+            </Pill>
+            <Pill tone="neutral">{ORIGIN_LABELS[plugin.origin]}</Pill>
+          </Group>
+          {/* 顶层来源才标数据类型；缩进在分组里的子来源已经一目了然，不重复。 */}
+          {plugin.kind === "source" && parentPlugin === undefined && (
+            <Text size="xs" c="var(--mo-muted)">
+              服务的数据类型：{typeName(plugin.data_type)}
+            </Text>
+          )}
+          {parentDisabled && (
+            <Text size="xs" c="var(--mo-muted)">
+              随 {parentPlugin?.name} 停用
+            </Text>
+          )}
+        </Stack>
+        <Group gap="md" wrap="nowrap" style={{ flexShrink: 0 }}>
+          {(plugin.kind === "source" || plugin.kind === "player") && (
+            <Anchor
+              component={Link}
+              to={plugin.kind === "player" ? "/settings?section=playback" : `/settings?section=source.${plugin.id}`}
+              size="sm"
+              fw={600}
+            >
+              去设置
+            </Anchor>
+          )}
+          <Switch
+            label="启用"
+            checked={plugin.enabled}
+            disabled={
+              parentDisabled ||
+              parentToggling ||
+              (toggle.isPending && toggle.variables?.id === plugin.id)
+            }
+            onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
+          />
+        </Group>
+      </Group>
+      {showError && (
+        <Alert color="red" title="加载失败">
+          {plugin.error}
+        </Alert>
+      )}
+      {plugin.notice !== null && <Alert color="yellow">{plugin.notice}</Alert>}
+    </>
   );
 }
 

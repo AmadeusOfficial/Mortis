@@ -266,6 +266,8 @@ export interface PluginInfo {
   origin: "builtin" | "user";
   enabled: boolean;
   error: string | null;
+  // 子来源插件的父数据类型插件 id；顶层插件为 null。
+  parent: string | null;
   data_type: string | null;
   settings_schema: JsonSchema | null;
   settings: Record<string, unknown> | null;
