@@ -93,6 +93,42 @@ def test_player_kind_requires_player_plugin(tmp_path: Path) -> None:
     assert sneaky is not None and sneaky.error == "__init__.py 用了不允许的模块 subprocess"
 
 
+@pytest.mark.parametrize(
+    ("code", "reason"),
+    [
+        ("import ctypes", "的模块 ctypes"),
+        ("import importlib.util", "的模块 importlib.util"),
+        ("from urllib.request import urlopen", "的模块 urllib.request"),
+        ("import socket", "的模块 socket"),
+        ("__import__('subprocess')", "的 __import__"),
+        ("eval('1')", "的 eval"),
+        ("import os\nos.system('calc')", "的 os.system"),
+        ("import os\nos.spawnv(0, 'a', [])", "的 os.spawnv"),
+        ("import os\nos.startfile('a')", "的 os.startfile"),
+        ("from os import popen", "的 os.popen"),
+    ],
+)
+def test_loader_rejects_process_and_network_escapes(tmp_path: Path, code: str, reason: str) -> None:
+    _write(tmp_path, "sneaky", "player", f"{code}\nPLUGIN = None\n")
+    registry = PluginRegistry([(tmp_path, "builtin")])
+    registry.load()
+    sneaky = registry.get("sneaky")
+    assert sneaky is not None and sneaky.error is not None
+    assert f"用了不允许{reason}" in sneaky.error
+
+
+def test_loader_allows_ordinary_stdlib(tmp_path: Path) -> None:
+    code = (
+        "import os, re, platform\nfrom urllib.parse import quote\n"
+        "re.compile('a'); platform.system(); os.path.isfile('a'); quote('a')\n"
+    )
+    _write(tmp_path, "fake_player", "player", code + PLAYER)
+    registry = PluginRegistry([(tmp_path, "builtin")])
+    registry.load()
+    fine = registry.get("fake_player")
+    assert fine is not None and fine.error is None
+
+
 def test_host_launch_passes_list_and_checks_args(tmp_path: Path) -> None:
     _write(tmp_path, "fake_player", "player", PLAYER)
     registry = PluginRegistry([(tmp_path, "builtin")])

@@ -14,8 +14,28 @@ MANIFEST = "plugin.toml"
 PACKAGE = "mortis_plugins"
 ALLOWED_PACKAGES = frozenset({"pydantic"})
 ALLOWED_MORTIS = "mortis.plugin_api"
-DENIED_STDLIB = frozenset({"subprocess"})
-"""启动程序只能经宿主的 launch，插件不自己开进程。"""
+DENIED_STDLIB = frozenset(
+    {
+        "subprocess",
+        "multiprocessing",
+        "_winapi",
+        "_posixsubprocess",
+        "ctypes",
+        "importlib",
+        "socket",
+        "ssl",
+        "http",
+        "urllib.request",
+        "ftplib",
+        "smtplib",
+    }
+)
+"""启动程序只能经宿主的 launch，联网只能经宿主的客户端。"""
+DENIED_CALLS = frozenset({"__import__", "eval", "exec", "compile"})
+_OS_MODULES = frozenset({"os", "nt", "posix"})
+_DENIED_ATTR = re.compile(
+    r"^(system|popen|startfile|fork|forkpty|spawn\w*|exec[lv]\w*|posix_spawn\w*)$"
+)
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 
 Kind = Literal["data_type", "source", "player"]
@@ -55,19 +75,45 @@ def _allowed(module: str) -> bool:
     top = module.split(".")[0]
     if top == "mortis":
         return module == ALLOWED_MORTIS
-    if top in DENIED_STDLIB:
+    if any(module == denied or module.startswith(f"{denied}.") for denied in DENIED_STDLIB):
         return False
     return top in sys.stdlib_module_names or top in ALLOWED_PACKAGES
 
 
+def _denied_use(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name) and node.id in DENIED_CALLS:
+        return node.id
+    if isinstance(node, ast.Attribute):
+        if node.attr == "__import__":
+            return node.attr
+        if (
+            isinstance(node.value, ast.Name)
+            and node.value.id in _OS_MODULES
+            and _DENIED_ATTR.fullmatch(node.attr)
+        ):
+            return f"{node.value.id}.{node.attr}"
+    if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module in _OS_MODULES:
+        for alias in node.names:
+            if _DENIED_ATTR.fullmatch(alias.name):
+                return f"{node.module}.{alias.name}"
+    return None
+
+
 def check_imports(folder: Path) -> None:
-    """插件只能用标准库、pydantic 和宿主接口，以及自己目录里的模块。"""
+    """插件只能用标准库、pydantic 和宿主接口，以及自己目录里的模块。
+
+    这是约定检查，挡住误用和常见写法，不是安全沙箱：插件只从本机目录加载，由用户自己放进去。
+    """
     for path in sorted(folder.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except (OSError, UnicodeDecodeError, SyntaxError) as error:
             raise PluginLoadError(f"{path.name} 读不了：{error}") from None
         for node in ast.walk(tree):
+            used = _denied_use(node)
+            if used is not None:
+                relative = path.relative_to(folder).as_posix()
+                raise PluginLoadError(f"{relative} 用了不允许的 {used}，开进程和联网要经宿主")
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
