@@ -25,6 +25,10 @@ def setup_logging(data_dir: Path) -> Path:
         RotatingFileHandler(path, maxBytes=MAX_BYTES, backupCount=BACKUPS, encoding="utf-8")
     ]
     if sys.stderr is not None:
+        # 重定向到文件或管道时默认是系统编码（GBK），托盘存下来的输出会乱码；控制台本来就是 UTF-8。
+        reconfigure = getattr(sys.stderr, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
         handlers.append(logging.StreamHandler(sys.stderr))
     for handler in handlers:
         handler.setFormatter(formatter)
