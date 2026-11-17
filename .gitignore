@@ -227,3 +227,6 @@ web/dist/
 *.local.toml
 /secrets.toml
 /config.toml
+!tray/app.manifest
+tray/bin/
+tray/obj/

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mortis"
-version = "0.0.1"
+version = "0.1.0"
 description = "莫提斯：智能体元数据刮削管理器"
 requires-python = ">=3.14"
 license = "GPL-3.0-only"
@@ -24,6 +24,7 @@ dev = [
     "pytest>=9.2",
     "ruff>=0.17",
     "playwright>=1.65",
+    "pyinstaller>=6.16",
 ]
 
 [tool.hatch.build.targets.wheel]

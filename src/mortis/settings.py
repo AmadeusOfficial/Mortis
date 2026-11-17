@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -12,9 +13,24 @@ def default_data_dir() -> Path:
     return Path.home() / ".mortis"
 
 
+def app_root() -> Path:
+    """打包后是 zip 解压出的目录（onedir\\Mortis.Server.exe 的上一级），源码运行时是仓库根目录。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent.parent
+    return Path(__file__).resolve().parents[2]
+
+
 def default_plugins_dir() -> Path | None:
-    bundled = Path(__file__).resolve().parents[2] / "plugins"
+    bundled = app_root() / "plugins"
     return bundled if bundled.is_dir() else None
+
+
+def default_web_dist() -> Path | None:
+    """只有打包后才默认托管前端；源码运行时由启动脚本用 MORTIS_WEB_DIST 指定。"""
+    if not getattr(sys, "frozen", False):
+        return None
+    dist = app_root() / "web" / "dist"
+    return dist if (dist / "index.html").is_file() else None
 
 
 def _is_blank(value: object) -> bool:
@@ -29,7 +45,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default_factory=default_data_dir)
     host: str = "127.0.0.1"
     port: int = Field(default=8100, ge=1, le=65535)
-    web_dist: Path | None = None
+    web_dist: Path | None = Field(default_factory=default_web_dist)
     plugins_dir: Path | None = Field(default_factory=default_plugins_dir)
     """程序自带的插件目录。数据目录下的 plugins 另外加载，同 id 时覆盖这里的。"""
 

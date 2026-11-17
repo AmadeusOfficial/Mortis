@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,29 @@ def test_blank_data_dir_uses_default(
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("MORTIS_DATA_DIR", value)
     assert Settings().data_dir == tmp_path / "Mortis"
+
+
+def test_frozen_paths_are_next_to_onedir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "Mortis"
+    (root / "onedir").mkdir(parents=True)
+    (root / "plugins").mkdir()
+    (root / "web" / "dist").mkdir(parents=True)
+    (root / "web" / "dist" / "index.html").write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(root / "onedir" / "Mortis.Server.exe"))
+    settings = Settings()
+    assert settings.plugins_dir == root / "plugins"
+    assert settings.web_dist == root / "web" / "dist"
+    monkeypatch.setenv("MORTIS_WEB_DIST", r"D:\别处\dist")
+    assert Settings().web_dist == Path(r"D:\别处\dist")
+
+
+def test_frozen_without_web_dist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / "Mortis" / "onedir").mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Mortis" / "onedir" / "x.exe"))
+    settings = Settings()
+    assert settings.web_dist is None and settings.plugins_dir is None
 
 
 @pytest.mark.parametrize("value", ["abc", "0", "65536", "-1"])
