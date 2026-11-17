@@ -156,15 +156,22 @@ def test_launcher_settings_not_a_video_player(
     page: Page, world: tuple[World, str], tmp_path: Path
 ) -> None:
     state, url = world
-    page.goto(f"{url}/settings?section=plugins")
-    expect(page.get_by_text("Galgame 启动", exact=True)).to_be_visible()
-
     page.goto(f"{url}/settings?section=playback")
-    expect(page.get_by_role("heading", name="Galgame 启动", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="系统默认播放器", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Galgame 启动", exact=True)).to_have_count(0)
     page.get_by_label("默认播放器").click()
     expect(page.get_by_role("option", name="系统默认播放器", exact=True)).to_be_visible()
     expect(page.get_by_role("option", name="Galgame 启动")).to_have_count(0)
     page.keyboard.press("Escape")
+
+    page.goto(f"{url}/settings?section=plugins")
+    row = page.get_by_text("Galgame 启动", exact=True)
+    expect(row).to_be_visible()
+    page.get_by_role("link", name="去设置").and_(
+        page.locator("a[href='/settings?section=type.galgame']")
+    ).click()
+    expect(page).to_have_url(f"{url}/settings?section=type.galgame")
+    expect(page.get_by_role("heading", name="Galgame 启动", exact=True)).to_be_visible()
 
     magpie = tmp_path / "Magpie" / "Magpie.exe"
     magpie.parent.mkdir()

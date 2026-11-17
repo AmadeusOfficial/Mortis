@@ -25,7 +25,7 @@ function isReady(plugin: PluginInfo): boolean {
   return plugin.enabled && plugin.error === null && plugin.available === true;
 }
 
-// 默认播放器只能选能打开视频的；启动游戏的播放插件（如 Galgame 启动）只在下面列出设置。
+// 这一页只管视频播放器；启动游戏的播放插件（如 Galgame 启动）放在它所属数据类型的设置页。
 export function playsVideo(plugin: PluginInfo): boolean {
   return plugin.kind === "player" && (plugin.file_kinds ?? ["video"]).includes("video");
 }
@@ -98,7 +98,7 @@ export function PlaybackSection() {
         </div>
       </SettingCard>
 
-      {players.length === 0 && (
+      {videoPlayers.length === 0 && (
         <Alert color="yellow" title="没有播放插件">
           插件目录里没有播放插件。可以在
           <Anchor component={Link} to="/settings?section=plugins">
@@ -108,7 +108,7 @@ export function PlaybackSection() {
         </Alert>
       )}
 
-      {players.map((plugin) => (
+      {videoPlayers.map((plugin) => (
         <PlayerCard key={plugin.id} plugin={plugin} onChanged={refresh} />
       ))}
 
@@ -127,7 +127,7 @@ export function PlaybackSection() {
   );
 }
 
-function PlayerCard({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
+export function PlayerCard({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
   const hasSettings = Object.keys(plugin.settings_schema?.properties ?? {}).length > 0;
   return (
     <>

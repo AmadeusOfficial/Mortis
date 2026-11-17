@@ -19,6 +19,7 @@ import { useDataTypes } from "../../dataTypes";
 import styles from "../../pages/SettingsPage.module.css";
 import { SourceOrdersSection } from "../SourceOrdersSection";
 import { Pill } from "../ui";
+import { PlayerCard } from "./PlaybackSection";
 import { SaveBar, SettingCard } from "./SettingLayout";
 import {
   MovieOrganizeFields,
@@ -220,6 +221,8 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
 
       <TypeSources dataTypeId={dataTypeId} />
 
+      {typeInfo?.plugin_id != null && <TypePlayers pluginId={typeInfo.plugin_id} />}
+
       {/* 来源顺序单独保存，不跟着下面的保存栏。 */}
       <SourceOrdersSection dataTypeId={dataTypeId} />
 
@@ -269,6 +272,19 @@ function SourceStatusRow({
       </Anchor>
     </div>
   );
+}
+
+// 插件类型自带的播放插件（如 Galgame 启动），各自单独保存。
+function TypePlayers({ pluginId }: { pluginId: string }) {
+  const queryClient = useQueryClient();
+  const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
+  const players = (plugins.data ?? []).filter(
+    (plugin) => plugin.kind === "player" && plugin.parent === pluginId,
+  );
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+  return players.map((plugin) => (
+    <PlayerCard key={plugin.id} plugin={plugin} onChanged={refresh} />
+  ));
 }
 
 // 这个类型用的来源：内置类型是内置来源，插件类型是服务它的来源插件。

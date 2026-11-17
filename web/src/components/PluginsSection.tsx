@@ -270,7 +270,13 @@ function PluginRow({
           {(plugin.kind === "source" || plugin.kind === "player") && (
             <Anchor
               component={Link}
-              to={plugin.kind === "player" ? "/settings?section=playback" : `/settings?section=source.${plugin.id}`}
+              to={
+                plugin.kind !== "player"
+                  ? `/settings?section=source.${plugin.id}`
+                  : parentPlugin !== undefined
+                    ? `/settings?section=type.${parentPlugin.data_type ?? parentPlugin.id}`
+                    : "/settings?section=playback"
+              }
               size="sm"
               fw={600}
             >
