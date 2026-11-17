@@ -1,4 +1,4 @@
-"""详情页删除条目：确认框列出文件，标题对上才能删，删完回到海报墙。只用临时目录和假回收站。"""
+"""详情页删除条目：确认框列出文件，点删除才删，删完回到海报墙。只用临时目录和假回收站。"""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -104,10 +104,6 @@ def test_delete_from_detail_page(page: Page, world: tuple[World, str]) -> None:
     expect(dialog.get_by_text("文件数 3")).to_be_visible()
 
     confirm = dialog.get_by_role("button", name="删除", exact=True)
-    expect(confirm).to_be_disabled()
-    dialog.get_by_label("输入「教父」确认").fill("教母")
-    expect(confirm).to_be_disabled()
-    dialog.get_by_label("输入「教父」确认").fill(" 教父 ")
     expect(confirm).to_be_enabled()
     confirm.click()
 
@@ -132,7 +128,6 @@ def test_conflict_shows_reason_and_reloads(page: Page, world: tuple[World, str])
     expect(dialog.get_by_text(str(folder), exact=True)).to_be_visible()
 
     (folder / "新写的.txt").write_bytes(b"new")
-    dialog.get_by_label("输入「教父」确认").fill("教父")
     confirm = dialog.get_by_role("button", name="删除", exact=True)
     confirm.click()
     expect(dialog.get_by_text("要删的文件变了，请重新确认")).to_be_visible()
@@ -143,9 +138,6 @@ def test_conflict_shows_reason_and_reloads(page: Page, world: tuple[World, str])
 
     dialog.get_by_role("button", name="重新读取要删的文件").click()
     expect(dialog.get_by_text("新写的.txt", exact=True)).to_be_visible()
-    expect(dialog.get_by_label("输入「教父」确认")).to_have_value("")
-    expect(confirm).to_be_disabled()
-    dialog.get_by_label("输入「教父」确认").fill("教父")
     expect(confirm).to_be_enabled()
     confirm.click()
     expect(page.get_by_text("已删除《教父》")).to_be_visible()

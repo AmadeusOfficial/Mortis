@@ -8,7 +8,6 @@ import {
   ScrollArea,
   Stack,
   Text,
-  TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -64,7 +63,6 @@ export function DeleteItemModal({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [typed, setTyped] = useState("");
   const preview = useQuery({
     queryKey: ["item-delete-preview", itemId],
     queryFn: () => fetchDeletePreview(itemId),
@@ -77,7 +75,7 @@ export function DeleteItemModal({
       if (preview.data === undefined) {
         throw new Error("还没读到要删的文件");
       }
-      return deleteItem(itemId, typed.trim(), deleteExpected(preview.data));
+      return deleteItem(itemId, preview.data.title, deleteExpected(preview.data));
     },
     onSuccess: ({ library_id }) => {
       notifications.show({ color: "green", message: `已删除《${title}》` });
@@ -96,12 +94,10 @@ export function DeleteItemModal({
   });
   const reload = () => {
     remove.reset();
-    setTyped("");
     void preview.refetch();
   };
 
   const data = preview.data;
-  const matches = data !== undefined && typed.trim() === data.title.trim();
   const conflict = remove.error instanceof ApiError && remove.error.status === 409;
   // 删一半失败时后端的说明以「有 N 个没删掉」开头。
   const partial = conflict && (remove.error?.message.includes("没删掉") ?? false);
@@ -162,13 +158,6 @@ export function DeleteItemModal({
                 ))}
               </Stack>
             )}
-            <TextInput
-              label={`输入「${data.title}」确认`}
-              placeholder={data.title}
-              value={typed}
-              onChange={(event) => setTyped(event.currentTarget.value)}
-              data-autofocus
-            />
           </>
         )}
         {remove.isError && (
@@ -192,7 +181,7 @@ export function DeleteItemModal({
           <Button
             color="red"
             loading={remove.isPending}
-            disabled={!matches || preview.isFetching || conflict}
+            disabled={data === undefined || preview.isFetching || conflict}
             onClick={() => remove.mutate()}
           >
             删除
