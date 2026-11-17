@@ -28,7 +28,7 @@ import {
   isBuiltinSourceSection,
   useBuiltinSources,
 } from "../components/settings/BuiltinSources";
-import { PlaybackSection } from "../components/settings/PlaybackSection";
+import { PlaybackSection, playsVideo } from "../components/settings/PlaybackSection";
 import { SettingCard } from "../components/settings/SettingLayout";
 import { TypeSettings } from "../components/settings/TypeSettings";
 import { PageHeader, Pill } from "../components/ui";
@@ -149,7 +149,7 @@ export function SettingsPage() {
   }, [loginPlugin, hasSection, setSearchParams]);
 
   const players = (plugins.data ?? []).filter(
-    (plugin) => plugin.kind === "player" && plugin.enabled && plugin.available === true,
+    (plugin) => playsVideo(plugin) && plugin.enabled && plugin.available === true,
   );
   const chosenPlayer = settings.data?.playback.player;
   const playbackReady =

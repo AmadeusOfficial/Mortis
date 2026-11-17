@@ -48,6 +48,7 @@ import {
   IconExternal,
   IconFile,
   IconFolder,
+  IconGame,
   IconImage,
   IconInfo,
   IconLink,
@@ -322,6 +323,8 @@ export function ItemDetailPage() {
   const canPlay =
     (detail.kind === "episode" || (isWork && !series)) &&
     detail.files.some((file) => file.file_kind === "video");
+  // 本地文件是游戏文件夹的条目（Galgame）按钮叫「启动」，启动的是文件夹里选定的程序。
+  const canLaunch = detail.files.some((file) => file.file_kind === "game");
   const landscape = detail.kind === "episode";
 
   const peopleFields = allFields.filter(
@@ -472,20 +475,49 @@ export function ItemDetailPage() {
           {tagline !== null && (
             <div className={classes.tagline}>「{tagline}」</div>
           )}
-          {(isWork || canPlay) && (
+          {(isWork || canPlay || canLaunch) && (
             <div className={classes.actions}>
-              {canPlay && (
-                <Button
-                  leftSection={<IconPlay size={16} />}
-                  loading={player.playingId === detail.id}
-                  onClick={() => player.play(detail.id, detail.title)}
-                >
-                  播放
-                </Button>
+              {canLaunch ? (
+                <>
+                  <Button
+                    leftSection={<IconPlay size={16} />}
+                    loading={player.playingId === detail.id}
+                    disabled={player.rechoosingId === detail.id}
+                    onClick={() =>
+                      player.play(detail.id, detail.title, { game: true })
+                    }
+                  >
+                    启动
+                  </Button>
+                  <Button
+                    variant="default"
+                    leftSection={<IconGame size={16} />}
+                    loading={player.rechoosingId === detail.id}
+                    disabled={player.playingId === detail.id}
+                    onClick={() =>
+                      player.play(detail.id, detail.title, {
+                        game: true,
+                        choose: true,
+                      })
+                    }
+                  >
+                    更换启动程序
+                  </Button>
+                </>
+              ) : (
+                canPlay && (
+                  <Button
+                    leftSection={<IconPlay size={16} />}
+                    loading={player.playingId === detail.id}
+                    onClick={() => player.play(detail.id, detail.title)}
+                  >
+                    播放
+                  </Button>
+                )
               )}
               {isWork && (
                 <Button
-                  variant={canPlay ? "default" : "filled"}
+                  variant={canPlay || canLaunch ? "default" : "filled"}
                   leftSection={<IconScrape size={16} />}
                   loading={busy && !arranging}
                   disabled={busy}

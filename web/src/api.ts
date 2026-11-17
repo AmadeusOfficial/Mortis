@@ -286,6 +286,8 @@ export interface PluginInfo {
   // 只有播放插件有：能不能用，以及实际会启动的程序路径。
   available: boolean | null;
   detected_path: string | null;
+  // 只有播放插件有：能打开哪种本地文件，如 video、game。
+  file_kinds: string[] | null;
 }
 
 export interface PluginAccount {
@@ -743,6 +745,16 @@ export interface PlayCandidate {
   name: string;
   size: number | null;
   exists: boolean;
+  // 游戏条目的候选程序相对游戏文件夹的路径；视频候选和游戏文件夹候选为 null。
+  target?: string | null;
+}
+
+export interface PlayRequest {
+  file_id?: number;
+  // 游戏条目：要启动的程序，相对游戏文件夹的路径。
+  target?: string;
+  // 游戏条目：不用记住的程序，重新给出候选。
+  choose?: boolean;
 }
 
 export interface PlayResult {
@@ -752,8 +764,8 @@ export interface PlayResult {
   path: string;
 }
 
-export const playItem = (id: number, fileId: number | null = null) =>
-  request<PlayResult>("POST", `/api/items/${id}/play`, fileId === null ? {} : { file_id: fileId });
+export const playItem = (id: number, body: PlayRequest = {}) =>
+  request<PlayResult>("POST", `/api/items/${id}/play`, body);
 
 // 多个视频时后端回 409 和候选，不替人选；其他错误返回 null。
 export function playCandidates(error: unknown): PlayCandidate[] | null {

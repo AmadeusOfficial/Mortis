@@ -87,6 +87,7 @@ def page() -> Iterator[Page]:
 
 
 GALGAME_SOURCES = ("Bangumi", "VNDB", "月幕 Galgame", "CnGal")
+GALGAME_CHILDREN = (*GALGAME_SOURCES, "Galgame 启动")
 
 
 @pytest.fixture
@@ -107,28 +108,28 @@ def test_plugins_grouped_under_data_type(page: Page, plugins_base_url: str) -> N
     page.goto(plugins_base_url + "/settings?section=plugins")
     expect(page.get_by_role("heading", name="插件", exact=True)).to_be_visible()
 
-    # Galgame 分组下缩进列出四个来源，各自有启用开关。
+    # Galgame 分组下缩进列出四个来源和「Galgame 启动」，各自有启用开关。
     galgame = page.locator('[class*="listRowCol"]', has_text="Galgame").first
     galgame_switch = galgame.get_by_role("switch").first
     group = galgame.locator('[class*="childSources"]')
     switches = group.get_by_role("switch")
-    expect(switches).to_have_count(len(GALGAME_SOURCES))
-    for name in GALGAME_SOURCES:
+    expect(switches).to_have_count(len(GALGAME_CHILDREN))
+    for name in GALGAME_CHILDREN:
         expect(group.get_by_text(name, exact=True)).to_be_visible()
-    for index in range(len(GALGAME_SOURCES)):
+    for index in range(len(GALGAME_CHILDREN)):
         expect(switches.nth(index)).to_be_enabled()
     # 按文本定位 CnGal 那一行的开关，不依赖来源在列表里的顺序。
     cngal_row = group.locator("xpath=./div").filter(has_text="CnGal")
     cngal_switch = cngal_row.get_by_role("switch")
 
-    # 停用 Galgame：父开关和四个子开关都未选中且子开关禁用，并注明「随 Galgame 停用」。
+    # 停用 Galgame：父开关和所有子开关都未选中且子开关禁用，并注明「随 Galgame 停用」。
     galgame_switch.click()
     expect(page.get_by_text("已停用 Galgame")).to_be_visible(timeout=SLOW)
     expect(galgame_switch).not_to_be_checked()
-    for index in range(len(GALGAME_SOURCES)):
+    for index in range(len(GALGAME_CHILDREN)):
         expect(switches.nth(index)).to_be_disabled()
         expect(switches.nth(index)).not_to_be_checked()
-    expect(group.get_by_text("随 Galgame 停用")).to_have_count(len(GALGAME_SOURCES))
+    expect(group.get_by_text("随 Galgame 停用")).to_have_count(len(GALGAME_CHILDREN))
 
     # 左侧「来源」导航里 Galgame 的来源随父停用变为不可用（状态点 data-ok="false"）。
     nav = page.get_by_role("navigation", name="设置分区")

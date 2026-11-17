@@ -25,6 +25,11 @@ function isReady(plugin: PluginInfo): boolean {
   return plugin.enabled && plugin.error === null && plugin.available === true;
 }
 
+// 默认播放器只能选能打开视频的；启动游戏的播放插件（如 Galgame 启动）只在下面列出设置。
+export function playsVideo(plugin: PluginInfo): boolean {
+  return plugin.kind === "player" && (plugin.file_kinds ?? ["video"]).includes("video");
+}
+
 // 播放：选默认的播放插件，各播放插件的路径设置和可用状态。只调用本机播放器，不在网页里播。
 export function PlaybackSection() {
   const queryClient = useQueryClient();
@@ -33,6 +38,7 @@ export function PlaybackSection() {
   const selectId = useId();
   const hintId = useId();
   const players = (plugins.data ?? []).filter((plugin) => plugin.kind === "player");
+  const videoPlayers = players.filter(playsVideo);
 
   if (settings.isError || plugins.isError) {
     return (
@@ -45,12 +51,12 @@ export function PlaybackSection() {
     return <Text c="var(--mo-dim)">正在读取设置…</Text>;
   }
 
-  const chosen = players.find((plugin) => plugin.id === draft.player) ?? null;
-  const autoPick = players.find(isReady) ?? null;
+  const chosen = videoPlayers.find((plugin) => plugin.id === draft.player) ?? null;
+  const autoPick = videoPlayers.find(isReady) ?? null;
   const dirtyCount = draft.player !== saved.player ? 1 : 0;
   const options = [
     { value: AUTO, label: `自动（第一个可用的${autoPick !== null ? `：${autoPick.name}` : ""}）` },
-    ...players.map((plugin) => ({
+    ...videoPlayers.map((plugin) => ({
       value: plugin.id,
       label: isReady(plugin) ? plugin.name : `${plugin.name}（${statusText(plugin)}）`,
     })),
