@@ -384,13 +384,16 @@ def update_locks(item_id: int, body: LocksUpdate, session: SessionDep) -> dict[s
 def scrape_item(
     item_id: int, session: SessionDep, runner: RunnerDep, body: ScrapeRequest | None = None
 ) -> Enqueued:
-    item = get_item(session, item_id)
+    force = body.force if body is not None else True
+    return Enqueued(task_id=scrape_work(session, runner, get_item(session, item_id), force=force))
+
+
+def scrape_work(session: Session, runner: TaskRunner, item: Item, *, force: bool) -> int:
     if item.kind == "collection":
         raise ItemError("系列电影跟着其中的电影一起刮削")
     if item.kind != "work":
         raise ItemError("季和集跟着剧一起刮削")
-    force = body.force if body is not None else True
-    return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=force))
+    return enqueue_scrape(session, runner, item.id, force=force)
 
 
 @router.post("/items/{item_id}/rematch", response_model=Enqueued, status_code=202)

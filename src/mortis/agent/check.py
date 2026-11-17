@@ -31,11 +31,11 @@ def check_ai(client: httpx.Client, config: AiConfig, api_key: str) -> AiCheck:
         return AiCheck(ok=False, message="连不上 AI 接口：超时")
     except httpx.HTTPError as error:
         text = str(error) or type(error).__name__
-        return AiCheck(ok=False, message=f"连不上 AI 接口：{_scrub(text, key)}")
+        return AiCheck(ok=False, message=f"连不上 AI 接口：{scrub(text, key)}")
     if response.status_code in (401, 403):
         return AiCheck(ok=False, message=f"key 不对：接口返回 HTTP {response.status_code}")
     if response.status_code != 200:
-        reason = _scrub(_reason(response), key)
+        reason = scrub(error_reason(response), key)
         suffix = f"：{reason}" if reason else ""
         return AiCheck(ok=False, message=f"接口返回 HTTP {response.status_code}{suffix}")
     if not _has_choices(response):
@@ -43,12 +43,16 @@ def check_ai(client: httpx.Client, config: AiConfig, api_key: str) -> AiCheck:
     return AiCheck(ok=True, message=f"连接成功，模型 {config.model} 可用")
 
 
-def _reason(response: httpx.Response) -> str:
+def error_reason(response: httpx.Response) -> str:
     """兼容接口的错误一般是 {"error": {"message": ...}}；不是 JSON 时取正文开头。"""
     try:
         body = response.json()
     except ValueError:
         return response.text.strip()[:REASON_LIMIT]
+    return message_of(body)
+
+
+def message_of(body: object) -> str:
     error = body.get("error") if isinstance(body, dict) else None
     if isinstance(error, dict) and isinstance(error.get("message"), str):
         return error["message"].strip()[:REASON_LIMIT]
@@ -65,5 +69,5 @@ def _has_choices(response: httpx.Response) -> bool:
     return isinstance(body, dict) and isinstance(body.get("choices"), list)
 
 
-def _scrub(text: str, key: str) -> str:
-    return text.replace(key, "***")
+def scrub(text: str, key: str) -> str:
+    return text.replace(key, "***") if key else text

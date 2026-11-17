@@ -2,6 +2,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
 from mortis import libraries
 from mortis.api.deps import RunnerDep, SessionDep, WatchDep
@@ -9,6 +10,7 @@ from mortis.db.models import Library, Schedule
 from mortis.organize.watch import WatchStatus
 from mortis.tasks import repo as task_repo
 from mortis.tasks import schedule
+from mortis.tasks.runner import TaskRunner
 
 router = APIRouter(prefix="/api/libraries")
 
@@ -176,18 +178,23 @@ def organize_library(
     body: OrganizeRequest | None = None,
 ) -> Enqueued:
     library = libraries.get_library(session, library_id)
+    scrape = body.scrape if body is not None else None
+    return Enqueued(task_id=enqueue_organize(session, runner, library, scrape=scrape))
+
+
+def enqueue_organize(
+    session: Session, runner: TaskRunner, library: Library, *, scrape: bool | None
+) -> int:
+    """已经有排队的整理任务时返回它。scrape 为空时按库的「扫描完接着刮削」。"""
     queued = task_repo.find_queued(session, "organize", "library_id", library.id)
     if queued is not None:
-        return Enqueued(task_id=queued.id)
+        return queued.id
     task = task_repo.enqueue(
-        session,
-        "organize",
-        {"library_id": library.id, "scrape": body.scrape if body is not None else None},
-        priority=1,
+        session, "organize", {"library_id": library.id, "scrape": scrape}, priority=1
     )
     session.commit()
     runner.wake()
-    return Enqueued(task_id=task.id)
+    return task.id
 
 
 class LibraryScrapeRequest(BaseModel):

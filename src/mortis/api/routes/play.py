@@ -94,9 +94,8 @@ def _candidate(row: MediaFile) -> PlayCandidate:
     )
 
 
-def _choices(detail: str, candidates: list[PlayCandidate]) -> JSONResponse:
-    content = PlayChoices(detail=detail, candidates=candidates).model_dump(mode="json")
-    return JSONResponse(status_code=409, content=content)
+def _choices(detail: str, candidates: list[PlayCandidate]) -> PlayChoices:
+    return PlayChoices(detail=detail, candidates=candidates)
 
 
 def _pick(rows: list[MediaFile], file_id: int | None) -> MediaFile | None:
@@ -117,8 +116,16 @@ def _pick(rows: list[MediaFile], file_id: int | None) -> MediaFile | None:
 def play_item(
     item_id: int, session: SessionDep, services: ServicesDep, body: PlayRequest | None = None
 ) -> PlayResult | JSONResponse:
-    item = get_item(session, item_id)
-    request = body if body is not None else PlayRequest()
+    result = play(session, services, get_item(session, item_id), body or PlayRequest())
+    if isinstance(result, PlayChoices):
+        return JSONResponse(status_code=409, content=result.model_dump(mode="json"))
+    return result
+
+
+def play(
+    session: Session, services: Services, item: Item, request: PlayRequest
+) -> PlayResult | PlayChoices:
+    """只有一个视频或程序时直接打开；多个时返回候选，不替调用方选。"""
     games = game_folders(session, item)
     if games:
         return _launch_game(services, item, games, request)
@@ -207,7 +214,7 @@ def _allowed(
 
 def _launch_game(
     services: Services, item: Item, games: list[MediaFile], request: PlayRequest
-) -> PlayResult | JSONResponse:
+) -> PlayResult | PlayChoices:
     row = _pick(games, request.file_id)
     if row is None:
         return _choices(
