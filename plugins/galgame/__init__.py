@@ -1,5 +1,6 @@
 from mortis.plugin_api import DataTypePlugin, DataTypeSpec, FieldSpec
 
+from .players.launcher import GalgameLauncher
 from .sources.bangumi import BangumiSource
 from .sources.cngal import CngalSource
 from .sources.vndb import VndbSource
@@ -102,4 +103,5 @@ PLUGIN = DataTypePlugin(
         "tags": ["bangumi", "vndb"],
     },
     sources=(BangumiSource(), VndbSource(), YmgalSource(), CngalSource()),
+    players=(GalgameLauncher(),),
 )

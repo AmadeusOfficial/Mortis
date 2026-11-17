@@ -18,3 +18,7 @@ name = "月幕 Galgame"
 [[sources]]
 id = "cngal"
 name = "CnGal"
+
+[[players]]
+id = "galgame_launcher"
+name = "Galgame 启动"
