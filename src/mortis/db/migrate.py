@@ -12,7 +12,7 @@ from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, event
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
-BACKUPS_TO_KEEP = 5
+BACKUPS_TO_KEEP = 3
 
 
 def _alembic_config(db_path: Path | None = None) -> Config:

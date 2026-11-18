@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 
@@ -87,6 +88,25 @@ def test_backup_before_upgrading_existing_database(tmp_path: Path) -> None:
         assert EXPECTED_TABLES <= _tables(engine)
     finally:
         engine.dispose()
+
+
+def test_keeps_latest_three_backups(tmp_path: Path) -> None:
+    db_path = tmp_path / "mortis.db"
+    for n in range(5):
+        stale = tmp_path / f"mortis.db.pre-migrate-old{n}.bak"
+        stale.write_bytes(b"")
+        os.utime(stale, (1_000_000 + n, 1_000_000 + n))
+    conn = sqlite3.connect(db_path)
+    conn.execute("create table legacy (x integer)")
+    conn.commit()
+    conn.close()
+
+    backup = upgrade_database(db_path)
+
+    left = sorted(path.name for path in tmp_path.glob("*.bak"))
+    assert backup is not None and backup.name in left
+    assert len(left) == 3
+    assert "mortis.db.pre-migrate-old4.bak" in left and "mortis.db.pre-migrate-old3.bak" in left
 
 
 def test_unknown_revision_is_rejected(tmp_path: Path) -> None:
