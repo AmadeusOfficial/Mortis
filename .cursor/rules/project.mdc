@@ -7,7 +7,7 @@ alwaysApply: true
 
 产品名是莫提斯（Mortis）。不用角色立绘和乐队标志。
 
-先读根目录的《产品思路》《技术方向》《刮削设置》和 `AGENTS.md`。
+先读 `docs/` 下的《产品思路》《技术方向》《刮削设置》和根目录的 `AGENTS.md`。`docs/` 只在本机，不进 git。
 
 - 单人本地片库。Python 3.14（conda 环境 `python314`），SQLite，FastAPI 加 React，一个进程。
 - 基地拥有表。结构只有单条目、单条目加分组、作品季集。插件不建表。
