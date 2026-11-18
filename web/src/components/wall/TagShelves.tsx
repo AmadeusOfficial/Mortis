@@ -2,7 +2,7 @@ import { Alert, Button, Checkbox, Loader, Popover, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
 import { type SortOrder, type UserTag, type WallSort, fetchShelves } from "../../api";
-import { IconDrag, IconList } from "../../icons";
+import { IconChevronRight, IconDrag, IconList } from "../../icons";
 import { PosterCard } from "../PosterCard";
 import styles from "./TagShelves.module.css";
 
@@ -184,19 +184,21 @@ export function TagShelves({
         <section key={shelf.tag_id} className={styles.shelf} aria-label={shelf.name}>
           <div className={styles.shelfHead}>
             <h3 className={styles.shelfTitle}>
-              {shelf.name}
-              <span className={`${styles.shelfCount} mo-mono`}>
-                {shelf.count} {unit}
+              <span className={styles.shelfName}>{shelf.name}</span>
+              <span className={styles.shelfCount}>
+                <span className="mo-mono">{shelf.count}</span> {unit}
               </span>
             </h3>
             {shelf.count > 0 && (
-              <Button
-                size="xs"
-                variant="subtle"
+              <button
+                type="button"
+                className={styles.viewAll}
+                aria-label={`查看全部：${shelf.name}`}
                 onClick={() => onViewAll({ id: shelf.tag_id, name: shelf.name })}
               >
                 查看全部
-              </Button>
+                <IconChevronRight size={14} />
+              </button>
             )}
           </div>
           {shelf.items.length === 0 ? (
