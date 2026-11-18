@@ -23,6 +23,11 @@ D:\python\envs\python314\python.exe -m pytest -q -p no:cacheprovider
 ```
 
 - 版本号只在 `pyproject.toml` 的 `[project] version`。新版本先问用户版本号，改完单独提交 `chore: 版本 x.y.z`。`git tag --list` 里已有的版本不能再用。
+- 后端从已安装的包信息读版本，改完版本号要重装一次，否则打出的后端还报旧版本、冒烟检查失败：
+
+```powershell
+$env:PIP_CACHE_DIR="D:\dev\cache\pip"; D:\python\envs\python314\python.exe -m pip install -e . --no-deps -q
+```
 
 ## 2. 打包
 
