@@ -15,7 +15,13 @@ IMG = "https://image.tmdb.org/t/p"
 
 
 def _image(size: str, path: str, language: str | None, width: int, height: int) -> dict:
-    return {"url": f"{IMG}/{size}{path}", "language": language, "width": width, "height": height}
+    return {
+        "url": f"{IMG}/{size}{path}",
+        "language": language,
+        "region": None,
+        "width": width,
+        "height": height,
+    }
 
 
 def test_movie_candidates() -> None:
@@ -66,6 +72,37 @@ def test_fanart_without_textless_preference() -> None:
     config = MovieScrapeConfig(prefer_textless_fanart=False, fanart_size="w1280")
     c = movie_candidates(load_fixture("movie_603.json"), config)
     assert c["fanart"][0]["url"] == f"{IMG}/w1280/backdrop-en.jpg"
+
+
+def test_poster_region_before_votes_and_textless_fanart_first() -> None:
+    def entry(path: str, language: str | None, region: str | None, votes: float) -> dict:
+        return {
+            "file_path": path,
+            "iso_639_1": language,
+            "iso_3166_1": region,
+            "vote_average": votes,
+        }
+
+    images = [
+        entry("/hk.jpg", "zh", "HK", 8),
+        entry("/cn.jpg", "zh", "CN", 0),
+        entry("/en.jpg", "en", "US", 9),
+        entry("/none.jpg", None, None, 1),
+    ]
+    raw = {"images": {"posters": images, "backdrops": images}}
+    c = movie_candidates(raw, MovieScrapeConfig(language="zh-CN"))
+    assert [i["url"].rsplit("/", 1)[1] for i in c["poster"]] == [
+        "cn.jpg",
+        "hk.jpg",
+        "en.jpg",
+        "none.jpg",
+    ]
+    assert [i["url"].rsplit("/", 1)[1] for i in c["fanart"]] == [
+        "none.jpg",
+        "cn.jpg",
+        "hk.jpg",
+        "en.jpg",
+    ]
 
 
 def test_empty_values_are_dropped() -> None:

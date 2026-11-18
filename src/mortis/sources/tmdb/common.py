@@ -18,6 +18,11 @@ def language_code(config: ScrapeConfig) -> str:
     return config.language.split("-")[0]
 
 
+def region_code(config: ScrapeConfig) -> str | None:
+    parts = config.language.split("-")
+    return parts[1].upper() if len(parts) > 1 and parts[1] else None
+
+
 def image_languages(config: ScrapeConfig) -> str:
     return f"{language_code(config)},en,null"
 
@@ -27,13 +32,40 @@ def ranker(order: list[str | None]) -> Callable[[str | None], int]:
     return lambda language: positions.get(language, len(order))
 
 
+type ImageRank = Callable[[dict[str, Any]], int]
+
+
+def image_ranker(config: ScrapeConfig, *, textless_first: bool = False) -> ImageRank:
+    """档位绝对优先，评分只在同一档里比：设置的语言和地区都对上、同语言其他地区、英文、无字、其他语言。
+
+    textless_first 时无字排最前，其余次序不变。
+    """
+    language, region = language_code(config), region_code(config)
+
+    def rank(entry: dict[str, Any]) -> int:
+        code = entry.get("iso_639_1")
+        if code is None:
+            tier = 3
+        elif code == language:
+            tier = 0 if region is not None and entry.get("iso_3166_1") == region else 1
+        elif code == "en":
+            tier = 2
+        else:
+            tier = 4
+        if textless_first:
+            return -1 if tier == 3 else tier
+        return tier
+
+    return rank
+
+
 def image_list(
-    entries: Iterable[dict[str, Any]], size: str, rank: Callable[[str | None], int]
+    entries: Iterable[dict[str, Any]], size: str, rank: ImageRank
 ) -> list[dict[str, Any]]:
     ordered = sorted(
         (entry for entry in entries if entry.get("file_path")),
         key=lambda entry: (
-            rank(entry.get("iso_639_1")),
+            rank(entry),
             -(entry.get("vote_average") or 0),
             -(entry.get("width") or 0),
         ),
@@ -42,6 +74,7 @@ def image_list(
         {
             "url": TmdbClient.image_url(entry["file_path"], size),
             "language": entry.get("iso_639_1"),
+            "region": entry.get("iso_3166_1") if entry.get("iso_639_1") else None,
             "width": entry.get("width"),
             "height": entry.get("height"),
         }
@@ -50,9 +83,8 @@ def image_list(
 
 
 def image_candidates(images: dict[str, Any], config: ScrapeConfig) -> dict[str, Any]:
-    language = language_code(config)
-    normal = ranker([language, "en", None])
-    fanart = ranker([None, language, "en"]) if config.prefer_textless_fanart else normal
+    normal = image_ranker(config)
+    fanart = image_ranker(config, textless_first=True) if config.prefer_textless_fanart else normal
     posters = images.get("posters") or []
     return {
         "poster": image_list(posters, config.poster_size, normal),

@@ -40,6 +40,42 @@ def test_show_candidates() -> None:
     assert all(image["language"] is None for image in c["keyart"])
 
 
+REGION_LOGOS = {
+    "images": {
+        "logos": [
+            {"file_path": "/tw.png", "iso_639_1": "zh", "iso_3166_1": "TW", "vote_average": 5.3},
+            {"file_path": "/cn0.png", "iso_639_1": "zh", "iso_3166_1": "CN", "vote_average": 0},
+            {"file_path": "/cn1.png", "iso_639_1": "zh", "iso_3166_1": "CN", "vote_average": 3},
+            {"file_path": "/en.png", "iso_639_1": "en", "iso_3166_1": "US", "vote_average": 9},
+            {"file_path": "/none.png", "iso_639_1": None, "vote_average": 9},
+            {"file_path": "/ja.png", "iso_639_1": "ja", "iso_3166_1": "JP", "vote_average": 10},
+        ]
+    }
+}
+
+
+def _names(images: list[dict]) -> list[str]:
+    return [image["url"].rsplit("/", 1)[1] for image in images]
+
+
+def test_logo_language_and_region_beat_votes() -> None:
+    logos = show_candidates(REGION_LOGOS, TvScrapeConfig(language="zh-CN"))["clearlogo"]
+    assert _names(logos) == ["cn1.png", "cn0.png", "tw.png", "en.png", "none.png", "ja.png"]
+    assert (logos[0]["language"], logos[0]["region"]) == ("zh", "CN")
+    assert logos[4]["region"] is None
+
+
+def test_logo_follows_tw_setting() -> None:
+    logos = show_candidates(REGION_LOGOS, TvScrapeConfig(language="zh-TW"))["clearlogo"]
+    assert _names(logos)[:3] == ["tw.png", "cn1.png", "cn0.png"]
+
+
+def test_season_poster_prefers_region() -> None:
+    raw = {"images": {"posters": REGION_LOGOS["images"]["logos"]}}
+    posters = season_candidates(raw, TvScrapeConfig(language="zh-CN"))["poster"]
+    assert _names(posters)[:3] == ["cn1.png", "cn0.png", "tw.png"]
+
+
 def test_show_runtime_and_status_fallbacks() -> None:
     raw = {"episode_run_time": [], "last_episode_to_air": {"runtime": 52}, "status": "Unknown"}
     c = show_candidates(raw, TvScrapeConfig())

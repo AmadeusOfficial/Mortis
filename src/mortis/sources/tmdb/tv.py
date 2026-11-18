@@ -8,10 +8,10 @@ from mortis.sources.tmdb.common import (
     image_candidates,
     image_languages,
     image_list,
+    image_ranker,
     language_code,
     names,
     person_of,
-    ranker,
     ratings,
     trailer,
 )
@@ -144,13 +144,12 @@ def season_candidates(raw: dict[str, Any], config: TvScrapeConfig) -> dict[str, 
     posters = images.get("posters") or []
     if not posters and raw.get("poster_path"):
         posters = [{"file_path": raw["poster_path"]}]
-    language = language_code(config)
     return compact(
         {
             "title": raw.get("name"),
             "overview": raw.get("overview"),
             "release_date": raw.get("air_date"),
-            "poster": image_list(posters, config.poster_size, ranker([language, "en", None])),
+            "poster": image_list(posters, config.poster_size, image_ranker(config)),
         }
     )
 
