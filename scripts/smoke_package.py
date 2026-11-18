@@ -101,9 +101,9 @@ def _check(base: str, expected: str, proc: subprocess.Popen[bytes], data: Path) 
     assert not broken, f"插件加载失败：{broken}"
     top = sorted(p["id"] for p in plugins if p.get("parent") is None)
     assert top == ["galgame", "system_player"], f"顶层插件不对：{top}"
-    galgame_sources = sorted(p["id"] for p in plugins if p.get("parent") == "galgame")
-    assert galgame_sources == ["bangumi", "cngal", "vndb", "ymgal"], (
-        f"galgame 的来源不对：{galgame_sources}"
+    galgame_children = sorted(p["id"] for p in plugins if p.get("parent") == "galgame")
+    assert galgame_children == ["bangumi", "cngal", "galgame_launcher", "vndb", "ymgal"], (
+        f"galgame 的来源和播放插件不对：{galgame_children}"
     )
     print(f"插件：{', '.join(p['id'] for p in plugins)}")
 
