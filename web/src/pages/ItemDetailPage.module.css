@@ -297,6 +297,16 @@
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
+.slotButton {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+.slotButton:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: -2px;
+}
 .slotCap {
   display: flex;
   align-items: center;

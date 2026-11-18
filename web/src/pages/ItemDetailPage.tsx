@@ -39,6 +39,10 @@ import { FieldActions } from "../components/detail/FieldActions";
 import { UserTagsModal } from "../components/detail/UserTagsModal";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
+import {
+  ImagePickerModal,
+  TRANSPARENT_KEYS,
+} from "../components/ImagePickerModal";
 import { useAgent } from "../components/agent/AgentContext";
 import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
@@ -180,6 +184,7 @@ export function ItemDetailPage() {
   const [arranging, setArranging] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [tagging, setTagging] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
@@ -348,6 +353,10 @@ export function ItemDetailPage() {
   const imageFields = allFields.filter(
     (field) => field.value_type === "images",
   );
+  // 集的剧照每个来源只有一张；额外同人画一个字段存多张，都不在这里换。
+  const pickableFields = ["work", "collection", "season"].includes(detail.kind)
+    ? imageFields.filter((field) => field.key !== "extrafanart")
+    : [];
   const overviewFields = allFields.filter((field) =>
     OVERVIEW_KEYS.has(field.key),
   );
@@ -692,31 +701,40 @@ export function ItemDetailPage() {
       ? (field.value as ImageValue[]).filter((image) => image.url !== null)
       : [];
     const url = images[0]?.url ?? null;
-    const transparent = [
-      "clearlogo",
-      "clearart",
-      "logo",
-      "characterart",
-    ].includes(field.key);
+    const transparent = TRANSPARENT_KEYS.has(field.key);
+    const pickable = pickableFields.includes(field);
+    const pic =
+      url !== null ? (
+        <div
+          className={`${classes.slotPic} ${transparent ? classes.checker : ""} ${
+            ["fanart", "thumb", "landscape", "banner"].includes(field.key)
+              ? classes.cover
+              : ""
+          }`}
+        >
+          <img src={url} alt={field.label} loading="lazy" />
+        </div>
+      ) : (
+        <div className={classes.slotPic}>
+          <IconImage size={22} />缺{field.label}
+        </div>
+      );
     return (
       <div
         key={field.key}
         className={`${classes.slot} ${classes.hoverRow} ${url === null ? classes.slotEmpty : ""}`}
       >
-        {url !== null ? (
-          <div
-            className={`${classes.slotPic} ${transparent ? classes.checker : ""} ${
-              ["fanart", "thumb", "landscape", "banner"].includes(field.key)
-                ? classes.cover
-                : ""
-            }`}
+        {pickable ? (
+          <button
+            type="button"
+            className={classes.slotButton}
+            aria-label={`换${field.label}`}
+            onClick={() => setPicking(field.key)}
           >
-            <img src={url} alt={field.label} loading="lazy" />
-          </div>
+            {pic}
+          </button>
         ) : (
-          <div className={classes.slotPic}>
-            <IconImage size={22} />缺{field.label}
-          </div>
+          pic
         )}
         <div className={classes.slotCap}>
           <Text size="sm" fw={600} c="var(--mo-text)">
@@ -726,6 +744,16 @@ export function ItemDetailPage() {
             <span className="mo-mono">{images.length} 张</span>
           )}
           <span style={{ marginLeft: "auto" }}>{actions(field)}</span>
+          {pickable && (
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              color="gray"
+              onClick={() => setPicking(field.key)}
+            >
+              换图
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -1039,6 +1067,15 @@ export function ItemDetailPage() {
           error={rematch.isError ? rematch.error.message : null}
           onPick={(hit: MovieHit) => rematch.mutate({ tmdbId: hit.tmdb_id })}
           onClose={() => setRematching(false)}
+        />
+      )}
+      {picking !== null && (
+        <ImagePickerModal
+          itemId={detail.id}
+          fields={pickableFields}
+          initialKey={picking}
+          onChanged={setDetail}
+          onClose={() => setPicking(null)}
         />
       )}
       {tagging && (

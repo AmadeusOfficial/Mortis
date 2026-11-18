@@ -30,13 +30,18 @@ function errorMessage(data: unknown, status: number): string {
   return `请求失败：HTTP ${status}`;
 }
 
+// body 是 Blob（上传的文件）时原样发送，Content-Type 用文件自己的类型。
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   let response: Response;
+  const raw = body instanceof Blob;
   try {
     response = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers:
+        body === undefined
+          ? undefined
+          : { "Content-Type": raw ? body.type || "application/octet-stream" : "application/json" },
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof TypeError) {
@@ -777,6 +782,29 @@ export const updateItemFields = (id: number, values: Record<string, unknown>) =>
   request<ItemDetail>("PATCH", `/api/items/${id}/fields`, { values });
 export const updateItemLocks = (id: number, locked: string[]) =>
   request<ItemDetail>("PUT", `/api/items/${id}/locks`, { locked });
+
+// 一个图片字段的候选，按这个字段的来源顺序排好；selected 是当前用的那张。
+export interface ImageChoice {
+  url: string;
+  source: string;
+  source_name: string;
+  language: string | null;
+  region: string | null;
+  width: number | null;
+  height: number | null;
+  preview_url: string;
+  selected: boolean;
+}
+
+const imagePath = (id: number, key: string) =>
+  `/api/items/${id}/images/${encodeURIComponent(key)}`;
+export const fetchImageChoices = (id: number, key: string) =>
+  request<ImageChoice[]>("GET", `${imagePath(id, key)}/choices`);
+// 候选里的网址记原来源；候选外的网址当作手动添加。两种都会锁定这个字段。
+export const chooseImage = (id: number, key: string, url: string) =>
+  request<ItemDetail>("PUT", imagePath(id, key), { url });
+export const uploadImage = (id: number, key: string, file: File) =>
+  request<ItemDetail>("PUT", `${imagePath(id, key)}/file`, file);
 
 export interface UserTag {
   id: number;
