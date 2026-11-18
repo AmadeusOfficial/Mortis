@@ -308,7 +308,6 @@ export function LibraryCard({
                 <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
                   编辑
                 </Menu.Item>
-                <Menu.Divider />
                 <Menu.Item
                   leftSection={<IconRefresh size={14} />}
                   disabled={running !== null}
