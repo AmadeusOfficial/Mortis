@@ -1,0 +1,119 @@
+.shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.shelf {
+  min-width: 0;
+}
+
+.shelfHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.shelfTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shelfCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mo-muted);
+}
+
+/* 宽度固定的海报卡片横向排开，细滚动条 */
+.row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: clamp(140px, 11vw, 190px);
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mo-line) transparent;
+}
+
+.row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.row::-webkit-scrollbar-thumb {
+  background: var(--mo-line);
+  border-radius: 3px;
+}
+
+.rowItem {
+  min-width: 0;
+}
+
+.rowItem > * {
+  height: 100%;
+}
+
+.empty {
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.pickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.pickRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+
+.pickRow:hover {
+  background: var(--mo-surface-2);
+}
+
+.pickRow[data-dragging] {
+  opacity: 0.5;
+}
+
+.handle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--mo-muted);
+  cursor: grab;
+}
+
+.handle[data-disabled] {
+  cursor: default;
+}
+
+.pickCheck {
+  flex: 1;
+  min-width: 0;
+}
+
+.pickCount {
+  font-size: 11.5px;
+  color: var(--mo-muted);
+  flex-shrink: 0;
+}

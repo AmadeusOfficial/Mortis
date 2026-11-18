@@ -1,14 +1,15 @@
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
-from mortis.db.models import Item, Library, MediaFile
+from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag
+from mortis.items import user_tags
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
@@ -282,19 +283,91 @@ def enqueue_scrape(session: Session, runner: TaskRunner, item_id: int, *, force:
     return task.id
 
 
+WallSort = Literal["title", "release_date", "created_at", "updated_at"]
+WallOrder = Literal["asc", "desc"]
+
+
 @router.get("/libraries/{library_id}/items", response_model=list[WallItem])
 def list_items(
     library_id: int,
     session: SessionDep,
     q: str | None = Query(default=None, max_length=200),
-    sort: Literal["title", "release_date", "created_at", "updated_at"] = "title",
-    order: Literal["asc", "desc"] = "asc",
+    sort: WallSort = "title",
+    order: WallOrder = "asc",
+    tag: Annotated[list[int] | None, Query()] = None,
 ) -> list[dict[str, Any]]:
+    """tag 是这个库数据类型的自定义标签 id，可以给多个，取交集。"""
     library = libraries.get_library(session, library_id)
+    tags = shelf_tags(session, library, tag or [])
     term = q.strip() if q else ""
+    return wall_rows(session, *wall_items(session, library, term, sort, order, tags))
+
+
+class Shelf(BaseModel):
+    tag_id: int
+    name: str
+    count: int
+    items: list[WallItem]
+    """前 SHELF_SIZE 个，排序同海报墙。"""
+
+
+SHELF_SIZE = 20
+
+
+@router.get("/libraries/{library_id}/shelves", response_model=list[Shelf])
+def list_shelves(
+    library_id: int,
+    session: SessionDep,
+    tags: str = Query(default="", max_length=2000),
+    sort: WallSort = "title",
+    order: WallOrder = "asc",
+) -> list[dict[str, Any]]:
+    """分类视图：按传入的自定义标签顺序，每个标签一行。tags 是逗号分隔的标签 id。"""
+    library = libraries.get_library(session, library_id)
+    try:
+        ids = [int(part) for part in tags.split(",") if part.strip()]
+    except ValueError:
+        raise ItemError("tags 要是逗号分隔的标签编号", status_code=400) from None
+    shelves: list[dict[str, Any]] = []
+    for tag in shelf_tags(session, library, list(dict.fromkeys(ids))):
+        items, years = wall_items(session, library, "", sort, order, [tag])
+        shelves.append(
+            {
+                "tag_id": tag.id,
+                "name": tag.name,
+                "count": len(items),
+                "items": wall_rows(session, items[:SHELF_SIZE], years),
+            }
+        )
+    return shelves
+
+
+def shelf_tags(session: Session, library: Library, tag_ids: list[int]) -> list[Tag]:
+    """按给出的顺序取标签；不是这个库数据类型的自定义标签就 400。"""
+    kind = user_tags.tag_kind(library.data_type_id)
+    found = {
+        tag.id: tag
+        for tag in session.scalars(select(Tag).where(Tag.id.in_(tag_ids), Tag.tag_kind == kind))
+    }
+    missing = [str(tag_id) for tag_id in tag_ids if tag_id not in found]
+    if missing:
+        raise ItemError(f"这些标签不属于这个库的类型：{'、'.join(missing)}", status_code=400)
+    return [found[tag_id] for tag_id in tag_ids]
+
+
+def wall_items(
+    session: Session,
+    library: Library,
+    term: str,
+    sort: WallSort,
+    order: WallOrder,
+    tags: list[Tag],
+) -> tuple[list[Item], dict[int, str | None]]:
+    """海报墙上的条目和系列算年份用的日期。搜索或按标签筛选时，折叠的系列和其中的作品都列出。"""
+    library_id = library.id
     if library.data_type.structure != "item_group":
         mode = libraries.WALL_MOVIES
-    elif term and library.wall_collections == libraries.WALL_COLLAPSE:
+    elif (term or tags) and library.wall_collections == libraries.WALL_COLLAPSE:
         mode = libraries.WALL_BOTH
     else:
         mode = library.wall_collections
@@ -331,6 +404,8 @@ def list_items(
             | Item.original_title.icontains(term, autoescape=True)
             | Item.sort_title.icontains(term, autoescape=True)
         )
+    for tag in tags:
+        query = query.where(exists().where(ItemTag.item_id == Item.id, ItemTag.tag_id == tag.id))
     column = {
         "title": func.coalesce(Item.sort_title, Item.title),
         "release_date": func.coalesce(Item.release_date, own.c.first_date),
@@ -341,7 +416,7 @@ def list_items(
     query = query.order_by(column.is_(None), ordered, Item.id)
     rows = session.execute(query).all()
     years = {item.id: first for item, first in rows if item.kind == "collection"}
-    return wall_rows(session, [item for item, _ in rows], years)
+    return [item for item, _ in rows], years
 
 
 @router.get("/items/{item_id}", response_model=ItemDetail)

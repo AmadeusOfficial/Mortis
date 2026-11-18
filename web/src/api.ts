@@ -744,12 +744,33 @@ export const saveSourceOrders = (dataType: string, orders: Record<string, OrderE
 export const resetSourceOrders = (dataType: string) =>
   request<SourceOrders>("POST", `/api/data-types/${dataType}/source-orders/reset`);
 
-export const fetchWall = (libraryId: number, q: string, sort: WallSort, order: SortOrder) => {
+export const fetchWall = (
+  libraryId: number,
+  q: string,
+  sort: WallSort,
+  order: SortOrder,
+  tagIds: number[] = [],
+) => {
   const params = new URLSearchParams({ sort, order });
   if (q.trim() !== "") {
     params.set("q", q.trim());
   }
+  for (const tagId of tagIds) {
+    params.append("tag", String(tagId));
+  }
   return request<WallItem[]>("GET", `/api/libraries/${libraryId}/items?${params}`);
+};
+
+export interface Shelf {
+  tag_id: number;
+  name: string;
+  count: number;
+  items: WallItem[];
+}
+
+export const fetchShelves = (libraryId: number, tagIds: number[], sort: WallSort, order: SortOrder) => {
+  const params = new URLSearchParams({ tags: tagIds.join(","), sort, order });
+  return request<Shelf[]>("GET", `/api/libraries/${libraryId}/shelves?${params}`);
 };
 export const fetchItem = (id: number) => request<ItemDetail>("GET", `/api/items/${id}`);
 export const updateItemFields = (id: number, values: Record<string, unknown>) =>

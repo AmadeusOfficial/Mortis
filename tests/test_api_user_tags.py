@@ -79,6 +79,27 @@ def test_tags_are_cleaned_deduped_and_kept_per_type(
     assert _put(client, ids["matrix"], ["收藏"]) == ["收藏"]
 
 
+def test_wall_tag_filter_and_shelves(client: TestClient, ids: dict[str, int]) -> None:
+    _put(client, ids["matrix"], ["收藏", "科幻"])
+    _put(client, ids["heat"], ["收藏"])
+    by_name = {
+        row["name"]: row["id"] for row in client.get("/api/data-types/movie/user-tags").json()
+    }
+    wall = f"/api/libraries/{ids['library']}/items"
+    both = client.get(wall, params={"tag": [by_name["收藏"], by_name["科幻"]]}).json()
+    assert [row["id"] for row in both] == [ids["matrix"]]
+    assert client.get(wall, params={"tag": 9999}).status_code == 400
+
+    shelves = client.get(
+        f"/api/libraries/{ids['library']}/shelves",
+        params={"tags": f"{by_name['科幻']},{by_name['收藏']}", "sort": "title"},
+    ).json()
+    assert [(s["name"], s["count"]) for s in shelves] == [("科幻", 1), ("收藏", 2)]
+    assert [row["title"] for row in shelves[1]["items"]] == ["Heat", "The Matrix"]
+    bad = client.get(f"/api/libraries/{ids['library']}/shelves", params={"tags": "x"})
+    assert bad.status_code == 400
+
+
 def test_rescrape_keeps_user_tags(app: FastAPI, client: TestClient, ids: dict[str, int]) -> None:
     _put(client, ids["matrix"], ["收藏"])
     client.post(f"/api/items/{ids['matrix']}/scrape")

@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Loader,
+  SegmentedControl,
   Select,
   Stack,
   Text,
@@ -19,6 +20,7 @@ import {
   arrangeLibrary,
   fetchLibrary,
   fetchLibraryArrangePreview,
+  fetchUserTags,
   fetchWall,
   organizeLibrary,
   scrapeLibrary,
@@ -27,7 +29,16 @@ import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { automationSummary } from "../components/libraries/automation";
 import { PosterCard } from "../components/PosterCard";
 import { FilterChip, PageHeader, Pill } from "../components/ui";
-import { fileUnit, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
+import {
+  ShelfPicker,
+  TagShelves,
+  type WallView,
+  readShelfTags,
+  readView,
+  saveShelfTags,
+  saveView,
+} from "../components/wall/TagShelves";
+import { fileUnit, hasShelves, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
 import {
   IconClose,
   IconOrganize,
@@ -112,15 +123,42 @@ export function LibraryWallPage() {
   const [sort, order] = sortKey.split(":") as [WallSort, SortOrder];
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const libData = library.data;
+  const shelvesOn = libData !== undefined && hasShelves(libData.data_type_id);
+  const [savedView, setSavedView] = useState(() => ({ id, value: readView(id) }));
+  const storedView = savedView.id === id ? savedView.value : readView(id);
+  const view: WallView = shelvesOn ? storedView : "wall";
+  const setView = (value: WallView) => {
+    saveView(id, value);
+    setSavedView({ id, value });
+  };
+  const [savedShelves, setSavedShelves] = useState(() => ({ id, value: readShelfTags(id) }));
+  const shelfIds = savedShelves.id === id ? savedShelves.value : readShelfTags(id);
+  const setShelfIds = (value: number[]) => {
+    saveShelfTags(id, value);
+    setSavedShelves({ id, value });
+  };
+  // 分类视图里点「查看全部」后，海报墙只看这个标签。
+  const [tagFilter, setTagFilter] = useState<{ id: number; name: string } | null>(null);
+  const userTags = useQuery({
+    queryKey: ["user-tags", libData?.data_type_id],
+    queryFn: () => fetchUserTags(libData?.data_type_id ?? ""),
+    enabled: shelvesOn,
+  });
+  // 存下的勾选里可能有已删除的标签，取数前去掉。
+  const shownTags = userTags.data
+    ? shelfIds.filter((tagId) => userTags.data.some((tag) => tag.id === tagId))
+    : null;
+
   const wall = useQuery({
-    queryKey: ["wall", id, query, sort, order],
-    queryFn: () => fetchWall(id, query, sort, order),
+    queryKey: ["wall", id, query, sort, order, tagFilter?.id ?? null],
+    queryFn: () => fetchWall(id, query, sort, order, tagFilter === null ? [] : [tagFilter.id]),
+    enabled: libData !== undefined && view === "wall",
   });
 
   const [running, setRunning] = useState<ActionKind | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  const libData = library.data;
   const canArrange =
     libData !== undefined && !isPluginType(dataTypes.data, libData.data_type_id);
 
@@ -185,6 +223,7 @@ export function LibraryWallPage() {
   // 切换媒体库时重置状态筛选，避免残留的筛选条件让新库看似为空。
   useEffect(() => {
     setStatusFilter("all");
+    setTagFilter(null);
   }, [id]);
 
   // Ctrl K 聚焦搜索框。
@@ -352,66 +391,92 @@ export function LibraryWallPage() {
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <TextInput
-            ref={searchInputRef}
-            className={styles.searchWrap}
-            classNames={{ input: styles.searchInput }}
-            size="sm"
-            placeholder="搜索片名或原名..."
-            aria-label="搜索片名"
-            leftSection={<IconSearch size={14} />}
-            rightSection={
-              search === "" ? (
-                <kbd className={styles.kbd}>Ctrl K</kbd>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.clearBtn}
-                  aria-label="清除搜索"
-                  onClick={() => setSearch("")}
-                >
-                  <IconClose size={13} />
-                </button>
-              )
-            }
-            rightSectionWidth={search === "" ? 58 : 30}
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-          />
+          {/* 分类视图不搜索，也不按刮削状态筛选。 */}
+          {view === "wall" && (
+            <>
+              <TextInput
+                ref={searchInputRef}
+                className={styles.searchWrap}
+                classNames={{ input: styles.searchInput }}
+                size="sm"
+                placeholder="搜索片名或原名..."
+                aria-label="搜索片名"
+                leftSection={<IconSearch size={14} />}
+                rightSection={
+                  search === "" ? (
+                    <kbd className={styles.kbd}>Ctrl K</kbd>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.clearBtn}
+                      aria-label="清除搜索"
+                      onClick={() => setSearch("")}
+                    >
+                      <IconClose size={13} />
+                    </button>
+                  )
+                }
+                rightSectionWidth={search === "" ? 58 : 30}
+                value={search}
+                onChange={(event) => setSearch(event.currentTarget.value)}
+              />
 
-          <div className={styles.chips} role="group" aria-label="状态筛选">
-            <FilterChip
-              active={statusFilter === "all"}
-              count={counts.all}
-              onClick={() => setStatusFilter("all")}
-            >
-              全部
-            </FilterChip>
-            <FilterChip
-              active={statusFilter === "scraped"}
-              count={counts.scraped}
-              onClick={() => setStatusFilter("scraped")}
-            >
-              已刮削
-            </FilterChip>
-            <FilterChip
-              active={statusFilter === "unscraped"}
-              count={counts.unscraped}
-              onClick={() => setStatusFilter("unscraped")}
-            >
-              未刮削
-            </FilterChip>
-            <FilterChip
-              active={statusFilter === "issue"}
-              count={counts.issue}
-              onClick={() => setStatusFilter("issue")}
-            >
-              有问题
-            </FilterChip>
-          </div>
+              <div className={styles.chips} role="group" aria-label="状态筛选">
+                <FilterChip
+                  active={statusFilter === "all"}
+                  count={counts.all}
+                  onClick={() => setStatusFilter("all")}
+                >
+                  全部
+                </FilterChip>
+                <FilterChip
+                  active={statusFilter === "scraped"}
+                  count={counts.scraped}
+                  onClick={() => setStatusFilter("scraped")}
+                >
+                  已刮削
+                </FilterChip>
+                <FilterChip
+                  active={statusFilter === "unscraped"}
+                  count={counts.unscraped}
+                  onClick={() => setStatusFilter("unscraped")}
+                >
+                  未刮削
+                </FilterChip>
+                <FilterChip
+                  active={statusFilter === "issue"}
+                  count={counts.issue}
+                  onClick={() => setStatusFilter("issue")}
+                >
+                  有问题
+                </FilterChip>
+                {tagFilter !== null && (
+                  <FilterChip active onClick={() => setTagFilter(null)}>
+                    按标签：{tagFilter.name}
+                    <IconClose size={12} />
+                  </FilterChip>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className={styles.toolbarRight}>
+          {shelvesOn && (
+            <SegmentedControl
+              size="sm"
+              value={view}
+              onChange={(value) => setView(value as WallView)}
+              data={[
+                { value: "wall", label: "海报墙" },
+                { value: "shelves", label: "分类" },
+              ]}
+              aria-label="显示方式"
+            />
+          )}
+          {view === "shelves" && (
+            <ShelfPicker tags={userTags.data ?? []} selected={shownTags ?? []} onChange={setShelfIds} />
+          )}
           <Select
             data={SORTS}
             value={sortKey}
@@ -426,25 +491,49 @@ export function LibraryWallPage() {
         </div>
       </div>
 
-      {wall.isPending && <Loader size="sm" />}
+      {view === "shelves" && userTags.isPending && <Loader size="sm" />}
 
-      {wall.isError && (
+      {view === "shelves" && userTags.isError && (
+        <Alert color="red" title="读不到标签">
+          {userTags.error.message}
+        </Alert>
+      )}
+
+      {view === "shelves" && shownTags !== null && (
+        <TagShelves
+          libraryId={id}
+          tagIds={shownTags}
+          sort={sort}
+          order={order}
+          unit={unit}
+          onViewAll={(tag) => {
+            setStatusFilter("all");
+            setSearch("");
+            setTagFilter(tag);
+            setView("wall");
+          }}
+        />
+      )}
+
+      {view === "wall" && wall.isPending && <Loader size="sm" />}
+
+      {view === "wall" && wall.isError && (
         <Alert color="red" title="读不到条目">
           {wall.error.message}
         </Alert>
       )}
 
-      {wall.isSuccess && wall.data.length === 0 && (
+      {view === "wall" && wall.isSuccess && wall.data.length === 0 && (
         <div className={styles.emptyBox}>
           <Text c="var(--mo-dim)" size="sm">
-            {query === ""
+            {query === "" && tagFilter === null
               ? `库里还没有条目。点「扫描」找出目录里的内容。`
               : "没有找到匹配的条目。"}
           </Text>
         </div>
       )}
 
-      {wall.isSuccess && wall.data.length > 0 && filteredItems.length === 0 && (
+      {view === "wall" && wall.isSuccess && wall.data.length > 0 && filteredItems.length === 0 && (
         <div className={styles.emptyBox}>
           <Text c="var(--mo-dim)" size="sm">
             当前筛选下没有条目。
@@ -455,7 +544,7 @@ export function LibraryWallPage() {
         </div>
       )}
 
-      {wall.isSuccess && filteredItems.length > 0 && (
+      {view === "wall" && wall.isSuccess && filteredItems.length > 0 && (
         <section className={styles.wallGrid} aria-label="海报墙">
           {filteredItems.map((item) => (
             <div key={item.id} className={styles.wallItem}>

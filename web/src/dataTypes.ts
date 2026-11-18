@@ -36,6 +36,13 @@ export function itemUnit(types: DataType[] | undefined, dataTypeId: string): str
   return dataTypeId === "anime" ? "部动漫" : "部剧";
 }
 
+// 海报墙能切到「分类」视图（按我的标签一行一行显示）的数据类型。以后开放别的类型只改这里。
+const SHELF_TYPES = new Set(["tv"]);
+
+export function hasShelves(dataTypeId: string): boolean {
+  return SHELF_TYPES.has(dataTypeId);
+}
+
 // 插件类型的库按文件夹认条目，文件数量是文件夹数。
 export function fileUnit(types: DataType[] | undefined, dataTypeId: string): string {
   return isPluginType(types, dataTypeId) ? "个文件夹" : "个视频";
