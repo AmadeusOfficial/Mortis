@@ -28,6 +28,7 @@ from mortis.output.nfo import (
     _tags,
     _text,
     kodi_trailer,
+    nfo_tags,
 )
 from mortis.output.writer import Target, WriteReport, _first_images, apply_targets
 from mortis.scrape.images import ImageStore
@@ -262,8 +263,8 @@ def build_show_nfo(session: Session, layout: ShowLayout, config: TvScrapeConfig)
         _text(root, "studio", studio)
     for country in _tags(session, show, "country"):
         _text(root, "country", country)
-    for keyword in _tags(session, show, "keyword"):
-        _text(root, "tag", keyword)
+    for tag in nfo_tags(session, show):
+        _text(root, "tag", tag)
     _actors(session, root, [show], _photos([layout.raw]))
     _text(root, "trailer", kodi_trailer(extra.get("trailer")))
     _text(root, "dateadded", _local_time(show.created_at))

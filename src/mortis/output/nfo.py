@@ -24,6 +24,7 @@ from mortis.db.models import (
     PersonExternalId,
     Tag,
 )
+from mortis.items.user_tags import item_tags
 from mortis.sources.tmdb.client import TmdbClient
 from mortis.sources.tmdb.common import SOURCE
 from mortis.sources.tmdb.movie import movie_candidates
@@ -50,6 +51,14 @@ def _tags(session: Session, item: Item, kind: str) -> list[str]:
             .order_by(ItemTag.position)
         )
     )
+
+
+def nfo_tags(session: Session, item: Item) -> list[str]:
+    """写成 <tag> 的：来源给的关键词，后面接自定义标签，重名的只写一次。"""
+    names: dict[str, str] = {}
+    for name in _tags(session, item, "keyword") + item_tags(session, item):
+        names.setdefault(name.casefold(), name)
+    return list(names.values())
 
 
 def _people(session: Session, item: Item, role: str) -> list[tuple[Person, str | None, str | None]]:
@@ -259,8 +268,8 @@ def build_movie_nfo(session: Session, item: Item, config: MovieScrapeConfig) -> 
         _text(root, "credits", person.name, **({"tmdbid": tmdb_id} if tmdb_id else {}))
     for person, _role, tmdb_id in _people(session, item, "director"):
         _text(root, "director", person.name, **({"tmdbid": tmdb_id} if tmdb_id else {}))
-    for keyword in _tags(session, item, "keyword"):
-        _text(root, "tag", keyword)
+    for tag in nfo_tags(session, item):
+        _text(root, "tag", tag)
     for person, character, tmdb_id in _people(session, item, "actor"):
         photo = snapshot.photos.get(tmdb_id) if tmdb_id else None
         _person(root, "actor", person, character, tmdb_id, photo)
