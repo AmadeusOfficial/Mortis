@@ -1,4 +1,12 @@
-import { Alert, Button, Loader, Select, Stack, Text } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Loader,
+  Modal,
+  Select,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -93,7 +101,7 @@ export function UnmatchedPage() {
             <Pill tone="warn">{rows.length} 条待处理</Pill>
           ) : undefined
         }
-        description="扫描时没能自动认出的文件和文件夹，选中一条在右边搜索匹配"
+        description="扫描时没能自动认出的文件和文件夹，点「匹配」搜索并绑定"
         actions={
           <Select
             placeholder="全部媒体库"
@@ -138,7 +146,7 @@ export function UnmatchedPage() {
       )}
 
       {files.isSuccess && rows.length > 0 && (
-        <div className={classes.layout}>
+        <>
           <div className={classes.list}>
             {rows.map((file) => {
               const [, name] = splitPath(file.path);
@@ -220,28 +228,24 @@ export function UnmatchedPage() {
             })}
           </div>
 
-          <aside className={classes.matchBox} aria-label="匹配面板">
-            {selectedFile === null ? (
-              <div className={classes.matchEmpty}>
-                <div className={classes.emptyIcon} aria-hidden="true">
-                  <IconSearch size={20} />
-                </div>
-                <Text fw={600} fz={15}>
-                  选择一条未识别文件
-                </Text>
-                <Text size="sm" c="var(--mo-muted)" maw={280}>
-                  在左侧列表点击任意条目或「匹配」按钮，即可在这里搜索并绑定元数据
-                </Text>
+          <Modal
+            opened={selectedFile !== null}
+            onClose={() => setSelectedId(null)}
+            centered
+            size="lg"
+            padding={0}
+            title={
+              <div className={classes.matchHead}>
+                <span className={classes.matchTitle} title={`匹配「${selectedName}」`}>
+                  匹配「{selectedName}」
+                </span>
+                <span className={classes.matchDesc}>{selectedTypeName}</span>
               </div>
-            ) : (
+            }
+            classNames={{ header: classes.modalHeader, title: classes.modalTitle }}
+          >
+            {selectedFile !== null && (
               <>
-                <div className={classes.matchHead}>
-                  <h3 className={classes.matchTitle} title={`匹配「${selectedName}」`}>
-                    匹配「{selectedName}」
-                  </h3>
-                  <p className={classes.matchDesc}>{selectedTypeName}</p>
-                </div>
-
                 {selectedIsPlugin ? (
                   <SourceSearchPanel
                     key={selectedFile.id}
@@ -274,8 +278,8 @@ export function UnmatchedPage() {
                 </div>
               </>
             )}
-          </aside>
-        </div>
+          </Modal>
+        </>
       )}
     </Stack>
   );

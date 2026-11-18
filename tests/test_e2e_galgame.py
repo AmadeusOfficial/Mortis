@@ -176,7 +176,7 @@ def test_galgame_folders_scrape_from_vndb(page: Page, base_url: str, root: Path)
 
     page.get_by_role("link", name="未识别").click()
     page.get_by_role("button", name=f"匹配{UNMATCHED}").click()
-    panel = page.get_by_role("complementary", name="匹配面板")
+    panel = page.get_by_role("dialog", name=f"匹配「{UNMATCHED}」")
     sources = panel.get_by_role("group", name="来源")
     expect(sources.get_by_role("button", name="VNDB")).to_have_attribute("aria-pressed", "true")
     panel.get_by_label("名称").fill("Paradise Lost")

@@ -107,7 +107,7 @@ def test_scan_scrape_edit_and_bind(page: Page, base_url: str, movies: Path) -> N
 
     page.get_by_role("link", name="未识别").click()
     page.get_by_role("button", name="匹配heat.mkv").click()
-    panel = page.get_by_role("complementary", name="匹配面板")
+    panel = page.get_by_role("dialog", name="匹配「heat.mkv」")
     panel.get_by_label("片名").fill("Heat")
     panel.get_by_role("button", name="搜索").click()
     panel.get_by_role("button", name="选这个").click()

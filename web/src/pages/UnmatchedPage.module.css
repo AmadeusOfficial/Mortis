@@ -3,13 +3,6 @@
   gap: 4px;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 440px;
-  gap: 20px;
-  align-items: start;
-}
-
 .list {
   background: var(--mo-surface);
   border: 1px solid var(--mo-line);
@@ -131,21 +124,23 @@
   white-space: nowrap;
 }
 
-.matchBox {
-  position: sticky;
-  top: 20px;
-  background: var(--mo-surface);
-  border: 1px solid var(--mo-line);
-  border-radius: 12px;
-  overflow: hidden;
+.modalHeader {
+  align-items: flex-start;
+  padding: 16px 14px 4px 18px;
+  min-height: 0;
+}
+
+.modalTitle {
+  min-width: 0;
+  flex: 1;
 }
 
 .matchHead {
-  padding: 16px 18px 4px;
+  min-width: 0;
 }
 
 .matchTitle {
-  margin: 0;
+  display: block;
   font-size: 15.5px;
   font-weight: 700;
   color: var(--mo-text);
@@ -155,7 +150,9 @@
 }
 
 .matchDesc {
-  margin: 3px 0 0;
+  display: block;
+  margin-top: 3px;
+  font-weight: 400;
   font-size: 12px;
   color: var(--mo-muted);
 }
@@ -169,26 +166,6 @@
   color: var(--mo-muted);
   background: var(--mo-bg);
   border-top: 1px solid var(--mo-line);
-}
-
-.matchEmpty {
-  padding: 56px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 10px;
-}
-
-.emptyIcon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--mo-surface-2);
-  border: 1px solid var(--mo-line);
-  color: var(--mo-dim);
 }
 
 .emptyPage {
@@ -212,16 +189,6 @@
   background: var(--mo-ok-soft);
   border: 1px solid var(--mo-ok-bd);
   color: var(--mo-ok);
-}
-
-@media (max-width: 62em) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .matchBox {
-    position: static;
-  }
 }
 
 @media (max-width: 42em) {
