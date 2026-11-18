@@ -195,6 +195,8 @@ export const IconChevronDown = makeIcon(<path d="m6 9 6 6 6-6" />);
 
 export const IconChevronRight = makeIcon(<path d="m9 6 6 6-6 6" />);
 
+export const IconArrowRight = makeIcon(<path d="M5 12h14m-6-6 6 6-6 6" />);
+
 export const IconPlus = makeIcon(<path d="M12 5v14M5 12h14" />);
 
 export const IconClose = makeIcon(<path d="M18 6 6 18M6 6l12 12" />);

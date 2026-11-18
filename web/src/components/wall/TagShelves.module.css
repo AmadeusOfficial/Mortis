@@ -1,7 +1,7 @@
 .shelves {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .shelf {
@@ -9,32 +9,46 @@
 }
 
 .shelf + .shelf {
-  padding-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--mo-line);
 }
 
+/* 细竖标 + 标签名 + 纯数字计数，右侧幽灵链接 */
 .shelfHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 13px;
+  height: 26px;
+  margin-bottom: 10px;
 }
 
-/* 与首张海报左边缘齐平的标题 + 轻磨砂计数签 */
 .shelfTitle {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
+.shelfTitle::before {
+  content: "";
+  flex-shrink: 0;
+  width: 2px;
+  height: 13px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--mo-dim) 55%, transparent);
+  transition: background 160ms ease;
+}
+
+.shelf:hover .shelfTitle::before {
+  background: var(--mo-accent-hi);
+}
+
 .shelfName {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--mo-text);
   white-space: nowrap;
   overflow: hidden;
@@ -43,32 +57,10 @@
 
 .shelfCount {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 21px;
-  padding: 0 7.5px;
-  border-radius: 6px;
-  border: 1px solid var(--mo-line);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--mo-text) 4.5%, var(--mo-surface-2)) 0%,
-    var(--mo-surface) 100%
-  );
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mo-text) 6.5%, transparent);
-  line-height: 1;
-}
-
-.shelfCountNum {
-  font-size: 12px;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--mo-text) 86%, var(--mo-dim));
-}
-
-.shelfCountUnit {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
-  color: var(--mo-dim);
+  color: var(--mo-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .viewAll {
@@ -76,64 +68,42 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
-  padding: 0 9px 0 12px;
-  border-radius: 8px;
-  border: 1px solid var(--mo-line);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--mo-text) 4.5%, var(--mo-surface-2)) 0%,
-    var(--mo-surface) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--mo-text) 7%, transparent),
-    0 1px 2px rgb(0 0 0 / 34%);
-  color: var(--mo-dim);
+  height: 26px;
+  padding: 0 9px;
+  margin-right: -9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mo-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1;
   cursor: pointer;
   transition:
     color 160ms ease,
     border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease,
-    transform 120ms ease;
+    background 160ms ease;
 }
 
 .viewAll > svg {
-  color: color-mix(in srgb, var(--mo-accent-hi) 68%, var(--mo-dim));
+  color: var(--mo-muted);
+  opacity: 0.7;
   transition:
     transform 160ms ease,
-    color 160ms ease;
-}
-
-.shelf:hover .viewAll {
-  border-color: var(--mo-line-2);
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .viewAll:hover {
   color: var(--mo-text);
-  border-color: var(--mo-accent-bd);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--mo-accent) 18%, var(--mo-surface-3)) 0%,
-    color-mix(in srgb, var(--mo-accent) 10%, var(--mo-surface-2)) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--mo-text) 14%, transparent),
-    0 6px 18px -6px rgb(0 0 0 / 72%);
+  background: color-mix(in srgb, var(--mo-dim) 12%, transparent);
+  border-color: color-mix(in srgb, var(--mo-dim) 18%, transparent);
 }
 
 .viewAll:hover > svg {
   color: var(--mo-accent-hi);
-  transform: translateX(2.5px);
-}
-
-.viewAll:active {
-  transform: scale(0.97);
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 .viewAll:focus-visible {

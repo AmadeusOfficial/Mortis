@@ -2,7 +2,7 @@ import { Alert, Button, Checkbox, Loader, Popover, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
 import { type SortOrder, type UserTag, type WallSort, fetchShelves } from "../../api";
-import { IconChevronRight, IconDrag, IconList } from "../../icons";
+import { IconArrowRight, IconDrag, IconList } from "../../icons";
 import { PosterCard } from "../PosterCard";
 import styles from "./TagShelves.module.css";
 
@@ -185,9 +185,8 @@ export function TagShelves({
           <div className={styles.shelfHead}>
             <h3 className={styles.shelfTitle}>
               <span className={styles.shelfName}>{shelf.name}</span>
-              <span className={styles.shelfCount}>
-                <span className={`${styles.shelfCountNum} mo-mono`}>{shelf.count}</span>
-                <span className={styles.shelfCountUnit}>{unit}</span>
+              <span className={styles.shelfCount} title={`${shelf.count} ${unit}`}>
+                {shelf.count}
               </span>
             </h3>
             {shelf.count > 0 && (
@@ -198,7 +197,7 @@ export function TagShelves({
                 onClick={() => onViewAll({ id: shelf.tag_id, name: shelf.name })}
               >
                 <span>查看全部</span>
-                <IconChevronRight size={13.5} strokeWidth={2} />
+                <IconArrowRight size={13} />
               </button>
             )}
           </div>
