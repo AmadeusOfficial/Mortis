@@ -1,5 +1,7 @@
 import json
+import logging
 import threading
+import traceback
 from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any, Literal
 
@@ -8,12 +10,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import iterate_in_threadpool
 
+from mortis.agent.check import scrub
 from mortis.agent.client import NO_KEY, ChatClient, ChatError
 from mortis.agent.loop import Approval, Event, run_chat
 from mortis.config.models import AppConfig, Secrets
 from mortis.errors import UserError
 
 router = APIRouter(prefix="/api/agent")
+logger = logging.getLogger("mortis.agent")
 
 MAX_MESSAGES = 200
 MAX_CHARS = 200_000
@@ -100,6 +104,14 @@ def _messages(body: ChatRequest) -> list[dict[str, Any]]:
     return result
 
 
+def _unexpected(error: Exception, key: str) -> Iterator[Event]:
+    trace = "".join(traceback.format_exception(error))
+    logger.error("对话出错：%s", scrub(trace, key))
+    yield "error", {"message": f"出错了：{type(error).__name__}"}
+    yield "messages", {"messages": []}
+    yield "done", {}
+
+
 def _sse(event: Event) -> str:
     name, data = event
     return f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -116,7 +128,8 @@ async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
     cancel = threading.Event()
 
     def events() -> Iterator[Event]:
-        if not secrets.ai.api_key.strip():
+        key = secrets.ai.api_key.strip()
+        if not key:
             yield "error", {"message": NO_KEY}
             yield "done", {}
             return
@@ -125,6 +138,9 @@ async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
         except ChatError as error:
             yield "error", {"message": error.message}
             yield "done", {}
+            return
+        except Exception as error:
+            yield from _unexpected(error, key)
             return
         try:
             yield from run_chat(
@@ -138,6 +154,8 @@ async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
                 max_rounds=config.ai.max_rounds,
                 cancel=cancel,
             )
+        except Exception as error:
+            yield from _unexpected(error, key)
         finally:
             close = getattr(client, "close", None)
             if close is not None:

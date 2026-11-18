@@ -2,6 +2,7 @@
 
 import copy
 import json
+import logging
 import threading
 from collections.abc import Iterator
 from pathlib import Path
@@ -454,6 +455,39 @@ def test_chat_error_becomes_error_event(
         ("messages", {"messages": []}),
         ("done", {}),
     ]
+
+
+def test_unexpected_error_becomes_error_event(
+    client: TestClient, holder: dict[str, ScriptedClient], caplog: pytest.LogCaptureFixture
+) -> None:
+    model = script(holder, RuntimeError(f"炸了 {KEY}"))
+    with caplog.at_level(logging.ERROR, logger="mortis.agent"):
+        events = chat(client, ASK)
+    assert events == [
+        ("error", {"message": "出错了：RuntimeError"}),
+        ("messages", {"messages": []}),
+        ("done", {}),
+    ]
+    assert model.closed == 1
+    assert "RuntimeError" in caplog.text and "炸了" in caplog.text
+    assert KEY not in caplog.text
+
+
+def test_unexpected_factory_error(
+    app: FastAPI, client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken(_config: AppConfig, _secrets: Secrets) -> ScriptedClient:
+        raise ValueError(f"坏了 {KEY}")
+
+    app.state.chat_client_factory = broken
+    with caplog.at_level(logging.ERROR, logger="mortis.agent"):
+        events = chat(client, ASK)
+    assert events == [
+        ("error", {"message": "出错了：ValueError"}),
+        ("messages", {"messages": []}),
+        ("done", {}),
+    ]
+    assert KEY not in caplog.text
 
 
 def test_missing_key(data_dir: Path, client: TestClient, holder: dict[str, ScriptedClient]) -> None:

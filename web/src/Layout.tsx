@@ -1,10 +1,21 @@
-import { ActionIcon, AppShell, Burger, Group, Progress, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, AppShell, Burger, Group, Progress, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { useDisclosure, useLocalStorage, useMediaQuery } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 import { NavLink as RouterNavLink, Outlet, useLocation } from "react-router";
 import { fetchLibraries, fetchSystemInfo, fetchTasks, fetchUnmatched } from "./api";
-import { DataTypeIcon, IconLibraries, IconSettings, IconSidebar, IconTasks, IconUnmatched, Logo } from "./icons";
+import { AgentProvider, useAgent } from "./components/agent/AgentContext";
+import { AgentDrawer } from "./components/agent/AgentDrawer";
+import {
+  DataTypeIcon,
+  IconLibraries,
+  IconSettings,
+  IconSidebar,
+  IconSparkle,
+  IconTasks,
+  IconUnmatched,
+  Logo,
+} from "./icons";
 
 function NavItem({
   to,
@@ -39,6 +50,25 @@ function NavItem({
           </>
         )}
       </RouterNavLink>
+    </Tooltip>
+  );
+}
+
+function AgentNavItem({ collapsed }: { collapsed: boolean }) {
+  const { opened, open, close } = useAgent();
+  return (
+    <Tooltip label="AI" position="right" withArrow disabled={!collapsed}>
+      <UnstyledButton
+        className={opened ? "mo-nav active" : "mo-nav"}
+        onClick={opened ? close : open}
+        aria-label={collapsed ? "AI" : undefined}
+        aria-expanded={opened}
+      >
+        <span className="mo-nav-icon">
+          <IconSparkle />
+        </span>
+        {!collapsed && <span className="mo-nav-label">AI</span>}
+      </UnstyledButton>
     </Tooltip>
   );
 }
@@ -148,6 +178,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () =>
           collapsed={collapsed}
         />
         <NavItem to="/settings" icon={<IconSettings />} label="设置" collapsed={collapsed} />
+        <AgentNavItem collapsed={collapsed} />
       </nav>
 
       <div className="mo-side-foot">
@@ -189,29 +220,32 @@ export function Layout() {
   useEffect(() => close(), [pathname, close]);
 
   return (
-    <AppShell
-      header={{ height: 52, collapsed: !mobile }}
-      navbar={{ width: collapsed ? 68 : 240, breakpoint: "62em", collapsed: { mobile: !opened } }}
-      padding={0}
-    >
-      <AppShell.Header className="mo-topbar">
-        <Group h="100%" px="md" gap="sm">
-          <Burger opened={opened} onClick={toggle} size="sm" aria-label="打开导航" />
-          <Logo size={24} />
-          <Text fw={700}>莫提斯</Text>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Navbar className="mo-navbar">
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={mobile ? undefined : () => setSideCollapsed((value) => !value)}
-        />
-      </AppShell.Navbar>
-      <AppShell.Main className="mo-main">
-        <div className="mo-page">
-          <Outlet />
-        </div>
-      </AppShell.Main>
-    </AppShell>
+    <AgentProvider>
+      <AppShell
+        header={{ height: 52, collapsed: !mobile }}
+        navbar={{ width: collapsed ? 68 : 240, breakpoint: "62em", collapsed: { mobile: !opened } }}
+        padding={0}
+      >
+        <AppShell.Header className="mo-topbar">
+          <Group h="100%" px="md" gap="sm">
+            <Burger opened={opened} onClick={toggle} size="sm" aria-label="打开导航" />
+            <Logo size={24} />
+            <Text fw={700}>莫提斯</Text>
+          </Group>
+        </AppShell.Header>
+        <AppShell.Navbar className="mo-navbar">
+          <Sidebar
+            collapsed={collapsed}
+            onToggle={mobile ? undefined : () => setSideCollapsed((value) => !value)}
+          />
+        </AppShell.Navbar>
+        <AppShell.Main className="mo-main">
+          <div className="mo-page">
+            <Outlet />
+          </div>
+        </AppShell.Main>
+      </AppShell>
+      <AgentDrawer />
+    </AgentProvider>
   );
 }
