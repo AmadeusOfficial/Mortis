@@ -1,47 +1,40 @@
 .shelves {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
 }
 
 .shelf {
   min-width: 0;
 }
 
+.shelf + .shelf {
+  padding-top: 18px;
+  border-top: 1px solid var(--mo-line);
+}
+
 .shelfHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 13px;
 }
 
-/* 主题色竖条 + 标签名 + 数量徽章 */
+/* 与首张海报左边缘齐平的标题 + 轻磨砂计数签 */
 .shelfTitle {
   margin: 0;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding-left: 12px;
-  position: relative;
-}
-
-.shelfTitle::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 2px;
-  background: var(--mo-accent);
-  transform: translateY(-50%);
 }
 
 .shelfName {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--mo-text);
   white-space: nowrap;
   overflow: hidden;
@@ -50,58 +43,102 @@
 
 .shelfCount {
   flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  color: var(--mo-dim);
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: var(--mo-surface-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  padding: 0 7.5px;
+  border-radius: 6px;
   border: 1px solid var(--mo-line);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mo-text) 4.5%, var(--mo-surface-2)) 0%,
+    var(--mo-surface) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mo-text) 6.5%, transparent);
+  line-height: 1;
 }
 
-.shelfCount > :global(.mo-mono) {
-  color: var(--mo-text);
+.shelfCountNum {
+  font-size: 12px;
   font-weight: 600;
+  color: color-mix(in srgb, var(--mo-text) 86%, var(--mo-dim));
+}
+
+.shelfCountUnit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mo-dim);
 }
 
 .viewAll {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 5px 8px 5px 12px;
-  border-radius: 999px;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px 0 12px;
+  border-radius: 8px;
   border: 1px solid var(--mo-line);
-  background: transparent;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mo-text) 4.5%, var(--mo-surface-2)) 0%,
+    var(--mo-surface) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--mo-text) 7%, transparent),
+    0 1px 2px rgb(0 0 0 / 34%);
   color: var(--mo-dim);
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
   cursor: pointer;
   transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease;
+}
+
+.viewAll > svg {
+  color: color-mix(in srgb, var(--mo-accent-hi) 68%, var(--mo-dim));
+  transition:
+    transform 160ms ease,
+    color 160ms ease;
+}
+
+.shelf:hover .viewAll {
+  border-color: var(--mo-line-2);
 }
 
 .viewAll:hover {
-  color: var(--mo-accent-hi);
+  color: var(--mo-text);
   border-color: var(--mo-accent-bd);
-  background: var(--mo-accent-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mo-accent) 18%, var(--mo-surface-3)) 0%,
+    color-mix(in srgb, var(--mo-accent) 10%, var(--mo-surface-2)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--mo-text) 14%, transparent),
+    0 6px 18px -6px rgb(0 0 0 / 72%);
+}
+
+.viewAll:hover > svg {
+  color: var(--mo-accent-hi);
+  transform: translateX(2.5px);
+}
+
+.viewAll:active {
+  transform: scale(0.97);
 }
 
 .viewAll:focus-visible {
   outline: 2px solid var(--mo-accent);
   outline-offset: 2px;
-}
-
-.viewAll > svg {
-  transition: transform 0.15s;
-}
-
-.viewAll:hover > svg {
-  transform: translateX(2px);
 }
 
 /* 宽度固定的海报卡片横向排开，细滚动条 */

@@ -186,7 +186,8 @@ export function TagShelves({
             <h3 className={styles.shelfTitle}>
               <span className={styles.shelfName}>{shelf.name}</span>
               <span className={styles.shelfCount}>
-                <span className="mo-mono">{shelf.count}</span> {unit}
+                <span className={`${styles.shelfCountNum} mo-mono`}>{shelf.count}</span>
+                <span className={styles.shelfCountUnit}>{unit}</span>
               </span>
             </h3>
             {shelf.count > 0 && (
@@ -196,8 +197,8 @@ export function TagShelves({
                 aria-label={`查看全部：${shelf.name}`}
                 onClick={() => onViewAll({ id: shelf.tag_id, name: shelf.name })}
               >
-                查看全部
-                <IconChevronRight size={14} />
+                <span>查看全部</span>
+                <IconChevronRight size={13.5} strokeWidth={2} />
               </button>
             )}
           </div>
