@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag
-from mortis.items import user_tags
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
@@ -135,7 +134,6 @@ class ItemDetail(BaseModel):
     seasons: list[SeasonOut]
     files: list[FileOut]
     scraped_at: str | None
-    user_tags: list[str]
     sections: list[SectionOut]
     guess: FileGuess | None = None
     """第一个视频或游戏目录的文件名、上级目录名，和从文件名解析出的标题、年份。"""
@@ -315,11 +313,37 @@ def list_items(
     order: WallOrder = "asc",
     tag: Annotated[list[int] | None, Query()] = None,
 ) -> list[dict[str, Any]]:
-    """tag 是这个库数据类型的自定义标签 id，可以给多个，取交集。"""
+    """tag 是类型（genre）标签的 id，可以给多个，取交集。"""
     library = libraries.get_library(session, library_id)
     tags = shelf_tags(session, library, tag or [])
     term = q.strip() if q else ""
     return wall_rows(session, *wall_items(session, library, term, sort, order, tags))
+
+
+GENRE = "genre"
+
+
+class GenreOut(BaseModel):
+    id: int
+    name: str
+    count: int
+    """这个库里有这个类型的作品数。"""
+
+
+@router.get("/libraries/{library_id}/genres", response_model=list[GenreOut])
+def list_genres(library_id: int, session: SessionDep) -> list[dict[str, Any]]:
+    """这个库的作品用到的全部类型（含刮削来的和手改的），给分类视图挑选。"""
+    library = libraries.get_library(session, library_id)
+    count = func.count(func.distinct(ItemTag.item_id))
+    rows = session.execute(
+        select(Tag, count)
+        .join(ItemTag, ItemTag.tag_id == Tag.id)
+        .join(Item, Item.id == ItemTag.item_id)
+        .where(Tag.tag_kind == GENRE, Item.library_id == library.id, Item.kind == "work")
+        .group_by(Tag.id)
+        .order_by(func.lower(Tag.name), Tag.id)
+    ).all()
+    return [{"id": tag.id, "name": tag.name, "count": n} for tag, n in rows]
 
 
 class Shelf(BaseModel):
@@ -341,7 +365,7 @@ def list_shelves(
     sort: WallSort = "title",
     order: WallOrder = "asc",
 ) -> list[dict[str, Any]]:
-    """分类视图：按传入的自定义标签顺序，每个标签一行。tags 是逗号分隔的标签 id。"""
+    """分类视图：按传入的类型顺序，每个类型一行。tags 是逗号分隔的类型标签 id。"""
     library = libraries.get_library(session, library_id)
     try:
         ids = [int(part) for part in tags.split(",") if part.strip()]
@@ -362,15 +386,14 @@ def list_shelves(
 
 
 def shelf_tags(session: Session, library: Library, tag_ids: list[int]) -> list[Tag]:
-    """按给出的顺序取标签；不是这个库数据类型的自定义标签就 400。"""
-    kind = user_tags.tag_kind(library.data_type_id)
+    """按给出的顺序取类型标签；不是类型的编号就 400。"""
     found = {
         tag.id: tag
-        for tag in session.scalars(select(Tag).where(Tag.id.in_(tag_ids), Tag.tag_kind == kind))
+        for tag in session.scalars(select(Tag).where(Tag.id.in_(tag_ids), Tag.tag_kind == GENRE))
     }
     missing = [str(tag_id) for tag_id in tag_ids if tag_id not in found]
     if missing:
-        raise ItemError(f"这些标签不属于这个库的类型：{'、'.join(missing)}", status_code=400)
+        raise ItemError(f"这些编号不是类型：{'、'.join(missing)}", status_code=400)
     return [found[tag_id] for tag_id in tag_ids]
 
 

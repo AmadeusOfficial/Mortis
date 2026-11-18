@@ -15,7 +15,6 @@ const TOOL_LABELS: Record<string, string> = {
   search_items: "检索",
   get_item: "查看",
   update_fields: "修改",
-  set_user_tags: "改标签",
   scrape_item: "刮削",
   scan_library: "扫描",
   play_item: "播放",
@@ -192,22 +191,6 @@ function ApprovalLine({ item }: { item: ApprovalItem }) {
             {field.label} → {formatValue(field.value)}
           </Text>
         ))}
-      </div>
-    );
-  }
-  if (item.tool === "set_user_tags" && item.title !== undefined) {
-    const changes = [
-      item.add !== undefined && item.add.length > 0 ? `加上：${item.add.join("、")}` : null,
-      item.remove !== undefined && item.remove.length > 0 ? `去掉：${item.remove.join("、")}` : null,
-    ].filter((part) => part !== null);
-    return (
-      <div>
-        <Text size="sm" fw={600}>
-          {item.title}
-        </Text>
-        <Text size="xs" c="var(--mo-dim)">
-          {changes.join("／")}
-        </Text>
       </div>
     );
   }

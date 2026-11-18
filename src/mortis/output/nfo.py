@@ -24,7 +24,6 @@ from mortis.db.models import (
     PersonExternalId,
     Tag,
 )
-from mortis.items.user_tags import item_tags
 from mortis.sources.tmdb.client import TmdbClient
 from mortis.sources.tmdb.common import SOURCE
 from mortis.sources.tmdb.movie import movie_candidates
@@ -54,9 +53,9 @@ def _tags(session: Session, item: Item, kind: str) -> list[str]:
 
 
 def nfo_tags(session: Session, item: Item) -> list[str]:
-    """写成 <tag> 的：来源给的关键词，后面接自定义标签，重名的只写一次。"""
+    """写成 <tag> 的：来源给的关键词，重名的只写一次。"""
     names: dict[str, str] = {}
-    for name in _tags(session, item, "keyword") + item_tags(session, item):
+    for name in _tags(session, item, "keyword"):
         names.setdefault(name.casefold(), name)
     return list(names.values())
 

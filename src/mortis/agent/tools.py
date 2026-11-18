@@ -19,7 +19,6 @@ from mortis.api.routes.libraries import enqueue_organize
 from mortis.api.routes.play import PlayChoices, PlayRequest, play
 from mortis.db.models import DataType, Item, ItemTag, Library, Tag
 from mortis.errors import UserError
-from mortis.items import user_tags
 from mortis.items.detail import image_url, read_value, year_of
 from mortis.items.edit import ItemError, edit_fields
 from mortis.output.service import rewrite_if_arranged
@@ -32,11 +31,10 @@ TEXT_LIMIT = 300
 PEOPLE_LIMIT = 10
 EPISODE_LIMIT = 200
 CANDIDATE_LIMIT = 20
-TYPE_TAG_LIMIT = 200
 TOP_KINDS = ("work", "collection")
 MAIN_FILE_KINDS = ("video", "game")
 RECOGNIZE_TOOLS = frozenset({"rematch_item", "bind_file"})
-EDIT_TOOLS = frozenset({"update_fields", "set_user_tags"})
+EDIT_TOOLS = frozenset({"update_fields"})
 """改一个条目的工具。一次提问内合起来改了两个及以上条目就要批准。"""
 
 
@@ -246,9 +244,9 @@ def _clip(text: str) -> str:
 
 def _search_items(ctx: ToolContext, args: dict[str, Any]) -> Result:
     term = args.get("query", "").strip()
-    user_tag = args.get("user_tag", "").strip()
-    if not term and not user_tag:
-        raise ItemError("query 和 user_tag 至少给一个")
+    genre = args.get("genre", "").strip()
+    if not term and not genre:
+        raise ItemError("query 和 genre 至少给一个")
     kinds = (args["kind"],) if "kind" in args else TOP_KINDS
     conditions = [Item.kind.in_(kinds)]
     if term:
@@ -257,13 +255,13 @@ def _search_items(ctx: ToolContext, args: dict[str, Any]) -> Result:
             | Item.original_title.icontains(term, autoescape=True)
             | Item.sort_title.icontains(term, autoescape=True)
         )
-    if user_tag:
+    if genre:
         conditions.append(
             exists().where(
                 ItemTag.item_id == Item.id,
                 ItemTag.tag_id == Tag.id,
-                Tag.tag_kind == user_tags.PREFIX + Item.data_type_id,
-                func.lower(Tag.name) == user_tag.lower(),
+                Tag.tag_kind == "genre",
+                func.lower(Tag.name) == genre.lower(),
             )
         )
     if "library_id" in args:
@@ -352,13 +350,9 @@ def _get_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
         "fields": fields,
         "editable": editable,
         "locked": json.loads(item.locked_fields),
-        "user_tags": detail["user_tags"],
         "external_ids": detail["external_ids"],
         "file_count": direct_files + sum(s["file_count"] for s in detail["seasons"]),
     }
-    if item.kind in user_tags.TAGGABLE_KINDS:
-        known = [row["name"] for row in user_tags.list_tags(session, item.data_type_id)]
-        result["type_user_tags"] = known[:TYPE_TAG_LIMIT]
     if detail["guess"] is not None:
         result["file"] = detail["guess"].model_dump()
     if detail["collection"] is not None:
@@ -433,28 +427,6 @@ def _update_fields(ctx: ToolContext, args: dict[str, Any]) -> Result:
     }
 
 
-def _set_user_tags(ctx: ToolContext, args: dict[str, Any]) -> Result:
-    session = ctx.session
-    item = _item(session, args["item_id"])
-    add: list[str] = args.get("add", [])
-    remove: list[str] = args.get("remove", [])
-    if not add and not remove:
-        raise ItemError("add 和 remove 至少给一个标签")
-    names = user_tags.change_item_tags(session, item, add, remove)
-    rewrite_if_arranged(session, ctx.runner, item)
-    return {"item_id": item.id, "title": item.title, "user_tags": names}
-
-
-def _describe_tags(ctx: ToolContext, args: dict[str, Any]) -> Result:
-    item = ctx.session.get(Item, args["item_id"])
-    return {
-        "item_id": args["item_id"],
-        "title": item.title if item is not None else f"条目 {args['item_id']}",
-        "add": args.get("add", []),
-        "remove": args.get("remove", []),
-    }
-
-
 def _scrape_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
     item = _item(ctx.session, args["item_id"])
     task_id = scrape_work(ctx.session, ctx.runner, item, force=True)
@@ -489,7 +461,7 @@ register(
     Tool(
         name="search_items",
         description=(
-            "按标题、原名、排序名或自定义标签检索所有库里的作品和系列（不含季和集），"
+            "按标题、原名、排序名或类型检索所有库里的作品和系列（不含季和集），"
             "最多返回 20 条。"
             "播放、修改之前先用它找到条目 id；同名的有多条时把候选列给用户选。"
         ),
@@ -497,9 +469,9 @@ register(
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "标题里的关键词"},
-                "user_tag": {
+                "genre": {
                     "type": "string",
-                    "description": "只找打了这个自定义标签的，和 query 至少给一个",
+                    "description": "只找有这个类型（如 犯罪、科幻）的，和 query 至少给一个",
                 },
                 "library_id": {"type": "integer", "description": "只在这个库里找"},
                 "kind": {
@@ -547,27 +519,6 @@ register(
         },
         run=_update_fields,
         describe=_describe_update,
-    )
-)
-TAG_NAMES = {"type": "array", "items": {"type": "string"}}
-register(
-    Tool(
-        name="set_user_tags",
-        description=(
-            "给一部作品或一个系列加减用户自己的标签（我的标签），不能给季和集打。"
-            "标签按数据类型分开；加之前先看 get_item 结果里的 type_user_tags，尽量用已有的。"
-        ),
-        parameters={
-            "type": "object",
-            "properties": {
-                "item_id": ITEM_ID,
-                "add": {**TAG_NAMES, "description": "要加上的标签名"},
-                "remove": {**TAG_NAMES, "description": "要去掉的标签名"},
-            },
-            "required": ["item_id"],
-        },
-        run=_set_user_tags,
-        describe=_describe_tags,
     )
 )
 register(

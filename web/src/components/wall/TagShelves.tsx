@@ -1,7 +1,7 @@
 import { Alert, Button, Checkbox, Loader, Popover, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
-import { type SortOrder, type UserTag, type WallSort, fetchShelves } from "../../api";
+import { type SortOrder, type Genre, type WallSort, fetchShelves } from "../../api";
 import { IconArrowRight, IconDrag, IconList } from "../../icons";
 import { PosterCard } from "../PosterCard";
 import styles from "./TagShelves.module.css";
@@ -19,7 +19,7 @@ export function saveView(libraryId: number, view: WallView) {
   window.localStorage.setItem(viewKey(libraryId), view);
 }
 
-// 勾选的标签 id，按显示顺序。
+// 勾选的类型 id，按显示顺序。
 export function readShelfTags(libraryId: number): number[] {
   try {
     const saved: unknown = JSON.parse(window.localStorage.getItem(shelfKey(libraryId)) ?? "[]");
@@ -33,13 +33,13 @@ export function saveShelfTags(libraryId: number, ids: number[]) {
   window.localStorage.setItem(shelfKey(libraryId), JSON.stringify(ids));
 }
 
-// 「展示」面板：勾选要显示的标签；已勾选的在上面，拖把手排顺序；未勾选的按名称排在下面。
+// 「展示」面板：勾选要显示的类型；已勾选的在上面，拖把手排顺序；未勾选的按名称排在下面。
 export function ShelfPicker({
   tags,
   selected,
   onChange,
 }: {
-  tags: UserTag[];
+  tags: Genre[];
   selected: number[];
   onChange: (ids: number[]) => void;
 }) {
@@ -81,10 +81,10 @@ export function ShelfPicker({
       <Popover.Dropdown p={6}>
         {tags.length === 0 ? (
           <Text size="sm" c="var(--mo-dim)" p={8}>
-            先在详情页给剧打上我的标签。
+            这个库还没有类型，刮削后会带上。
           </Text>
         ) : (
-          <ul className={styles.pickList} aria-label="要显示的标签">
+          <ul className={styles.pickList} aria-label="要显示的类型">
             {picked.map((tag) => (
               <li
                 key={tag.id}
@@ -137,7 +137,7 @@ export function ShelfPicker({
   );
 }
 
-// 分类视图：每个勾选的标签一行，横向滚动；没落在任何已选标签里的条目不显示。
+// 分类视图：每个勾选的类型一行，横向滚动；没落在任何已选类型里的条目不显示。
 export function TagShelves({
   libraryId,
   tagIds,
@@ -163,7 +163,7 @@ export function TagShelves({
     return (
       <div className={styles.empty}>
         <Text c="var(--mo-dim)" size="sm">
-          点「展示」选择要显示的标签。
+          点「展示」选择要显示的类型。
         </Text>
       </div>
     );
@@ -203,7 +203,7 @@ export function TagShelves({
           </div>
           {shelf.items.length === 0 ? (
             <Text size="sm" c="var(--mo-dim)">
-              这个标签下还没有内容。
+              这个类型下还没有内容。
             </Text>
           ) : (
             <div className={styles.row}>

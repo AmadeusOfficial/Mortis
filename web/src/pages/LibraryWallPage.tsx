@@ -20,7 +20,7 @@ import {
   arrangeLibrary,
   fetchLibrary,
   fetchLibraryArrangePreview,
-  fetchUserTags,
+  fetchLibraryGenres,
   fetchWall,
   organizeLibrary,
   scrapeLibrary,
@@ -138,16 +138,16 @@ export function LibraryWallPage() {
     saveShelfTags(id, value);
     setSavedShelves({ id, value });
   };
-  // 分类视图里点「查看全部」后，海报墙只看这个标签。
+  // 分类视图里点「查看全部」后，海报墙只看这个类型。
   const [tagFilter, setTagFilter] = useState<{ id: number; name: string } | null>(null);
-  const userTags = useQuery({
-    queryKey: ["user-tags", libData?.data_type_id],
-    queryFn: () => fetchUserTags(libData?.data_type_id ?? ""),
+  const genres = useQuery({
+    queryKey: ["genres", id],
+    queryFn: () => fetchLibraryGenres(id),
     enabled: shelvesOn,
   });
-  // 存下的勾选里可能有已删除的标签，取数前去掉。
-  const shownTags = userTags.data
-    ? shelfIds.filter((tagId) => userTags.data.some((tag) => tag.id === tagId))
+  // 存下的勾选里可能有库里已经没有的类型，取数前去掉。
+  const shownTags = genres.data
+    ? shelfIds.filter((tagId) => genres.data.some((tag) => tag.id === tagId))
     : null;
 
   const wall = useQuery({
@@ -452,7 +452,7 @@ export function LibraryWallPage() {
                 </FilterChip>
                 {tagFilter !== null && (
                   <FilterChip active onClick={() => setTagFilter(null)}>
-                    按标签：{tagFilter.name}
+                    按类型：{tagFilter.name}
                     <IconClose size={12} />
                   </FilterChip>
                 )}
@@ -475,7 +475,7 @@ export function LibraryWallPage() {
             />
           )}
           {view === "shelves" && (
-            <ShelfPicker tags={userTags.data ?? []} selected={shownTags ?? []} onChange={setShelfIds} />
+            <ShelfPicker tags={genres.data ?? []} selected={shownTags ?? []} onChange={setShelfIds} />
           )}
           <Select
             data={SORTS}
@@ -491,11 +491,11 @@ export function LibraryWallPage() {
         </div>
       </div>
 
-      {view === "shelves" && userTags.isPending && <Loader size="sm" />}
+      {view === "shelves" && genres.isPending && <Loader size="sm" />}
 
-      {view === "shelves" && userTags.isError && (
-        <Alert color="red" title="读不到标签">
-          {userTags.error.message}
+      {view === "shelves" && genres.isError && (
+        <Alert color="red" title="读不到类型">
+          {genres.error.message}
         </Alert>
       )}
 

@@ -25,7 +25,7 @@ from mortis.agent.tools import (
 from mortis.api.app import create_app
 from mortis.config.models import AiSecrets, NetworkSecrets, PlaybackConfig, Secrets
 from mortis.config.store import ConfigStore
-from mortis.db.models import Item, ItemExternalId, MediaFile, Task, utc_now
+from mortis.db.models import Item, ItemExternalId, ItemTag, MediaFile, Tag, Task, utc_now
 from mortis.errors import UserError
 from mortis.settings import Settings
 from tests.fakes import FakeLauncher
@@ -246,7 +246,6 @@ def test_schemas_are_openai_functions() -> None:
         "search_items",
         "get_item",
         "update_fields",
-        "set_user_tags",
         "scrape_item",
         "scan_library",
         "play_item",
@@ -547,28 +546,28 @@ def test_batch_update_targets() -> None:
     assert batch_update_targets([call("scrape_item", {"item_id": 1})]) == []
     mixed = [
         call("update_fields", {"item_id": 1, "values": {"title": "a"}}),
-        call("set_user_tags", {"item_id": 2, "add": ["收藏"]}),
+        call("update_fields", {"item_id": 2, "values": {"title": "b"}}),
     ]
-    assert batch_update_targets(mixed) == [1, 2]
     assert calls_needing_approval(mixed) == mixed
-    single = [call("set_user_tags", {"item_id": 3, "add": ["收藏"]})]
+    single = [call("update_fields", {"item_id": 3, "values": {"title": "c"}})]
     assert calls_needing_approval(single) == []
     assert calls_needing_approval(single, changed=[1]) == single
 
 
-def test_set_user_tags_and_search_by_tag(ctx: ToolContext, shelf: dict[str, int]) -> None:
-    added = _run(ctx, "set_user_tags", item_id=shelf["matrix"], add=["收藏", " 科幻 "])
-    assert added == {"item_id": shelf["matrix"], "title": "黑客帝国", "user_tags": ["收藏", "科幻"]}
-    removed = _run(ctx, "set_user_tags", item_id=shelf["matrix"], remove=["科幻"])
-    assert removed["user_tags"] == ["收藏"]
-    assert _run(ctx, "set_user_tags", item_id=shelf["matrix"]) == {
-        "error": "add 和 remove 至少给一个标签"
-    }
-    assert "error" in _run(ctx, "set_user_tags", item_id=shelf["season"], add=["收藏"])
-    item = _run(ctx, "get_item", item_id=shelf["matrix"])
-    assert item["user_tags"] == ["收藏"] and item["type_user_tags"] == ["收藏", "科幻"]
-    found = _run(ctx, "search_items", user_tag="收藏")["items"]
-    assert [row["id"] for row in found] == [shelf["matrix"]]
-    _run(ctx, "set_user_tags", item_id=shelf["show"], add=["收藏"])
-    in_tv = _run(ctx, "search_items", user_tag="收藏", query="动画")["items"]
+def test_search_by_genre(ctx: ToolContext, shelf: dict[str, int]) -> None:
+    session = ctx.session
+    crime = Tag(tag_kind="genre", name="犯罪")
+    session.add(crime)
+    session.flush()
+    session.add_all(
+        [
+            ItemTag(item_id=shelf["matrix"], tag_id=crime.id, position=0),
+            ItemTag(item_id=shelf["show"], tag_id=crime.id, position=0),
+        ]
+    )
+    session.commit()
+    assert _run(ctx, "search_items") == {"error": "query 和 genre 至少给一个"}
+    found = _run(ctx, "search_items", genre="犯罪")["items"]
+    assert sorted(row["id"] for row in found) == sorted([shelf["matrix"], shelf["show"]])
+    in_tv = _run(ctx, "search_items", genre="犯罪", query="动画")["items"]
     assert [row["id"] for row in in_tv] == [shelf["show"]]
