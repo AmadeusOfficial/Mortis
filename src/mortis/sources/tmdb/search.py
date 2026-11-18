@@ -45,6 +45,8 @@ class MovieHit:
 class Match:
     hit: MovieHit
     score: float
+    rivals: tuple[MovieHit, ...] = ()
+    """文件名没有年份时，名字同样完全一致、有上映年份的其他候选；有的话不自动绑定，交给人选。"""
 
 
 def _hit(raw: dict[str, Any]) -> MovieHit:
@@ -228,6 +230,22 @@ def _check_aliases(pool: _Pool, best: Match, threshold: float) -> bool:
     return best.hit.popularity < top * OBSCURE_RATIO
 
 
+def _exact(hit: MovieHit, attempts: list[tuple[str, int | None]]) -> bool:
+    return any(similarity(title, name) == 1.0 for title, _ in attempts for name in _names(hit))
+
+
+def _rivals(
+    pool: _Pool, best: Match, attempts: list[tuple[str, int | None]]
+) -> tuple[MovieHit, ...]:
+    if not _exact(best.hit, attempts):
+        return ()
+    return tuple(
+        hit
+        for hit in pool.hits.values()
+        if hit.tmdb_id != best.hit.tmdb_id and hit.year is not None and _exact(hit, attempts)
+    )
+
+
 def _alternative_titles(tmdb: TmdbClient, kind: str, tmdb_id: int) -> tuple[str, ...]:
     try:
         body = tmdb.get(f"/{kind}/{tmdb_id}/alternative_titles")
@@ -295,6 +313,8 @@ def find_best(
             pool.add(pool.hits[tmdb_id], _alternative_titles(tmdb, kind, tmdb_id), local=False)
         best = pool.best(attempts, shorts, parsed.year)
 
+    if best is not None and parsed.year is None:
+        best = replace(best, rivals=_rivals(pool, best, attempts))
     if best is not None and best.hit.tmdb_id not in pool.local:
-        best = Match(_localized(tmdb, kind, best.hit), best.score)
+        best = replace(best, hit=_localized(tmdb, kind, best.hit))
     return best

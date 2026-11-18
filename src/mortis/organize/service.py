@@ -104,6 +104,17 @@ def organize_library(
                     )
                     ctx.log(f"未识别：{group.movie.name}{best}")
                     continue
+                if match.rivals:
+                    unmatched += 1
+                    names = "、".join(
+                        f"{hit.title}（{hit.year or '年份未知'}）"
+                        for hit in (match.hit, *match.rivals)
+                    )
+                    ctx.log(
+                        f"未识别：{group.movie.name}，有 {len(match.rivals) + 1} 部同名片："
+                        f"{names}，文件名没有年份，请手动匹配"
+                    )
+                    continue
                 with services.locks.hold("catalog-write"):
                     item, _created = find_or_create_movie(
                         session,

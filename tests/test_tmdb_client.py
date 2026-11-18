@@ -147,6 +147,26 @@ def test_english_search_is_skipped_for_chinese_queries_and_english_libraries() -
     assert languages == ["zh-CN", "en-US"]
 
 
+def test_same_name_films_without_year_are_left_for_manual_pick() -> None:
+    fake = FakeTmdb()
+    fake.add_search(
+        "Flow",
+        [
+            hit(823219, "Flow", "2024-08-29"),
+            hit(11, "Flow", "2010-05-01"),
+            hit(12, "Flow", ""),
+            hit(13, "Flowers", "2015-01-01"),
+        ],
+    )
+    tmdb = TmdbClient(
+        httpx.Client(transport=fake.transport), "k", language="en-US", include_adult=True
+    )
+    match = find_best(tmdb, parse_name("Flow"))
+    assert match is not None and [r.tmdb_id for r in match.rivals] == [11]
+    match = find_best(tmdb, parse_name("Flow.2024"))
+    assert match is not None and match.hit.tmdb_id == 823219 and match.rivals == ()
+
+
 def test_find_best_tries_variants_and_falls_back_without_year() -> None:
     fake = FakeTmdb()
     fake.add_search("黑客帝国 The Matrix", [])

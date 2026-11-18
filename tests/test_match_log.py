@@ -130,11 +130,42 @@ def tmdb() -> TmdbClient:
     )
 
 
+# 没有年份、TMDB 上有好几部名字完全一样的片：不自动绑定，正确的那部要在候选里。
+AMBIGUOUS = {
+    "A.Guilty.Conscience",
+    "All's.Well.End's.Well",
+    "All.Quiet.on.the.Western.Front",
+    "Dear.You",
+    "Fight.Back.to.School",
+    "Final.Justice",
+    "Flirting.Scholar",
+    "Flow",
+    "Gorgeous.UNCUT",
+    "Kaibutsu",
+    "King.of.Beggars",
+    "Legend.of.the.Dragon",
+    "Love.is.Love",
+    "Never.Say.Never",
+    "Nobody.Knows",
+    "Out.of.the.Dark",
+    "Paprika",
+    "Pegasus",
+    "Royal.Tramp",
+    "The.Mad.Monk",
+    "The.Mermaid",
+}
+
+
 @pytest.mark.parametrize(("name", "tmdb_id"), EXPECTED.items(), ids=list(EXPECTED))
 def test_log_name_is_matched(tmdb: TmdbClient, name: str, tmdb_id: int | None) -> None:
     match = find_best(tmdb, parse_name(name), threshold=THRESHOLD)
-    got = match.hit.tmdb_id if match is not None and match.score >= THRESHOLD else None
-    assert got == tmdb_id
+    if name in AMBIGUOUS:
+        assert match is not None and match.rivals
+        assert tmdb_id in {hit.tmdb_id for hit in (match.hit, *match.rivals)}
+        return
+    matched = match is not None and match.score >= THRESHOLD and not match.rivals
+    got = match.hit.tmdb_id if matched else None
+    assert got == tmdb_id, match and [(r.tmdb_id, r.title, r.year) for r in match.rivals]
 
 
 def test_english_only_winner_gets_local_title(tmdb: TmdbClient) -> None:
