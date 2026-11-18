@@ -50,13 +50,14 @@
   max-height: 100%;
   object-fit: contain;
 }
+/* 选图时固定用中灰棋盘格，白字和黑字的标志都看得清，不随主题变深。 */
 .checker {
-  background-color: var(--mo-surface-2);
+  background-color: #7a7a7a;
   background-image:
-    linear-gradient(45deg, var(--mo-surface-3) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--mo-surface-3) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--mo-surface-3) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--mo-surface-3) 75%);
+    linear-gradient(45deg, #949494 25%, transparent 25%),
+    linear-gradient(-45deg, #949494 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #949494 75%),
+    linear-gradient(-45deg, transparent 75%, #949494 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
