@@ -115,6 +115,14 @@ def organize_library(
                         f"{names}，文件名没有年份，请手动匹配"
                     )
                     continue
+                if match.loose:
+                    unmatched += 1
+                    year = f"（{match.hit.year}）" if match.hit.year else ""
+                    ctx.log(
+                        f"未识别：{group.movie.name}，最接近的是 {match.hit.title}{year}，"
+                        f"匹配度 {match.score:.2f}，文件名没有年份、名字只部分对上，请手动匹配"
+                    )
+                    continue
                 with services.locks.hold("catalog-write"):
                     item, _created = find_or_create_movie(
                         session,

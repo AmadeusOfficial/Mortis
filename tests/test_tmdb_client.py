@@ -167,6 +167,18 @@ def test_same_name_films_without_year_are_left_for_manual_pick() -> None:
     assert match is not None and match.hit.tmdb_id == 823219 and match.rivals == ()
 
 
+def test_partial_name_without_year_is_left_for_manual_pick() -> None:
+    fake = FakeTmdb()
+    fake.add_search("Blossoms", [hit(15529, "Love Blossoms", "")])
+    fake.add_search("Love Blossoms", [hit(15529, "Love Blossoms", "")])
+    tmdb = TmdbClient(
+        httpx.Client(transport=fake.transport), "k", language="en-US", include_adult=True
+    )
+    match = find_best(tmdb, parse_name("Blossoms"))
+    assert match is not None and match.loose
+    assert not find_best(tmdb, parse_name("Love.Blossoms")).loose
+
+
 def test_find_best_tries_variants_and_falls_back_without_year() -> None:
     fake = FakeTmdb()
     fake.add_search("黑客帝国 The Matrix", [])

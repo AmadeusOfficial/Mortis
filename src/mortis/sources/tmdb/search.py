@@ -25,6 +25,7 @@ ALIAS_CANDIDATES = 3
 OBSCURE_RATIO = 0.1
 SEQUEL_PENALTY = 0.3
 NO_YEAR_PENALTY = 0.05
+SURE_SCORE = 0.9
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,8 @@ class Match:
     score: float
     rivals: tuple[MovieHit, ...] = ()
     """文件名没有年份时，名字同样完全一致、有上映年份的其他候选；有的话不自动绑定，交给人选。"""
+    loose: bool = False
+    """文件名没有年份，名字也只部分对上（低于 SURE_SCORE）；不自动绑定，交给人选。"""
 
 
 def _hit(raw: dict[str, Any]) -> MovieHit:
@@ -314,7 +317,7 @@ def find_best(
         best = pool.best(attempts, shorts, parsed.year)
 
     if best is not None and parsed.year is None:
-        best = replace(best, rivals=_rivals(pool, best, attempts))
+        best = replace(best, rivals=_rivals(pool, best, attempts), loose=best.score < SURE_SCORE)
     if best is not None and best.hit.tmdb_id not in pool.local:
         best = replace(best, hit=_localized(tmdb, kind, best.hit))
     return best

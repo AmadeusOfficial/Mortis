@@ -156,6 +156,10 @@ AMBIGUOUS = {
 }
 
 
+# 没有年份、名字只部分对上：最接近的就是正确的那部，但也不自动绑定。
+LOOSE = {"A.Chinese.Odyssey.Part.1", "A.Chinese.Odyssey.Part.2"}
+
+
 @pytest.mark.parametrize(("name", "tmdb_id"), EXPECTED.items(), ids=list(EXPECTED))
 def test_log_name_is_matched(tmdb: TmdbClient, name: str, tmdb_id: int | None) -> None:
     match = find_best(tmdb, parse_name(name), threshold=THRESHOLD)
@@ -163,7 +167,12 @@ def test_log_name_is_matched(tmdb: TmdbClient, name: str, tmdb_id: int | None) -
         assert match is not None and match.rivals
         assert tmdb_id in {hit.tmdb_id for hit in (match.hit, *match.rivals)}
         return
-    matched = match is not None and match.score >= THRESHOLD and not match.rivals
+    if name in LOOSE:
+        assert match is not None and match.loose and match.hit.tmdb_id == tmdb_id
+        return
+    matched = (
+        match is not None and match.score >= THRESHOLD and not match.rivals and not match.loose
+    )
     got = match.hit.tmdb_id if matched else None
     assert got == tmdb_id, match and [(r.tmdb_id, r.title, r.year) for r in match.rivals]
 
