@@ -1,6 +1,7 @@
 // 改编自 Amane（https://github.com/sqzw-x/amane，GPL-3.0）的 winapp/DesktopSettings.cs。
-// 托盘设置文件：%LOCALAPPDATA%\Mortis\desktop.env。
-// 位置固定，不随 MORTIS_DATA_DIR 变：要先读它才知道数据目录在哪。
+// 托盘设置文件：解压目录下的 desktop.env，数据默认在解压目录下的 data。
+// 解压目录不能写（比如放进了 Program Files）时两者都退回 %LOCALAPPDATA%\Mortis。
+// 设置文件的位置不随 MORTIS_DATA_DIR 变：要先读它才知道数据目录在哪。
 
 using System.Text;
 
@@ -19,19 +20,28 @@ internal static class DesktopSettings
         "MORTIS_PORT",
     ];
 
-    internal static string DefaultDataDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Mortis"
-    );
+    /// zip 解压出的目录，Mortis.exe 所在的位置。
+    internal static string AppRoot { get; } = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
 
-    internal static string SettingsPath { get; } = Path.Combine(DefaultDataDir, FileName);
+    /// 解压目录能写：设置、数据和更新都放在里面。
+    internal static bool Portable { get; } = IsWritable(AppRoot);
+
+    private static string HomeDir { get; } =
+        Portable
+            ? AppRoot
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mortis");
+
+    internal static string DefaultDataDir { get; } = Portable ? Path.Combine(AppRoot, "data") : HomeDir;
+
+    internal static string SettingsPath { get; } = Path.Combine(HomeDir, FileName);
 
     internal static string Template { get; } =
         $"""
         # 莫提斯托盘设置。每行一个 键=值，# 开头的行是注释。
         # 同名的系统环境变量优先于这个文件。改完从托盘菜单点「重启服务」生效。
         #
-        # 数据目录（数据库、图片、日志、设置和 key）。可以改到别的盘；改了不会搬走已有数据。
+        # 数据目录（数据库、图片、日志、设置和 key）。可以改到别的盘，相对路径按莫提斯所在的目录算；
+        # 改了不会搬走已有数据，要自己把旧目录里的东西挪过去。
         # MORTIS_DATA_DIR={DefaultDataDir}
         #
         # 监听地址。默认只有本机能访问；写 0.0.0.0 或 :: 让局域网也能访问，托盘自己仍访问 127.0.0.1。
@@ -57,8 +67,9 @@ internal static class DesktopSettings
     {
         CreateIfMissing();
         var parsed = Parse(ReadFile());
+        var dataDir = Resolve(parsed, "MORTIS_DATA_DIR");
         return new Config(
-            Resolve(parsed, "MORTIS_DATA_DIR") ?? DefaultDataDir,
+            dataDir is null ? DefaultDataDir : Path.GetFullPath(dataDir, AppRoot),
             Resolve(parsed, "MORTIS_HOST") ?? DefaultHost,
             Resolve(parsed, "MORTIS_PORT") ?? DefaultPort,
             parsed.UnknownKeys
@@ -98,22 +109,40 @@ internal static class DesktopSettings
         return new Parsed(values, unknown);
     }
 
-    /// 首次运行写模板；已有文件不覆盖。
-    internal static void CreateIfMissing()
+    /// 首次运行写模板；已有文件不覆盖。返回这次是否新写了文件。
+    internal static bool CreateIfMissing()
     {
         if (File.Exists(SettingsPath))
         {
-            return;
+            return false;
         }
 
         try
         {
-            Directory.CreateDirectory(DefaultDataDir);
+            Directory.CreateDirectory(HomeDir);
             File.WriteAllText(SettingsPath, Template, new UTF8Encoding(false));
+            return true;
         }
         catch (Exception)
         {
             // 写不了就当没有设置文件，按默认值启动。
+            return false;
+        }
+    }
+
+    /// 只看目录权限不可靠，真的建一个文件试。
+    private static bool IsWritable(string folder)
+    {
+        var probe = Path.Combine(folder, $".mortis-write-test-{Environment.ProcessId}");
+        try
+        {
+            File.WriteAllBytes(probe, []);
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 

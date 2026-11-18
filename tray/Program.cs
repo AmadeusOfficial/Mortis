@@ -3,11 +3,9 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 
 namespace Mortis.Tray;
 
@@ -15,9 +13,15 @@ internal static class Program
 {
     private const string MutexName = @"Local\Mortis.Tray";
 
+    /// 更新换好文件后，旧托盘用这两个参数拉起新托盘：先等旧托盘退出再接手。
+    internal const string AfterUpdateArg = "--after-update";
+    internal const string RestartArg = "--restart";
+
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        var afterUpdate = args.Contains(AfterUpdateArg);
+        var handOver = afterUpdate || args.Contains(RestartArg);
         Mutex? mutex;
         bool createdNew;
         try
@@ -32,13 +36,25 @@ internal static class Program
 
         using (mutex)
         {
+            if (!createdNew && handOver)
+            {
+                try
+                {
+                    createdNew = mutex is not null && mutex.WaitOne(TimeSpan.FromSeconds(30));
+                }
+                catch (AbandonedMutexException)
+                {
+                    createdNew = true;
+                }
+            }
+
             if (!createdNew)
             {
                 App.OpenUrl(DesktopSettings.Load().BaseUrl);
                 return 0;
             }
 
-            return App.Run();
+            return App.Run(afterUpdate);
         }
     }
 }
@@ -59,7 +75,7 @@ internal sealed class App
     private const int MaxQuickExits = 5;
     private static readonly TimeSpan QuickExit = TimeSpan.FromSeconds(30);
     private static readonly int[] BackoffSeconds = [1, 2, 4, 8, 16];
-    private const string ReleaseApi = "https://api.github.com/repos/AmadeusOfficial/Mortis/releases/latest";
+    private static readonly TimeSpan StartupUpdateDelay = TimeSpan.FromSeconds(20);
 
     private static App? _instance;
     private static Native.WndProc? _wndProc;
@@ -76,7 +92,10 @@ internal sealed class App
     private readonly AutoResetEvent _wake = new(false);
     private readonly HttpClient _local = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
     private readonly HttpClient _web = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private readonly HttpClient _download = new() { Timeout = TimeSpan.FromMinutes(15) };
     private readonly Version _version;
+    private readonly bool _afterUpdate;
+    private readonly bool _settingsCreated;
 
     private nint _hwnd;
     private nint _hIcon;
@@ -93,6 +112,7 @@ internal sealed class App
     private string _reason = "";
     private bool _pollInFlight;
     private bool _openedBrowser;
+    private bool _updating;
     private IReadOnlyList<string> _warnedKeys = Array.Empty<string>();
 
     // 以下由 _gate 保护，监督线程和界面线程都会碰。
@@ -100,20 +120,23 @@ internal sealed class App
     private bool _stopping;
     private bool _manualRestart;
 
-    private App()
+    private App(bool afterUpdate)
     {
         var v = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
         _version = new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
+        _afterUpdate = afterUpdate;
+        _settingsCreated = DesktopSettings.CreateIfMissing();
         _config = DesktopSettings.Load();
         _web.DefaultRequestHeaders.UserAgent.ParseAdd($"Mortis/{VersionText}");
         _web.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        _download.DefaultRequestHeaders.UserAgent.ParseAdd($"Mortis/{VersionText}");
     }
 
     private string VersionText => _version.ToString(3);
 
-    internal static int Run()
+    internal static int Run(bool afterUpdate)
     {
-        var app = new App();
+        var app = new App(afterUpdate);
         _instance = app;
         return app.RunLoop();
     }
@@ -130,6 +153,28 @@ internal sealed class App
         _hJob = CreateKillOnCloseJob();
         _ = Task.Factory.StartNew(Supervise, TaskCreationOptions.LongRunning);
         Native.SetTimer(_hwnd, PollTimerId, 1500, 0);
+
+        if (DesktopSettings.Portable)
+        {
+            _ = Task.Run(Updater.CleanUp);
+        }
+        else if (_settingsCreated)
+        {
+            Alert(
+                "数据放在用户目录",
+                $"莫提斯所在的目录不能写入，设置和数据改放在：\n{_config.DataDir}\n\n这种情况下不能自动更新，要自己下载新版本替换。");
+        }
+
+        if (_afterUpdate)
+        {
+            Notify("莫提斯已更新", $"现在是 {VersionText}。");
+        }
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(StartupUpdateDelay);
+            OnUi(() => CheckUpdate(silent: true));
+        });
 
         while (Native.GetMessage(out var msg, 0, 0, 0))
         {
@@ -622,7 +667,7 @@ internal sealed class App
                 RestartServer();
                 break;
             case IdUpdate:
-                CheckUpdate();
+                CheckUpdate(silent: false);
                 break;
             case IdQuit:
                 Native.PostMessage(_hwnd, Native.WmClose, 0, 0);
@@ -804,85 +849,152 @@ internal sealed class App
         }
     }
 
-    private void CheckUpdate()
+    /// silent：启动时自动查，只在有新版时出声，查不到或出错都不打扰。
+    private void CheckUpdate(bool silent)
     {
+        if (_updating)
+        {
+            if (!silent)
+            {
+                Alert("检查更新", "正在更新，请稍等。");
+            }
+
+            return;
+        }
+
         var current = _version;
+        _ = Task.Run(async () =>
+        {
+            Release? release;
+            try
+            {
+                release = await Updater.FetchLatest(_web);
+            }
+            catch (Exception ex)
+            {
+                if (!silent)
+                {
+                    var message = ex is UpdateException ? ex.Message : "暂时连不上 GitHub，请稍后再试。";
+                    OnUi(() => Alert("检查更新失败", message));
+                }
+
+                return;
+            }
+
+            if (release is null || release.Version <= current)
+            {
+                if (!silent)
+                {
+                    var message = release is null ? "还没有发布过版本。" : $"已经是最新版本（{current.ToString(3)}）。";
+                    OnUi(() => Alert("检查更新", message));
+                }
+
+                return;
+            }
+
+            OnUi(() => OfferUpdate(release));
+        });
+    }
+
+    private void OfferUpdate(Release release)
+    {
+        if (_updating)
+        {
+            return;
+        }
+
+        var latest = release.Version.ToString(3);
+        if (!DesktopSettings.Portable)
+        {
+            var open = Native.MessageBox(
+                _hwnd,
+                $"有新版本 {latest}（当前 {VersionText}）。\n莫提斯所在的目录不能写入，没法自动更新。要打开发布页面下载吗？",
+                "检查更新",
+                Native.MbYesNo | Native.MbIconInformation | Native.MbSetForeground);
+            if (open == Native.IdYes)
+            {
+                OpenUrl(release.PageUrl);
+            }
+
+            return;
+        }
+
+        var answer = Native.MessageBox(
+            _hwnd,
+            $"有新版本 {latest}（当前 {VersionText}）。\n现在更新吗？\n\n下载完成后服务会停一下再自动启动，数据目录和设置文件不会动。",
+            "检查更新",
+            Native.MbYesNo | Native.MbIconInformation | Native.MbSetForeground);
+        if (answer != Native.IdYes)
+        {
+            return;
+        }
+
+        _updating = true;
+        Notify("正在下载更新", $"莫提斯 {latest}，下载完会自动替换并重启。");
         _ = Task.Run(async () =>
         {
             try
             {
-                using var resp = await _web.GetAsync(ReleaseApi);
-                if (resp.StatusCode == HttpStatusCode.NotFound)
-                {
-                    OnUi(() => Alert("检查更新", "还没有发布过版本。"));
-                    return;
-                }
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    OnUi(() => Alert("检查更新失败", $"GitHub 返回 {(int)resp.StatusCode}，请稍后再试。"));
-                    return;
-                }
-
-                await using var stream = await resp.Content.ReadAsStreamAsync();
-                using var doc = await JsonDocument.ParseAsync(stream);
-                var root = doc.RootElement;
-                var tag = root.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
-                var html = root.TryGetProperty("html_url", out var h) ? h.GetString() ?? "" : "";
-                // 这个地址会交给系统打开，只认 GitHub 的网页。
-                if (!html.StartsWith("https://github.com/", StringComparison.Ordinal))
-                {
-                    html = "";
-                }
-                var latest = ParseVersion(tag);
-                if (latest is null)
-                {
-                    OnUi(() => Alert("检查更新失败", $"看不懂最新版本号「{tag}」。"));
-                    return;
-                }
-
-                if (latest <= current || html.Length == 0)
-                {
-                    OnUi(() => Alert("检查更新", $"已经是最新版本（{current.ToString(3)}）。"));
-                    return;
-                }
-
+                var root = await Updater.Prepare(_download, release);
+                OnUi(() => ApplyUpdate(root));
+            }
+            catch (Exception ex)
+            {
+                var message = ex is UpdateException ? ex.Message : $"下载或解压失败：{ex.Message}";
                 OnUi(() =>
                 {
-                    var answer = Native.MessageBox(
-                        _hwnd,
-                        $"有新版本 {latest.ToString(3)}（当前 {current.ToString(3)}）。\n要打开发布页面下载吗？",
-                        "检查更新",
-                        Native.MbYesNo | Native.MbIconInformation | Native.MbSetForeground);
-                    if (answer == Native.IdYes)
-                    {
-                        OpenUrl(html);
-                    }
+                    _updating = false;
+                    Alert("更新失败", $"{message}\n\n现在的版本照常运行。");
                 });
-            }
-            catch (Exception)
-            {
-                OnUi(() => Alert("检查更新失败", "暂时连不上 GitHub，请稍后再试。"));
             }
         });
     }
 
-    /// 「v0.1.0」「0.1.0-rc.1」都取前面的数字部分。
-    private static Version? ParseVersion(string tag)
+    /// 停后端、换文件，然后拉起解压目录里的 Mortis.exe 接手，自己退出。换失败时文件已恢复，拉起的还是旧版本。
+    private void ApplyUpdate(string newRoot)
     {
-        var text = tag.Trim().TrimStart('v', 'V');
-        var cut = text.IndexOfAny(['-', '+']);
-        if (cut >= 0)
+        StopServer(TimeSpan.FromSeconds(10));
+        var arg = Program.AfterUpdateArg;
+        try
         {
-            text = text[..cut];
+            Updater.Swap(newRoot);
+        }
+        catch (Exception ex)
+        {
+            arg = Program.RestartArg;
+            Alert("更新失败", ex.Message);
         }
 
-        if (!Version.TryParse(text, out var v))
+        try
         {
-            return null;
+            Process.Start(new ProcessStartInfo(Path.Combine(DesktopSettings.AppRoot, "Mortis.exe"), arg)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = DesktopSettings.AppRoot,
+            });
+        }
+        catch (Exception ex)
+        {
+            Alert("没能重新启动莫提斯", $"请手动运行 Mortis.exe。\n{ex.Message}");
         }
 
-        return new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
+        Quit();
+    }
+
+    private void Notify(string title, string text)
+    {
+        if (!_trayAdded)
+        {
+            return;
+        }
+
+        _nid.uFlags = Native.NifMessage | Native.NifIcon | Native.NifTip | Native.NifInfo;
+        _nid.szInfoTitle = Shorten(title, 63);
+        _nid.szInfo = Shorten(text, 250);
+        _nid.dwInfoFlags = Native.NiifInfo;
+        Native.ShellNotifyIcon(Native.NimModify, ref _nid);
+        _nid.szInfo = "";
+        _nid.szInfoTitle = "";
     }
 
     private void Quit()
@@ -921,6 +1033,7 @@ internal sealed class App
 
         _local.Dispose();
         _web.Dispose();
+        _download.Dispose();
         GC.KeepAlive(_wndProc);
     }
 

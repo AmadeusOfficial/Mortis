@@ -25,6 +25,7 @@ internal static class Native
     internal const uint NifIcon = 0x0002;
     internal const uint NifTip = 0x0004;
     internal const uint NifInfo = 0x0010;
+    internal const uint NiifInfo = 0x0001;
     internal const uint NiifWarning = 0x0002;
 
     internal const uint MfString = 0;

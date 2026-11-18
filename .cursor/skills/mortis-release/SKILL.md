@@ -81,6 +81,8 @@ $env:GH_CONFIG_DIR="D:\dev\tools\gh\config"; D:\dev\tools\gh\bin\gh.exe release 
 
 发完用 `gh release view v<版本> -R AmadeusOfficial/Mortis` 确认两个附件都在，把 Release 网址给用户。
 
+托盘的自动更新靠附件名找文件：压缩包必须叫 `Mortis-v<版本>-windows-x64.zip`，校验文件必须叫 `SHA256SUMS`，里面要有这个压缩包的一行。不要改名，也不要只传其中一个。tag 必须是 `v` 加三段数字，托盘按它比较版本。
+
 ## 不要做
 
 - 不把 `.dev-data`、设置文件、密钥文件、`dist\` 提交进 git。

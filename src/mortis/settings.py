@@ -7,6 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def default_data_dir() -> Path:
+    """打包后默认放在解压目录下的 data，和托盘的默认一致；解压目录不能写时退回用户目录。"""
+    if getattr(sys, "frozen", False) and _writable(app_root()):
+        return app_root() / "data"
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
         return Path(local_app_data) / "Mortis"
@@ -18,6 +21,17 @@ def app_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent.parent
     return Path(__file__).resolve().parents[2]
+
+
+def _writable(folder: Path) -> bool:
+    """os.access 在 Windows 上不看权限表，只能真的建一个文件试。"""
+    probe = folder / f".mortis-write-test-{os.getpid()}"
+    try:
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
 
 
 def default_plugins_dir() -> Path | None:

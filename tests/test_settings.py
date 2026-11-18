@@ -84,6 +84,29 @@ def test_frozen_paths_are_next_to_onedir(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert Settings().web_dist == Path(r"D:\别处\dist")
 
 
+def test_frozen_data_dir_is_inside_app_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "Mortis"
+    (root / "onedir").mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(root / "onedir" / "Mortis.Server.exe"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    assert default_data_dir() == root / "data"
+    assert Settings().data_dir == root / "data"
+    assert list(root.iterdir()) == [root / "onedir"]
+
+
+def test_frozen_read_only_root_falls_back(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "Mortis"
+    (root / "onedir").mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(root / "onedir" / "Mortis.Server.exe"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr("mortis.settings._writable", lambda folder: False)
+    assert default_data_dir() == tmp_path / "local" / "Mortis"
+
+
 def test_frozen_without_web_dist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "Mortis" / "onedir").mkdir(parents=True)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
