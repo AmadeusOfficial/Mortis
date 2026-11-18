@@ -575,6 +575,8 @@ export interface ItemDetail {
   seasons: SeasonInfo[];
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
+  // 用户自己的标签（我的标签），按数据类型分开，不来自刮削。
+  user_tags: string[];
   sections: { name: string; fields: FieldOut[] }[];
   // 作品的第一个视频或游戏目录，和从它解析出的标题、年份；没有文件时为 null。
   guess?: FileGuess | null;
@@ -754,6 +756,36 @@ export const updateItemFields = (id: number, values: Record<string, unknown>) =>
   request<ItemDetail>("PATCH", `/api/items/${id}/fields`, { values });
 export const updateItemLocks = (id: number, locked: string[]) =>
   request<ItemDetail>("PUT", `/api/items/${id}/locks`, { locked });
+
+export interface UserTag {
+  id: number;
+  name: string;
+  count: number;
+}
+
+export const fetchUserTags = (dataType: string) =>
+  request<UserTag[]>("GET", `/api/data-types/${dataType}/user-tags`);
+export const saveItemUserTags = (id: number, names: string[]) =>
+  request<{ names: string[] }>("PUT", `/api/items/${id}/user-tags`, { names });
+export const renameUserTag = (id: number, name: string) =>
+  request<UserTag>("PATCH", `/api/user-tags/${id}`, { name });
+export const fetchMergeImpact = (sourceIds: number[], targetId: number) => {
+  const params = new URLSearchParams({ target_id: String(targetId) });
+  for (const sourceId of sourceIds) {
+    params.append("source_ids", String(sourceId));
+  }
+  return request<{ count: number }>("GET", `/api/user-tags/merge/impact?${params}`);
+};
+export const mergeUserTags = (sourceIds: number[], targetId: number, expectedCount: number) =>
+  request<UserTag>("POST", "/api/user-tags/merge", {
+    source_ids: sourceIds,
+    target_id: targetId,
+    expected_count: expectedCount,
+  });
+export const fetchDeleteTagImpact = (id: number) =>
+  request<{ count: number }>("GET", `/api/user-tags/${id}/impact`);
+export const deleteUserTag = (id: number, expectedCount: number) =>
+  request<void>("DELETE", `/api/user-tags/${id}`, { expected_count: expectedCount });
 export const scrapeItem = (id: number, force = true) =>
   request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
 export const rematchItem = (id: number, tmdbId: number) =>

@@ -32,6 +32,7 @@ import {
   parseSkipFolders,
   thresholdInvalid,
 } from "./TypeFields";
+import { UserTagsSection } from "./UserTagsSection";
 
 // 电影和剧集类的设置结构不同：整理块里的目录模板名不一样。
 function isMovieSection(value: TypeSection): value is MovieScrapeConfig {
@@ -225,6 +226,9 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
 
       {/* 来源顺序单独保存，不跟着下面的保存栏。 */}
       <SourceOrdersSection dataTypeId={dataTypeId} />
+
+      {/* 标签的改名、合并、删除各自立即生效，不跟着保存栏。 */}
+      <UserTagsSection dataTypeId={dataTypeId} />
 
       <SaveBar
         dirtyCount={dirtyCount}

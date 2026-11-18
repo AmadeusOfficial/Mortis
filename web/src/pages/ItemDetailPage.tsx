@@ -3,6 +3,7 @@ import {
   Alert,
   Avatar,
   Button,
+  Group,
   Loader,
   Menu,
   Paper,
@@ -35,6 +36,7 @@ import {
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { DeleteItemModal } from "../components/DeleteItemModal";
 import { FieldActions } from "../components/detail/FieldActions";
+import { UserTagsModal } from "../components/detail/UserTagsModal";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import { useAgent } from "../components/agent/AgentContext";
@@ -49,6 +51,7 @@ import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import {
   IconBack,
+  IconEdit,
   IconExternal,
   IconFile,
   IconFolder,
@@ -176,6 +179,7 @@ export function ItemDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
     queryClient.setQueryData(["item", id], detail);
@@ -889,6 +893,31 @@ export function ItemDetailPage() {
           {allFields.length} 项有值
         </Text>
       </div>
+      {isWork && (
+        <div className={`${classes.kv} ${classes.hoverRow}`}>
+          <span className={classes.kvLabel}>我的标签</span>
+          <div className={classes.kvValue}>
+            {detail.user_tags.length > 0 ? (
+              detail.user_tags.join("，")
+            ) : (
+              <Text span size="sm" c="dimmed">
+                —
+              </Text>
+            )}
+          </div>
+          <Group gap={2} wrap="nowrap" className={classes.tools}>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="gray"
+              aria-label="编辑我的标签"
+              onClick={() => setTagging(true)}
+            >
+              <IconEdit size={14} />
+            </ActionIcon>
+          </Group>
+        </div>
+      )}
       {panelSections.map((section) => (
         <div key={section.name}>
           {panelSections.length > 1 && (
@@ -1010,6 +1039,14 @@ export function ItemDetailPage() {
           error={rematch.isError ? rematch.error.message : null}
           onPick={(hit: MovieHit) => rematch.mutate({ tmdbId: hit.tmdb_id })}
           onClose={() => setRematching(false)}
+        />
+      )}
+      {tagging && (
+        <UserTagsModal
+          itemId={detail.id}
+          dataType={detail.data_type_id}
+          initial={detail.user_tags}
+          onClose={() => setTagging(false)}
         />
       )}
       {deleting && (
