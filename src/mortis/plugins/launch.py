@@ -17,6 +17,8 @@ class Launcher(Protocol):
 
     def open_default(self, path: str) -> None: ...
 
+    def reveal(self, path: str, *, select: bool) -> None: ...
+
 
 class SystemLauncher:
     def __init__(self) -> None:
@@ -57,3 +59,14 @@ class SystemLauncher:
         if startfile is None:
             raise OSError("这个系统不能用默认程序打开文件")
         startfile(path)
+
+    def reveal(self, path: str, *, select: bool) -> None:
+        """select 时在资源管理器里选中 path，否则打开 path 这个目录。"""
+        if os.name != "nt":
+            raise OSError("这个系统没有资源管理器")
+        # explorer 按逗号拆参数，路径必须整个加引号；Windows 路径里不会有引号。
+        command = f'explorer.exe /select,"{path}"' if select else f'explorer.exe "{path}"'
+        child = subprocess.Popen(command, close_fds=True, creationflags=_DETACHED)
+        with self._guard:
+            self._children = [old for old in self._children if old.poll() is None]
+            self._children.append(child)

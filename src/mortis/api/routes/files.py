@@ -2,9 +2,11 @@ import os
 import stat
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
+from mortis.api.deps import ServicesDep, SessionDep
+from mortis.db.models import MediaFile
 from mortis.errors import UserError
 
 router = APIRouter(prefix="/api")
@@ -73,3 +75,22 @@ def list_dirs(path: str = "", files: bool = False) -> DirListing:
     dirs.sort(key=lambda entry: entry.name.casefold())
     found.sort(key=lambda entry: entry.name.casefold())
     return DirListing(path=str(folder), parent=_parent(folder), dirs=dirs, files=found)
+
+
+@router.post("/media-files/{file_id}/reveal", status_code=204)
+def reveal_media_file(file_id: int, session: SessionDep, services: ServicesDep) -> Response:
+    """在资源管理器里选中文件；文件没了时打开它原来所在的目录。"""
+    media_file = session.get(MediaFile, file_id)
+    if media_file is None:
+        raise UserError("没有这个文件", status_code=404)
+    path = Path(media_file.path)
+    try:
+        if path.exists():
+            services.launcher.reveal(str(path), select=True)
+        elif path.parent.is_dir():
+            services.launcher.reveal(str(path.parent), select=False)
+        else:
+            raise UserError(f"文件和所在目录都不在了：{path}", status_code=404)
+    except OSError as error:
+        raise UserError(f"打不开资源管理器：{error.strerror or error}", status_code=502) from None
+    return Response(status_code=204)

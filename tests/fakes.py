@@ -90,6 +90,7 @@ class FakeLauncher:
         self.launched: list[tuple[str, list[str]]] = []
         self.cwds: list[str | None] = []
         self.opened: list[str] = []
+        self.revealed: list[tuple[str, bool]] = []
         self.fail: OSError | None = None
 
     def launch(self, executable: str, args: list[str], cwd: str | None = None) -> None:
@@ -102,6 +103,11 @@ class FakeLauncher:
         if self.fail is not None:
             raise self.fail
         self.opened.append(path)
+
+    def reveal(self, path: str, *, select: bool) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.revealed.append((path, select))
 
 
 def make_junction(link: Path, target: Path) -> None:

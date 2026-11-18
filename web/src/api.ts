@@ -580,8 +580,6 @@ export interface ItemDetail {
   seasons: SeasonInfo[];
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
-  // 用户自己的标签（我的标签），按数据类型分开，不来自刮削。
-  user_tags: string[];
   sections: { name: string; fields: FieldOut[] }[];
   // 作品的第一个视频或游戏目录，和从它解析出的标题、年份；没有文件时为 null。
   guess?: FileGuess | null;
@@ -657,6 +655,8 @@ export const organizeLibrary = (id: number, scrape: boolean | null = null) =>
   request<Enqueued>("POST", `/api/libraries/${id}/organize`, { scrape });
 export const scrapeLibrary = (id: number, force = false) =>
   request<Enqueued>("POST", `/api/libraries/${id}/scrape`, { force });
+export const revealMediaFile = (id: number) =>
+  request<void>("POST", `/api/media-files/${id}/reveal`);
 export const previewCron = (cron: string) =>
   request<CronPreview>("GET", `/api/schedules/preview?${new URLSearchParams({ cron }).toString()}`);
 
@@ -806,35 +806,15 @@ export const chooseImage = (id: number, key: string, url: string) =>
 export const uploadImage = (id: number, key: string, file: File) =>
   request<ItemDetail>("PUT", `${imagePath(id, key)}/file`, file);
 
-export interface UserTag {
+// 库里作品用到的类型（刮削来的和手改的都算），count 是有这个类型的作品数。
+export interface Genre {
   id: number;
   name: string;
   count: number;
 }
 
-export const fetchUserTags = (dataType: string) =>
-  request<UserTag[]>("GET", `/api/data-types/${dataType}/user-tags`);
-export const saveItemUserTags = (id: number, names: string[]) =>
-  request<{ names: string[] }>("PUT", `/api/items/${id}/user-tags`, { names });
-export const renameUserTag = (id: number, name: string) =>
-  request<UserTag>("PATCH", `/api/user-tags/${id}`, { name });
-export const fetchMergeImpact = (sourceIds: number[], targetId: number) => {
-  const params = new URLSearchParams({ target_id: String(targetId) });
-  for (const sourceId of sourceIds) {
-    params.append("source_ids", String(sourceId));
-  }
-  return request<{ count: number }>("GET", `/api/user-tags/merge/impact?${params}`);
-};
-export const mergeUserTags = (sourceIds: number[], targetId: number, expectedCount: number) =>
-  request<UserTag>("POST", "/api/user-tags/merge", {
-    source_ids: sourceIds,
-    target_id: targetId,
-    expected_count: expectedCount,
-  });
-export const fetchDeleteTagImpact = (id: number) =>
-  request<{ count: number }>("GET", `/api/user-tags/${id}/impact`);
-export const deleteUserTag = (id: number, expectedCount: number) =>
-  request<void>("DELETE", `/api/user-tags/${id}`, { expected_count: expectedCount });
+export const fetchLibraryGenres = (libraryId: number) =>
+  request<Genre[]>("GET", `/api/libraries/${libraryId}/genres`);
 export const scrapeItem = (id: number, force = true) =>
   request<Enqueued>("POST", `/api/items/${id}/scrape`, { force });
 export const rematchItem = (id: number, tmdbId: number) =>

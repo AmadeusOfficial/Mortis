@@ -3,7 +3,6 @@ import {
   Alert,
   Avatar,
   Button,
-  Group,
   Loader,
   Menu,
   Paper,
@@ -29,6 +28,7 @@ import {
   fetchSources,
   rematchItem,
   rematchItemToSource,
+  revealMediaFile,
   scrapeItem,
   updateItemFields,
   updateItemLocks,
@@ -36,7 +36,6 @@ import {
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { DeleteItemModal } from "../components/DeleteItemModal";
 import { FieldActions } from "../components/detail/FieldActions";
-import { UserTagsModal } from "../components/detail/UserTagsModal";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import {
@@ -55,7 +54,6 @@ import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import {
   IconBack,
-  IconEdit,
   IconExternal,
   IconFile,
   IconFolder,
@@ -183,7 +181,6 @@ export function ItemDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [tagging, setTagging] = useState(false);
   const [picking, setPicking] = useState<string | null>(null);
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
@@ -213,6 +210,11 @@ export function ItemDetailPage() {
   const scrape = useMutation({
     mutationFn: () => scrapeItem(id, true),
     onSuccess: ({ task_id }) => watcher.watch(task_id),
+    onError: (error) =>
+      notifications.show({ color: "red", message: error.message }),
+  });
+  const reveal = useMutation({
+    mutationFn: revealMediaFile,
     onError: (error) =>
       notifications.show({ color: "red", message: error.message }),
   });
@@ -907,6 +909,16 @@ export function ItemDetailPage() {
                 {FILE_KIND_LABELS[file.file_kind]} · {formatSize(file.size)}
               </Text>
             </div>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label="在资源管理器中显示"
+              title="在资源管理器中显示"
+              loading={reveal.isPending && reveal.variables === file.id}
+              onClick={() => reveal.mutate(file.id)}
+            >
+              <IconFolder size={16} />
+            </ActionIcon>
           </div>
         ))}
       </Paper>
@@ -921,31 +933,6 @@ export function ItemDetailPage() {
           {allFields.length} 项有值
         </Text>
       </div>
-      {isWork && (
-        <div className={`${classes.kv} ${classes.hoverRow}`}>
-          <span className={classes.kvLabel}>我的标签</span>
-          <div className={classes.kvValue}>
-            {detail.user_tags.length > 0 ? (
-              detail.user_tags.join("，")
-            ) : (
-              <Text span size="sm" c="dimmed">
-                —
-              </Text>
-            )}
-          </div>
-          <Group gap={2} wrap="nowrap" className={classes.tools}>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="gray"
-              aria-label="编辑我的标签"
-              onClick={() => setTagging(true)}
-            >
-              <IconEdit size={14} />
-            </ActionIcon>
-          </Group>
-        </div>
-      )}
       {panelSections.map((section) => (
         <div key={section.name}>
           {panelSections.length > 1 && (
@@ -1076,14 +1063,6 @@ export function ItemDetailPage() {
           initialKey={picking}
           onChanged={setDetail}
           onClose={() => setPicking(null)}
-        />
-      )}
-      {tagging && (
-        <UserTagsModal
-          itemId={detail.id}
-          dataType={detail.data_type_id}
-          initial={detail.user_tags}
-          onClose={() => setTagging(false)}
         />
       )}
       {deleting && (

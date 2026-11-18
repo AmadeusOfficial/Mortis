@@ -1,4 +1,4 @@
-import { Button, Menu, Switch } from "@mantine/core";
+import { Button, Group, Menu, Modal, Stack, Switch, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,6 +20,7 @@ import {
   IconFolder,
   IconMore,
   IconOrganize,
+  IconRefresh,
   IconScan,
   IconScrape,
   IconTrash,
@@ -27,11 +28,12 @@ import {
 import classes from "../../pages/LibrariesPage.module.css";
 import { useTaskWatcher } from "../../useTaskWatcher";
 
-type ActionKind = "organize" | "scrape" | "arrange";
+type ActionKind = "organize" | "scrape" | "rescrape" | "arrange";
 
 const START_MESSAGES: Record<ActionKind, string> = {
   organize: "已开始扫描",
   scrape: "已开始刮削还没刮削过的条目",
+  rescrape: "已开始重新刮削全部条目",
   arrange: "已开始整理整库",
 };
 
@@ -86,6 +88,7 @@ export function LibraryCard({
   const queryClient = useQueryClient();
   const [running, setRunning] = useState<ActionKind | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [confirmingRescrape, setConfirmingRescrape] = useState(false);
 
   const toggle = useMutation({
     mutationFn: (isAutoScrape: boolean) =>
@@ -123,8 +126,8 @@ export function LibraryCard({
       if (kind === "organize") {
         return organizeLibrary(library.id);
       }
-      if (kind === "scrape") {
-        return scrapeLibrary(library.id);
+      if (kind === "scrape" || kind === "rescrape") {
+        return scrapeLibrary(library.id, kind === "rescrape");
       }
       return arrangeLibrary(library.id);
     },
@@ -132,6 +135,9 @@ export function LibraryCard({
     onSuccess: ({ task_id }, kind) => {
       if (kind === "arrange") {
         setPreviewing(false);
+      }
+      if (kind === "rescrape") {
+        setConfirmingRescrape(false);
       }
       watcher.watch(task_id);
       notifications.show({
@@ -281,7 +287,7 @@ export function LibraryCard({
                   variant="default"
                   className={classes.moreBtn}
                   aria-label="更多操作"
-                  loading={running === "arrange"}
+                  loading={running === "arrange" || running === "rescrape"}
                 >
                   <IconMore size={14} />
                 </Button>
@@ -303,6 +309,13 @@ export function LibraryCard({
                   编辑
                 </Menu.Item>
                 <Menu.Divider />
+                <Menu.Item
+                  leftSection={<IconRefresh size={14} />}
+                  disabled={running !== null}
+                  onClick={() => setConfirmingRescrape(true)}
+                >
+                  重新刮削全部
+                </Menu.Item>
                 <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={onDelete}>
                   删除
                 </Menu.Item>
@@ -338,6 +351,31 @@ export function LibraryCard({
         onConfirm={() => start.mutate("arrange")}
         confirming={start.isPending}
       />
+
+      <Modal
+        opened={confirmingRescrape}
+        onClose={() => setConfirmingRescrape(false)}
+        title="重新刮削全部"
+      >
+        <Stack>
+          <Text>
+            「{library.name}」里已经认出的条目会全部重新刮削：不用之前存下的来源结果，
+            重新向各个来源请求。锁定的字段（包括手动改过的）不变，没认出的不在其中。
+            条目多时要排很多任务。
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setConfirmingRescrape(false)}>
+              取消
+            </Button>
+            <Button
+              loading={running === "rescrape"}
+              onClick={() => start.mutate("rescrape")}
+            >
+              开始重新刮削
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </article>
   );
 }
