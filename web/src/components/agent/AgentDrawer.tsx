@@ -26,6 +26,12 @@ const TOOL_LABELS: Record<string, string> = {
 
 const markdown: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  // 回答里的图片不加载，免得模型把片库数据拼进地址发到外面；只显示成文字。
+  img: ({ alt, src }) => (
+    <span className={styles.image}>
+      [图片{alt ? `：${alt}` : ""}] {typeof src === "string" ? src : ""}
+    </span>
+  ),
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -228,6 +234,28 @@ function ApprovalLine({ item }: { item: ApprovalItem }) {
   );
 }
 
+const APPROVAL_STATUS = { approved: "已批准", rejected: "已拒绝", expired: "已失效" } as const;
+
+function ReasoningEntry({ entry }: { entry: Extract<Entry, { kind: "reasoning" }> }) {
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (entry.done) setExpanded(false);
+  }, [entry.done]);
+  return (
+    <div className={styles.reasoning}>
+      <UnstyledButton
+        className={styles.reasoningLine}
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+      >
+        {expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+        <span>{entry.done ? "思考过程" : "思考中…"}</span>
+      </UnstyledButton>
+      {expanded && <div className={styles.reasoningText}>{entry.text}</div>}
+    </div>
+  );
+}
+
 function ApprovalCard({ entry }: { entry: Extract<Entry, { kind: "approval" }> }) {
   const { decide, busy } = useAgent();
   return (
@@ -251,7 +279,7 @@ function ApprovalCard({ entry }: { entry: Extract<Entry, { kind: "approval" }> }
         </Group>
       ) : (
         <Pill tone={entry.status === "approved" ? "ok" : "neutral"}>
-          {entry.status === "approved" ? "已批准" : "已拒绝"}
+          {APPROVAL_STATUS[entry.status]}
         </Pill>
       )}
     </div>
@@ -270,6 +298,8 @@ function EntryView({ entry }: { entry: Entry }) {
           </Markdown>
         </div>
       );
+    case "reasoning":
+      return <ReasoningEntry entry={entry} />;
     case "tool":
       return <ToolEntry entry={entry} />;
     case "approval":

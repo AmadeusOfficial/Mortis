@@ -166,6 +166,36 @@
   font-size: 12.5px;
 }
 
+.image {
+  color: var(--mo-dim);
+  word-break: break-all;
+}
+
+.reasoning {
+  font-size: 12px;
+  color: var(--mo-muted);
+}
+.reasoningLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mo-muted);
+  font-size: 12px;
+}
+.reasoningLine:hover {
+  color: var(--mo-dim);
+}
+.reasoningText {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--mo-line-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .approval {
   padding: 10px 12px;
   border-radius: 10px;

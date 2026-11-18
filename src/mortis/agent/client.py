@@ -6,7 +6,7 @@ from typing import Any, Protocol, Self
 
 import httpx2 as httpx
 
-from mortis.agent.check import error_reason, message_of, scrub
+from mortis.agent.check import error_reason, message_of, scrub, status_message
 from mortis.config.models import AppConfig, Secrets
 from mortis.errors import UserError
 from mortis.net.http import build_client
@@ -37,6 +37,8 @@ class Delta:
     """流里的一段：文字增量；或者结束时的一段，带拼好的工具调用和结束原因。"""
 
     text: str = ""
+    reasoning: str = ""
+    """推理模型的思考过程增量。"""
     tool_calls: list[ToolCall] = field(default_factory=list)
     finish_reason: str | None = None
 
@@ -103,16 +105,8 @@ class OpenAICompatClient:
             raise ChatError(f"连不上 AI 接口：{scrub(text, self._key)}") from None
 
     def _status_error(self, response: httpx.Response) -> ChatError:
-        status = response.status_code
         reason = scrub(error_reason(response), self._key)
-        suffix = f"：{reason}" if reason else ""
-        if status in (401, 403):
-            return ChatError(f"key 不对：接口返回 HTTP {status}")
-        if status == 429:
-            return ChatError(f"请求太频繁或额度用完了：HTTP {status}{suffix}")
-        if status >= 500:
-            return ChatError(f"AI 接口出错：HTTP {status}{suffix}")
-        return ChatError(f"接口返回 HTTP {status}{suffix}，检查接口地址")
+        return ChatError(status_message(response.status_code, reason))
 
     def _parse(self, lines: Iterator[str]) -> Iterator[Delta]:
         pending: dict[int, _PendingCall] = {}
@@ -138,7 +132,10 @@ class OpenAICompatClient:
                 if not isinstance(choice, dict):
                     continue
                 delta = choice.get("delta") or {}
-                # DeepSeek 的 reasoning_content 是思考过程，不当作回答。
+                # DeepSeek 的 reasoning_content 是思考过程，单独交出，不当作回答。
+                thought = delta.get("reasoning_content")
+                if isinstance(thought, str) and thought:
+                    yield Delta(reasoning=thought)
                 text = delta.get("content")
                 if isinstance(text, str) and text:
                     yield Delta(text=text)

@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/agent")
 logger = logging.getLogger("mortis.agent")
 
 MAX_MESSAGES = 200
-MAX_CHARS = 200_000
+MAX_CHARS = 100_000
 
 ChatClientFactory = Callable[[AppConfig, Secrets], ChatClient]
 
@@ -49,6 +49,8 @@ class MessageIn(BaseModel):
     content: str | None = None
     tool_calls: list[ToolCallIn] | None = None
     tool_call_id: str | None = None
+    reasoning_content: str | None = None
+    """推理模型的思考过程，只在带工具调用的助手消息上保留。"""
 
 
 class ApprovalIn(BaseModel):
@@ -73,7 +75,7 @@ def _messages(body: ChatRequest) -> list[dict[str, Any]]:
     total = 0
     result: list[dict[str, Any]] = []
     for message in body.messages:
-        total += len(message.content or "")
+        total += len(message.content or "") + len(message.reasoning_content or "")
         total += sum(len(call.function.arguments) for call in message.tool_calls or [])
         if message.role == "user":
             if message.content is None:
@@ -90,13 +92,14 @@ def _messages(body: ChatRequest) -> list[dict[str, Any]]:
                 }
             )
         elif message.tool_calls:
-            result.append(
-                {
-                    "role": "assistant",
-                    "content": message.content or None,
-                    "tool_calls": [call.model_dump() for call in message.tool_calls],
-                }
-            )
+            assistant: dict[str, Any] = {
+                "role": "assistant",
+                "content": message.content or None,
+                "tool_calls": [call.model_dump() for call in message.tool_calls],
+            }
+            if message.reasoning_content:
+                assistant["reasoning_content"] = message.reasoning_content
+            result.append(assistant)
         else:
             result.append({"role": "assistant", "content": message.content or ""})
     if total > MAX_CHARS:

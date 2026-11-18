@@ -11,19 +11,18 @@ from sqlalchemy.orm import Session
 
 from mortis import libraries
 from mortis.agent import recognize
+from mortis.agent.check import scrub, secret_values
 from mortis.agent.client import ToolCall
 from mortis.agent.context import Result, ToolContext
-from mortis.api.routes.items import scrape_work
+from mortis.api.routes.items import detail_of, scrape_work
 from mortis.api.routes.libraries import enqueue_organize
 from mortis.api.routes.play import PlayChoices, PlayRequest, play
 from mortis.db.models import DataType, Item, Library
 from mortis.errors import UserError
-from mortis.items.detail import image_url, item_detail, read_value, year_of
+from mortis.items.detail import image_url, read_value, year_of
 from mortis.items.edit import ItemError, edit_fields
 from mortis.output.service import rewrite_if_arranged
 from mortis.scrape.apply import level_fields
-
-__all__ = ["TOOLS", "Tool", "ToolContext", "run_tool", "tool_schemas"]
 
 logger = logging.getLogger("mortis.agent")
 
@@ -44,7 +43,6 @@ class Tool:
     parameters: dict[str, Any]
     """JSON Schema。只用 integer、string、object 和 enum，参数检查按它来。"""
     run: Callable[[ToolContext, dict[str, Any]], Result]
-    read_only: bool
     needs_approval: bool = False
     """每次调用都要用户先批准。"""
     describe: Callable[[ToolContext, dict[str, Any]], Result] | None = None
@@ -69,13 +67,15 @@ def register(tool: Tool) -> Tool:
     return tool
 
 
-def tool_schemas(names: Iterable[str] | None = None) -> list[dict[str, Any]]:
-    chosen = TOOLS if names is None else {name: TOOLS[name] for name in names}
-    return [tool.schema() for tool in chosen.values()]
+def tool_schemas() -> list[dict[str, Any]]:
+    return [tool.schema() for tool in TOOLS.values()]
 
 
 def run_tool(ctx: ToolContext, name: str, arguments: str | dict[str, Any]) -> Result:
-    """执行一次工具调用。不抛异常：未知工具、参数不对、执行出错都返回 {"error": ...}。"""
+    """执行一次工具调用。不抛异常：未知工具、参数不对、执行出错都返回 {"error": ...}。
+
+    错误信息会交给模型，里面出现的代理用户名、口令和各种 key 都遮掉。
+    """
     tool = TOOLS.get(name)
     if tool is None:
         return {"error": f"没有这个工具：{name}"}
@@ -89,7 +89,8 @@ def run_tool(ctx: ToolContext, name: str, arguments: str | dict[str, Any]) -> Re
         return tool.run(ctx, parsed)
     except UserError as error:
         ctx.session.rollback()
-        return {"error": error.message}
+        secrets = secret_values(ctx.services.config_store.load_secrets())
+        return {"error": scrub(error.message, *secrets)}
     except Exception as error:
         ctx.session.rollback()
         logger.exception("工具 %s 出错", name)
@@ -109,9 +110,14 @@ def batch_update_targets(calls: Iterable[ToolCall]) -> list[int]:
     return sorted(targets)
 
 
-def calls_needing_approval(calls: list[ToolCall]) -> list[ToolCall]:
-    """同一轮里要等用户批准的调用：标了 needs_approval 的，和批量修改时的全部 update_fields。"""
-    batch = len(batch_update_targets(calls)) >= 2
+def calls_needing_approval(calls: list[ToolCall], changed: Iterable[int] = ()) -> list[ToolCall]:
+    """这一轮里要等用户批准的调用：标了 needs_approval 的；批量修改时这一轮的全部 update_fields。
+
+    changed 是这次提问里前几轮已经改过的条目。批量按一次提问算：这一轮要改的加上已改过的
+    达到两个及以上，就算批量，免得模型一轮改一个绕过批准。
+    """
+    targets = set(batch_update_targets(calls))
+    batch = bool(targets) and len(targets | set(changed)) >= 2
     held: list[ToolCall] = []
     for call in calls:
         tool = TOOLS.get(call.name)
@@ -122,9 +128,12 @@ def calls_needing_approval(calls: list[ToolCall]) -> list[ToolCall]:
     return held
 
 
-def approval_summary(calls: list[ToolCall]) -> str:
+def approval_summary(calls: list[ToolCall], changed: Iterable[int] = ()) -> str:
     if all(call.name == "update_fields" for call in calls):
         count = len(batch_update_targets(calls))
+        done = len(set(changed) - set(batch_update_targets(calls)))
+        if done:
+            return f"这次已经改了 {done} 个条目，再改 {count} 个要你批准后才会执行"
         return f"要修改 {count} 个条目，批准后才会执行"
     if all(call.name in RECOGNIZE_TOOLS for call in calls):
         return f"要重新识别 {len(calls)} 项，批准后才会执行"
@@ -299,7 +308,7 @@ def _compact_value(value_type: str, stored_in: str, value: Any) -> Any:
 def _get_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
     session = ctx.session
     item = _item(session, args["item_id"])
-    detail = item_detail(session, item)
+    detail = detail_of(session, item)
     fields: dict[str, Any] = {}
     editable: list[str] = []
     for section in detail["sections"]:
@@ -327,9 +336,8 @@ def _get_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
         "external_ids": detail["external_ids"],
         "file_count": direct_files + sum(s["file_count"] for s in detail["seasons"]),
     }
-    guess = recognize.file_of_item(session, item)
-    if guess is not None:
-        result["file"] = guess
+    if detail["guess"] is not None:
+        result["file"] = detail["guess"].model_dump()
     if detail["collection"] is not None:
         result["collection"] = {
             "id": detail["collection"]["id"],
@@ -417,7 +425,7 @@ def _scan_library(ctx: ToolContext, args: dict[str, Any]) -> Result:
 def _play_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
     item = _item(ctx.session, args["item_id"])
     request = PlayRequest(file_id=args.get("file_id"), target=args.get("target"))
-    result = play(ctx.session, ctx.services, item, request)
+    result = play(ctx.session, ctx.services, item, request, listed_only=True)
     if isinstance(result, PlayChoices):
         candidates = [c.model_dump(mode="json") for c in result.candidates[:CANDIDATE_LIMIT]]
         return {"needs_choice": True, "detail": result.detail, "candidates": candidates}
@@ -453,7 +461,6 @@ register(
             "required": ["query"],
         },
         run=_search_items,
-        read_only=True,
     )
 )
 register(
@@ -469,7 +476,6 @@ register(
             "required": ["item_id"],
         },
         run=_get_item,
-        read_only=True,
     )
 )
 register(
@@ -491,7 +497,6 @@ register(
             "required": ["item_id", "values"],
         },
         run=_update_fields,
-        read_only=False,
         describe=_describe_update,
     )
 )
@@ -507,7 +512,6 @@ register(
             "required": ["item_id"],
         },
         run=_scrape_item,
-        read_only=False,
     )
 )
 register(
@@ -520,7 +524,6 @@ register(
             "required": ["library_id"],
         },
         run=_scan_library,
-        read_only=False,
     )
 )
 register(
@@ -541,7 +544,6 @@ register(
             "required": ["item_id"],
         },
         run=_play_item,
-        read_only=False,
     )
 )
 FILE_ID = {"type": "integer", "description": "未识别文件的 file_id，从 list_unmatched 的结果里取"}
@@ -567,7 +569,6 @@ register(
             },
         },
         run=recognize.search_candidates,
-        read_only=True,
     )
 )
 register(
@@ -579,7 +580,6 @@ register(
             "properties": {"library_id": {"type": "integer", "description": "只看这个库"}},
         },
         run=recognize.list_unmatched,
-        read_only=True,
     )
 )
 register(
@@ -595,7 +595,6 @@ register(
             "required": ["item_id", "source", "external_id"],
         },
         run=recognize.rematch_item,
-        read_only=False,
         needs_approval=True,
         describe=recognize.describe_rematch,
     )
@@ -613,7 +612,6 @@ register(
             "required": ["file_id", "source", "external_id"],
         },
         run=recognize.bind_file,
-        read_only=False,
         needs_approval=True,
         describe=recognize.describe_bind,
     )

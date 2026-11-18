@@ -123,12 +123,20 @@ def play_item(
 
 
 def play(
-    session: Session, services: Services, item: Item, request: PlayRequest
+    session: Session,
+    services: Services,
+    item: Item,
+    request: PlayRequest,
+    *,
+    listed_only: bool = False,
 ) -> PlayResult | PlayChoices:
-    """只有一个视频或程序时直接打开；多个时返回候选，不替调用方选。"""
+    """只有一个视频或程序时直接打开；多个时返回候选，不替调用方选。
+
+    listed_only 时游戏只启动启动插件列出的程序，不接受文件夹里任意的 .exe（智能体用）。
+    """
     games = game_folders(session, item)
     if games:
-        return _launch_game(services, item, games, request)
+        return _launch_game(services, item, games, request, listed_only=listed_only)
     videos = playable_videos(session, item)
     if not videos:
         raise UserError("这个条目没有视频文件", status_code=404)
@@ -201,19 +209,34 @@ def _targets(plugin: PlayerPlugin, host: PluginPlayerHost, folder: Path) -> list
 
 
 def _allowed(
-    plugin: PlayerPlugin, host: PluginPlayerHost, folder: Path, target: str | None
+    plugin: PlayerPlugin,
+    host: PluginPlayerHost,
+    folder: Path,
+    target: str | None,
+    *,
+    listed_only: bool = False,
 ) -> Path | None:
-    """手选的和记住的程序都要过这一关：在文件夹里、存在，并且是 .exe 或插件给的候选之一。"""
+    """手选的和记住的程序都要过这一关：在文件夹里、存在，并且是 .exe 或插件给的候选之一。
+
+    listed_only 时只认插件给的候选。
+    """
     relative = _inside(folder, target)
     if relative is None:
         return None
-    if relative.suffix.lower() == ".exe" or relative in _targets(plugin, host, folder):
+    if not listed_only and relative.suffix.lower() == ".exe":
+        return relative
+    if relative in _targets(plugin, host, folder):
         return relative
     return None
 
 
 def _launch_game(
-    services: Services, item: Item, games: list[MediaFile], request: PlayRequest
+    services: Services,
+    item: Item,
+    games: list[MediaFile],
+    request: PlayRequest,
+    *,
+    listed_only: bool,
 ) -> PlayResult | PlayChoices:
     row = _pick(games, request.file_id)
     if row is None:
@@ -238,11 +261,11 @@ def _launch_game(
 
     remembered = remembered_target(host, row.path)
     if request.target is not None:
-        chosen = _allowed(plugin, host, folder, request.target)
+        chosen = _allowed(plugin, host, folder, request.target, listed_only=listed_only)
         if chosen is None:
             raise UserError(BAD_TARGET, status_code=400)
     elif not request.choose and remembered is not None:
-        chosen = _allowed(plugin, host, folder, remembered)
+        chosen = _allowed(plugin, host, folder, remembered, listed_only=listed_only)
     else:
         chosen = None
     if chosen is None:

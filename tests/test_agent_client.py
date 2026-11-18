@@ -186,7 +186,37 @@ def test_reasoning_content_is_not_answer() -> None:
         + _sse(_delta({"content": "DONE 之后的不要"}))
     )
     client, _ = _client(_stream(body))
-    assert _collect(list(client.stream(MESSAGES, TOOLS))) == ("有两部。", [], "stop")
+    deltas = list(client.stream(MESSAGES, TOOLS))
+    assert _collect(deltas) == ("有两部。", [], "stop")
+    assert [d.reasoning for d in deltas if d.reasoning] == ["用户想要", "列出电影"]
+
+
+def test_reasoning_with_tool_calls() -> None:
+    body = _sse(
+        _delta({"role": "assistant", "reasoning_content": "先查一下", "content": None}),
+        _delta({"reasoning_content": "教父"}),
+        _delta(
+            {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_1",
+                        "function": {"name": "search_items", "arguments": '{"query": "教父"}'},
+                    }
+                ]
+            }
+        ),
+        _delta({}, "tool_calls"),
+        "[DONE]",
+    )
+    client, _ = _client(_stream(body))
+    deltas = list(client.stream(MESSAGES, TOOLS))
+    assert "".join(d.reasoning for d in deltas) == "先查一下教父"
+    assert _collect(deltas) == (
+        "",
+        [ToolCall(id="call_1", name="search_items", arguments='{"query": "教父"}')],
+        "tool_calls",
+    )
 
 
 @pytest.mark.parametrize(
@@ -201,6 +231,14 @@ def test_reasoning_content_is_not_answer() -> None:
         ),
         (500, {"error": {"message": f"boom {KEY}"}}, "AI 接口出错：HTTP 500：boom ***"),
         (404, {"error": "no route"}, "接口返回 HTTP 404：no route，检查接口地址"),
+        (
+            402,
+            {"error": {"message": "Insufficient Balance"}},
+            "余额不足：接口返回 HTTP 402：Insufficient Balance",
+        ),
+        (400, {"error": {"message": f"bad model {KEY}"}}, "请求被拒绝：bad model ***"),
+        (422, {"detail": "x"}, "请求被拒绝：接口返回 HTTP 422"),
+        (418, {}, "接口返回 HTTP 418"),
     ],
 )
 def test_http_errors_become_chinese_chat_errors(status: int, body: dict, message: str) -> None:

@@ -8,6 +8,8 @@ export const NO_KEY = "先在设置里填写 AI 的 key";
 export type Entry =
   | { kind: "user"; key: string; text: string }
   | { kind: "assistant"; key: string; text: string }
+  /** 推理模型的思考过程；开始回答或调用工具后 done。 */
+  | { kind: "reasoning"; key: string; text: string; done: boolean }
   | { kind: "tool"; key: string; callId: string; name: string; arguments: unknown; result?: unknown }
   | {
       kind: "approval";
@@ -15,7 +17,8 @@ export type Entry =
       approvalId: string;
       summary: string;
       items: ApprovalItem[];
-      status: "pending" | "approved" | "rejected";
+      /** expired：没批就发了新消息，卡片作废。 */
+      status: "pending" | "approved" | "rejected" | "expired";
     }
   | { kind: "error"; key: string; message: string };
 
@@ -65,8 +68,24 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       setBusy(true);
       let finished = false;
       let partial = "";
+      const received: ChatMessage[] = [];
+      const finishThinking = () =>
+        setEntries((rows) => {
+          const last = rows[rows.length - 1];
+          if (last === undefined || last.kind !== "reasoning" || last.done) return rows;
+          return [...rows.slice(0, -1), { ...last, done: true }];
+        });
+      const appendThinking = (delta: string) =>
+        setEntries((rows) => {
+          const last = rows[rows.length - 1];
+          if (last !== undefined && last.kind === "reasoning" && !last.done) {
+            return [...rows.slice(0, -1), { ...last, text: last.text + delta }];
+          }
+          return [...rows, { kind: "reasoning", key: nextKey(), text: delta, done: false }];
+        });
       const appendText = (delta: string) => {
         partial += delta;
+        finishThinking();
         setEntries((rows) => {
           const last = rows[rows.length - 1];
           if (last !== undefined && last.kind === "assistant") {
@@ -78,11 +97,15 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       try {
         for await (const event of streamChat(request, abort.signal)) {
           switch (event.event) {
+            case "reasoning":
+              appendThinking(event.data.delta);
+              break;
             case "text":
               appendText(event.data.delta);
               break;
             case "tool":
               partial = "";
+              finishThinking();
               push({
                 kind: "tool",
                 key: nextKey(),
@@ -112,8 +135,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
               });
               break;
             case "messages":
-              history.current = [...request.messages, ...event.data.messages];
-              finished = true;
+              // 后端每轮工具执行完先推一次，最后再推剩下的；合起来才是这次新增的全部。
+              received.push(...event.data.messages);
+              history.current = [...request.messages, ...received];
+              partial = "";
               break;
             case "error":
               if (event.data.message === NO_KEY) setNoKey(true);
@@ -133,10 +158,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         // 清空对话后旧请求的收尾不再改历史。
         if (controller.current === abort) {
           if (!finished) {
-            // 被停止或断开：已显示的文字留下，未完成的工具调用不进历史。
+            // 被停止或断开：已推过的消息和已显示的文字留下，没推过的工具调用不进历史。
             const kept: ChatMessage[] = partial ? [{ role: "assistant", content: partial }] : [];
-            history.current = [...request.messages, ...kept];
+            history.current = [...request.messages, ...received, ...kept];
           }
+          finishThinking();
           controller.current = null;
           setBusy(false);
         }
@@ -149,7 +175,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     (text: string) => {
       const content = text.trim();
       if (content === "" || controller.current !== null) return;
-      push({ kind: "user", key: nextKey(), text: content });
+      // 换了话题，还没批的卡片作废；后端也会把那些调用记成没执行。
+      setEntries((rows) => [
+        ...rows.map((row) =>
+          row.kind === "approval" && row.status === "pending" ? { ...row, status: "expired" as const } : row,
+        ),
+        { kind: "user", key: nextKey(), text: content },
+      ]);
       void run({ messages: [...history.current, { role: "user", content }] });
     },
     [push, run],

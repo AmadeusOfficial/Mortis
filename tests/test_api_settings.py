@@ -233,7 +233,17 @@ def test_check_ai_other_status_gives_reason(data_dir: Path) -> None:
     with _ai_client(data_dir, handler) as client:
         client.put("/api/secrets", json={"ai_api_key": AI_KEY})
         body = client.post("/api/settings/check-ai").json()
-    assert body == {"ok": False, "message": "接口返回 HTTP 404：Model Not Exist"}
+    assert body == {"ok": False, "message": "接口返回 HTTP 404：Model Not Exist，检查接口地址"}
+
+
+def test_check_ai_shares_status_messages(data_dir: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(402, json={"error": {"message": "Insufficient Balance"}})
+
+    with _ai_client(data_dir, handler) as client:
+        client.put("/api/secrets", json={"ai_api_key": AI_KEY})
+        body = client.post("/api/settings/check-ai").json()
+    assert body == {"ok": False, "message": "余额不足：接口返回 HTTP 402：Insufficient Balance"}
 
 
 def test_check_ai_rejects_bad_draft(client: TestClient) -> None:

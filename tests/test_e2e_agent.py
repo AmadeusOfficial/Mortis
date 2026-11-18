@@ -236,6 +236,65 @@ def test_batch_update_rejected(page: Page, world: tuple[World, str]) -> None:
     assert json.loads(state.item("heat").fields) == {}
 
 
+def test_new_message_expires_pending_approval(page: Page, world: tuple[World, str]) -> None:
+    state, url = world
+    state.script.replies = [_batch(state), say("好的，问别的。")]
+    drawer = _open(page, url)
+    _ask(drawer, "把这两部改一下")
+    card = drawer.get_by_role("group", name="需要批准的修改")
+    expect(card.get_by_role("button", name="批准")).to_be_visible()
+    _ask(drawer, "算了")
+    expect(card.get_by_text("已失效")).to_be_visible()
+    expect(card.get_by_role("button", name="批准")).to_have_count(0)
+    expect(drawer.get_by_text("好的，问别的。")).to_be_visible()
+    assert state.item("matrix").title == "黑客帝国"
+
+
+def test_stop_after_approval_keeps_executed_results(page: Page, world: tuple[World, str]) -> None:
+    state, url = world
+    state.script.replies = [_batch(state), state.script.release]
+    drawer = _open(page, url)
+    _ask(drawer, "把这两部改一下")
+    card = drawer.get_by_role("group", name="需要批准的修改")
+    card.get_by_role("button", name="批准").click()
+    expect(drawer.get_by_text("先说一半")).to_be_visible()
+    drawer.get_by_role("button", name="停止").click()
+    expect(drawer.get_by_role("button", name="停止")).to_have_count(0)
+    state.script.release.set()
+
+    state.script.replies = [say("好。")]
+    _ask(drawer, "改完了吗")
+    expect(drawer.get_by_text("好。", exact=True)).to_be_visible()
+    sent = state.script.seen[-1]
+    results = {m["tool_call_id"]: json.loads(m["content"]) for m in sent if m["role"] == "tool"}
+    assert results["u1"]["title"] == "黑客帝国 4K", "批准后执行过的不能记成没执行"
+    assert "error" not in results["u2"]
+    assert [m["role"] for m in sent[-2:]] == ["assistant", "user"]
+    assert sent[-2]["content"] == "先说一半"
+
+
+def test_reasoning_collapsed_and_images_not_loaded(page: Page, world: tuple[World, str]) -> None:
+    state, url = world
+    requested: list[str] = []
+    page.on("request", lambda request: requested.append(request.url))
+    state.script.replies = [
+        [Delta(reasoning="用户想看海报，")]
+        + say("这是海报：![海报](http://example.invalid/leak.png?title=黑客帝国)")
+    ]
+    drawer = _open(page, url)
+    _ask(drawer, "给我看海报")
+    expect(drawer.get_by_text("[图片：海报]", exact=False)).to_be_visible()
+    expect(drawer.locator("img")).to_have_count(0)
+    assert not any("example.invalid" in address for address in requested)
+
+    thinking = drawer.get_by_role("button", name="思考过程")
+    expect(thinking).to_be_visible()
+    expect(thinking).to_have_attribute("aria-expanded", "false")
+    expect(drawer.get_by_text("用户想看海报，")).to_have_count(0)
+    thinking.click()
+    expect(drawer.get_by_text("用户想看海报，")).to_be_visible()
+
+
 def test_missing_key_points_to_settings(page: Page, no_key_world: tuple[World, str]) -> None:
     state, url = no_key_world
     drawer = _open(page, url)

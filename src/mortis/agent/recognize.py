@@ -51,11 +51,6 @@ def forget_all() -> None:
         _remembered.clear()
 
 
-def file_of_item(session: Session, item: Item) -> Result | None:
-    guess = file_guess(session, item)
-    return guess.model_dump() if guess is not None else None
-
-
 def _work(session: Session, item_id: int) -> Item:
     item = session.get(Item, item_id)
     if item is None:

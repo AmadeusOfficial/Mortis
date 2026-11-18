@@ -13,11 +13,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mortis.agent.client import ToolCall
-from mortis.agent.tools import TOOLS, ToolContext, batch_update_targets, run_tool, tool_schemas
+from mortis.agent.tools import (
+    TOOLS,
+    Tool,
+    ToolContext,
+    batch_update_targets,
+    run_tool,
+    tool_schemas,
+)
 from mortis.api.app import create_app
-from mortis.config.models import PlaybackConfig
+from mortis.config.models import AiSecrets, NetworkSecrets, PlaybackConfig, Secrets
 from mortis.config.store import ConfigStore
 from mortis.db.models import Item, ItemExternalId, MediaFile, Task, utc_now
+from mortis.errors import UserError
 from mortis.settings import Settings
 from tests.fakes import FakeLauncher
 
@@ -37,6 +45,8 @@ class FakeGame(PlayerPlugin):
     def targets(self, host, folder):
         found = []
         for root, _dirs, files in os.walk(folder):
+            if os.path.basename(root) == "redist":
+                continue
             for name in files:
                 if name.lower().endswith(".exe"):
                     found.append(os.path.relpath(os.path.join(root, name), folder))
@@ -207,6 +217,27 @@ def _run(ctx: ToolContext, name: str, **arguments: Any) -> dict[str, Any]:
     return result
 
 
+def test_tool_errors_hide_secrets(app: FastAPI, ctx: ToolContext) -> None:
+    secrets = Secrets(
+        network=NetworkSecrets(proxy_username="proxy-user", proxy_password="proxy-pass-9"),
+        sources={"tmdb": {"api_key": "tmdb-key-1"}},
+        ai=AiSecrets(api_key="sk-ai-2"),
+    )
+    app.state.config_store.save_secrets(secrets)
+
+    def leak(_ctx: ToolContext, _args: dict[str, Any]) -> dict[str, Any]:
+        raise UserError("连不上 http://proxy-user:proxy-pass-9@proxy 用 tmdb-key-1 和 sk-ai-2")
+
+    TOOLS["leak"] = Tool(
+        name="leak", description="测试", parameters={"type": "object", "properties": {}}, run=leak
+    )
+    try:
+        result = _run(ctx, "leak")
+    finally:
+        del TOOLS["leak"]
+    assert result == {"error": "连不上 http://***:***@proxy 用 *** 和 ***"}
+
+
 def test_schemas_are_openai_functions() -> None:
     schemas = tool_schemas()
     names = [schema["function"]["name"] for schema in schemas]
@@ -226,12 +257,6 @@ def test_schemas_are_openai_functions() -> None:
         assert schema["type"] == "function"
         assert schema["function"]["description"]
         assert schema["function"]["parameters"]["type"] == "object"
-    assert {name for name, tool in TOOLS.items() if tool.read_only} == {
-        "search_items",
-        "get_item",
-        "search_candidates",
-        "list_unmatched",
-    }
     assert {name for name, tool in TOOLS.items() if tool.needs_approval} == {
         "rematch_item",
         "bind_file",
@@ -478,6 +503,28 @@ def test_play_galgame_with_several_programs(
     started = _run(ctx, "play_item", item_id=game, target="game.exe")
     assert started["played"] is True and started["path"] == str(folder / "game.exe")
     assert launcher.launched == [(str(folder / "game.exe"), [])]
+
+
+def test_agent_only_launches_listed_programs(
+    client: TestClient, ctx: ToolContext, session: Session, tmp_path: Path, launcher: FakeLauncher
+) -> None:
+    games = _library(client, tmp_path, "游戏", "galgame")
+    game = _item(session, games, "galgame", "work", "白色相簿2")
+    folder = tmp_path / "游戏" / "白色相簿 2"
+    for name in ("game.exe", "redist/vcredist.exe"):
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_bytes(b"MZ")
+    file_id = _file(session, games, game, folder, "game")
+
+    hidden = _run(ctx, "play_item", item_id=game, target="redist/vcredist.exe")
+    assert hidden == {"error": "选的程序不在游戏文件夹里，或者不能启动"}
+    assert launcher.launched == []
+
+    manual = client.post(
+        f"/api/items/{game}/play", json={"file_id": file_id, "target": "redist/vcredist.exe"}
+    )
+    assert manual.status_code == 200, "页面手动选的 .exe 照旧可以启动"
+    assert launcher.launched == [(str(folder / "redist" / "vcredist.exe"), [])]
 
 
 def test_batch_update_targets() -> None:

@@ -9,7 +9,7 @@ export interface ChatToolCall {
 /** 发给后端的消息，OpenAI 格式。system 由后端加。 */
 export type ChatMessage =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string | null; tool_calls?: ChatToolCall[] }
+  | { role: "assistant"; content: string | null; tool_calls?: ChatToolCall[]; reasoning_content?: string }
   | { role: "tool"; tool_call_id: string; content: string };
 
 export interface SearchRow {
@@ -69,6 +69,7 @@ export interface ApprovalItem {
 
 export type ChatEvent =
   | { event: "text"; data: { delta: string } }
+  | { event: "reasoning"; data: { delta: string } }
   | { event: "tool"; data: { id: string; name: string; arguments: unknown } }
   | { event: "tool_result"; data: { id: string; name: string; result: unknown } }
   | { event: "approval"; data: { id: string; summary: string; items: ApprovalItem[] } }
