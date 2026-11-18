@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from mortis.plugin_api import Hit, Host, SourcePlugin
-from mortis.sources.tmdb.search import similarity
+from mortis.sources.tmdb.search import title_score
 
 MATCH_THRESHOLD = 0.75
 """各类型设置里 match_threshold 的默认值。实际用哪个阈值由调用方从类型设置里读。"""
@@ -20,7 +20,7 @@ class SourceMatch:
 
 def hit_score(hit: Hit, title: str, year: int | None) -> float:
     names = [name for name in (hit.title, hit.original_title, *hit.aliases) if name]
-    base = max((similarity(title, name) for name in names), default=0.0)
+    base = max((title_score(title, name) for name in names), default=0.0)
     if year is None or hit.year is None:
         return base
     diff = abs(year - hit.year)

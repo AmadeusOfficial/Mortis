@@ -16,7 +16,8 @@ _JUNK = re.compile(
     r"2160p|1080p|1080i|720p|576p|480p|4k|uhd|hdr10\+?|hdr|dovi|"
     r"blu-?ray|bdrip|brrip|bdremux|remux|bd(?:1080|720|2160)p?|web-?dl|webrip|hdtv|"
     r"dvdrip|dvdscr|hdrip|x264|x265|h\.?264|h\.?265|hevc|avc|10bit|8bit|"
-    r"aac|ac3|eac3|dts|truehd|atmos|proper|repack|unrated|remastered|imax|"
+    r"aac|ac3|eac3|dts|truehd|atmos|proper|repack|unrated|uncut|extended|director'?s cut|"
+    r"remastered|imax|"
     r"[0-9]{3,4}x[0-9]{3,4}"
     r")(?![a-z0-9])"
     r"|中英字幕|国英双语|中字|双语"
@@ -28,6 +29,9 @@ _STACK = re.compile(
     r"(?i)[ ._-]*[\[(]?(?:cd|dvd|part|pt|disc|disk)[ ._-]*([0-9]{1,2}|[a-d])[\])]?$"
 )
 _CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]")
+# 开头方括号一般是字幕组，但 `[哪吒之魔童闹海].Ne.Zha.2.2025` 这种放的是中文片名。
+_LEADING_BRACKET = re.compile(r"^\s*(?:\[([^\]]*)\]|【([^】]*)】)")
+_GROUP_WORDS = re.compile(r"(?i)字幕|汉化|漢化|压制|壓制|搬运|工作室|[组組社]$|sub|raws")
 _LATIN = re.compile(r"[A-Za-z]")
 _EDGE = " -–—([{_."
 
@@ -71,8 +75,19 @@ def _variants(title: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item for item in result if item))
 
 
+def _leading_title(text: str) -> str | None:
+    match = _LEADING_BRACKET.match(text)
+    if match is None:
+        return None
+    inner = (match.group(1) or match.group(2) or "").strip()
+    if not _CJK.search(inner) or _SPEC.search(inner) or _GROUP_WORDS.search(inner):
+        return None
+    return inner
+
+
 def parse_name(name: str) -> ParsedName:
     text = unicodedata.normalize("NFKC", name)
+    leading = _leading_title(text)
     text = _brackets(text)
     text = _PAREN.sub(lambda m: " " if _JUNK.search(m.group(1)) else m.group(0), text)
     text = re.sub(r"[._]+", " ", text)
@@ -87,7 +102,10 @@ def parse_name(name: str) -> ParsedName:
     if junk is not None and text[: junk.start()].strip():
         cut = min(cut, junk.start())
     title = _clean(text[:cut]) or _clean(text)
-    return ParsedName(title=title, year=year, search_titles=_variants(title))
+    variants = _variants(title)
+    if leading and leading not in variants:
+        variants += (leading,)
+    return ParsedName(title=title, year=year, search_titles=variants)
 
 
 def strip_stack(stem: str) -> tuple[str, str | None]:

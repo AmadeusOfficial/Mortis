@@ -82,7 +82,12 @@ def organize_library(
                 ctx.check_cancelled()
                 ctx.progress(index, len(pending), group.movie.name)
                 try:
-                    match = find_best(tmdb, group.movie.parsed, kind="tv" if is_series else "movie")
+                    match = find_best(
+                        tmdb,
+                        group.movie.parsed,
+                        kind="tv" if is_series else "movie",
+                        threshold=settings.match_threshold,
+                    )
                 except TmdbAuthError:
                     raise TaskError("TMDB 拒绝了这个 API Key") from None
                 except TmdbError as error:

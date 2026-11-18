@@ -55,6 +55,26 @@ def test_mixed_cjk_and_latin_give_extra_search_titles() -> None:
     assert parse_name("The.Matrix.1999").search_titles == ("The Matrix",)
 
 
+def test_leading_bracket_with_chinese_title_is_searched_too() -> None:
+    parsed = parse_name("[哪吒之魔童闹海].Ne.Zha.2.2025.2160p.WEB-DL.H265-CMCTV")
+    assert (parsed.title, parsed.year) == ("Ne Zha 2", 2025)
+    assert parsed.search_titles == ("Ne Zha 2", "哪吒之魔童闹海")
+    assert parse_name("[桜都字幕组] Haikyuu (2015)").search_titles == ("Haikyuu",)
+    assert parse_name("[喵萌字幕社][1080p] Movie").search_titles == ("Movie",)
+
+
+@pytest.mark.parametrize(
+    ("name", "title"),
+    [
+        ("Gorgeous.UNCUT", "Gorgeous"),
+        ("Aliens.1986.Extended.1080p", "Aliens"),
+        ("Blade.Runner.Director's.Cut", "Blade Runner"),
+    ],
+)
+def test_edition_words_are_dropped(name: str, title: str) -> None:
+    assert parse_name(name).title == title
+
+
 def test_release_info_in_parentheses_is_dropped() -> None:
     parsed = parse_name(
         "[Seed-Raws] 劇場版 空の境界 - 第02章 殺人考察（前） (BD 1280x720 HEVC AACx2 [5.1+2.0])"

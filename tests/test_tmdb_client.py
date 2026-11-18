@@ -16,7 +16,7 @@ from mortis.sources.tmdb.client import (
     TmdbNotFound,
     open_tmdb,
 )
-from mortis.sources.tmdb.search import MovieHit, find_best, score, similarity
+from mortis.sources.tmdb.search import MovieHit, find_best, score, similarity, title_score
 from tests.fakes import FakeTmdb, hit, tv_hit
 
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -93,6 +93,58 @@ def test_similarity_and_score() -> None:
     assert score(movie, "The Matrix", 1999) == 1.0
     assert score(movie, "The Matrix", 2003) == pytest.approx(0.85)
     assert score(movie, "The Matrix", None) == 1.0
+
+
+def test_title_score_unifies_numbers_and_penalizes_missing_sequel_number() -> None:
+    assert title_score("Royal Tramp II", "Royal Tramp 2") == 1.0
+    assert title_score("A Chinese Odyssey Part 2", "A Chinese Odyssey Part Two") == 1.0
+    assert title_score("Infernal Affairs II", "Infernal Affairs III") < 0.75
+    assert title_score("Fight Back to School 3", "Fight Back to School") < 0.75
+    assert title_score("Fight Back to School", "Fight Back to School 3") > 0.9
+
+
+def test_hit_without_year_loses_a_tie() -> None:
+    dated = MovieHit(1, "Shaolin Soccer", "少林足球", "2001-07-12", 2001, "", None, 15.0)
+    undated = MovieHit(2, "Shaolin Soccer", "Shaolin Soccer", None, None, "", None, 0.1)
+    assert score(dated, "Shaolin Soccer", None) > score(undated, "Shaolin Soccer", None)
+
+
+def _bilingual(
+    local: dict[str, list[dict]], english: dict[str, list[dict]], languages: list[str]
+) -> httpx.MockTransport:
+    """中文和英文搜索回不同的结果，记下每次搜索用的语言。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/3/search/movie":
+            return httpx.Response(404, json={})
+        language = request.url.params["language"]
+        languages.append(language)
+        table = english if language == "en-US" else local
+        return httpx.Response(200, json={"results": table.get(request.url.params["query"], [])})
+
+    return httpx.MockTransport(handler)
+
+
+def test_english_file_name_matches_by_english_title() -> None:
+    transport = _bilingual(
+        {"Kung Fu Hustle": [hit(9470, "功夫", "2004-02-10")]},
+        {"Kung Fu Hustle": [hit(9470, "Kung Fu Hustle", "2004-02-10", "功夫")]},
+        [],
+    )
+    tmdb = TmdbClient(httpx.Client(transport=transport), "k", language="zh-CN", include_adult=True)
+    match = find_best(tmdb, parse_name("Kung.Fu.Hustle"))
+    assert match is not None and match.hit.tmdb_id == 9470 and match.score == 1.0
+    assert match.hit.title == "功夫"
+
+
+def test_english_search_is_skipped_for_chinese_queries_and_english_libraries() -> None:
+    languages: list[str] = []
+    transport = _bilingual({"功夫": [hit(9470, "功夫", "2004-02-10")]}, {}, languages)
+    zh = TmdbClient(httpx.Client(transport=transport), "k", language="zh-CN", include_adult=True)
+    find_best(zh, parse_name("功夫"))
+    en = TmdbClient(httpx.Client(transport=transport), "k", language="en-US", include_adult=True)
+    find_best(en, parse_name("Heat"))
+    assert languages == ["zh-CN", "en-US"]
 
 
 def test_find_best_tries_variants_and_falls_back_without_year() -> None:
