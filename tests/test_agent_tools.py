@@ -18,6 +18,7 @@ from mortis.agent.tools import (
     Tool,
     ToolContext,
     batch_update_targets,
+    calls_needing_approval,
     run_tool,
     tool_schemas,
 )
@@ -245,6 +246,7 @@ def test_schemas_are_openai_functions() -> None:
         "search_items",
         "get_item",
         "update_fields",
+        "set_user_tags",
         "scrape_item",
         "scan_library",
         "play_item",
@@ -543,3 +545,30 @@ def test_batch_update_targets() -> None:
         ]
     ) == [1, 2]
     assert batch_update_targets([call("scrape_item", {"item_id": 1})]) == []
+    mixed = [
+        call("update_fields", {"item_id": 1, "values": {"title": "a"}}),
+        call("set_user_tags", {"item_id": 2, "add": ["收藏"]}),
+    ]
+    assert batch_update_targets(mixed) == [1, 2]
+    assert calls_needing_approval(mixed) == mixed
+    single = [call("set_user_tags", {"item_id": 3, "add": ["收藏"]})]
+    assert calls_needing_approval(single) == []
+    assert calls_needing_approval(single, changed=[1]) == single
+
+
+def test_set_user_tags_and_search_by_tag(ctx: ToolContext, shelf: dict[str, int]) -> None:
+    added = _run(ctx, "set_user_tags", item_id=shelf["matrix"], add=["收藏", " 科幻 "])
+    assert added == {"item_id": shelf["matrix"], "title": "黑客帝国", "user_tags": ["收藏", "科幻"]}
+    removed = _run(ctx, "set_user_tags", item_id=shelf["matrix"], remove=["科幻"])
+    assert removed["user_tags"] == ["收藏"]
+    assert _run(ctx, "set_user_tags", item_id=shelf["matrix"]) == {
+        "error": "add 和 remove 至少给一个标签"
+    }
+    assert "error" in _run(ctx, "set_user_tags", item_id=shelf["season"], add=["收藏"])
+    item = _run(ctx, "get_item", item_id=shelf["matrix"])
+    assert item["user_tags"] == ["收藏"] and item["type_user_tags"] == ["收藏", "科幻"]
+    found = _run(ctx, "search_items", user_tag="收藏")["items"]
+    assert [row["id"] for row in found] == [shelf["matrix"]]
+    _run(ctx, "set_user_tags", item_id=shelf["show"], add=["收藏"])
+    in_tv = _run(ctx, "search_items", user_tag="收藏", query="动画")["items"]
+    assert [row["id"] for row in in_tv] == [shelf["show"]]

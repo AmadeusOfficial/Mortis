@@ -53,6 +53,8 @@ export interface ApprovalItem {
   title?: string;
   values?: Record<string, unknown>;
   fields?: { key: string; label: string; value: unknown }[];
+  add?: string[];
+  remove?: string[];
   current?: {
     title?: string;
     year?: number | null;

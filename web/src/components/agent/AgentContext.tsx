@@ -42,8 +42,15 @@ interface AgentState {
 const AgentContext = createContext<AgentState | null>(null);
 
 /** 这些工具执行后，页面上的条目、海报墙和未识别列表可能变了。 */
-const CHANGING_TOOLS = new Set(["update_fields", "scrape_item", "scan_library", "rematch_item", "bind_file"]);
-const CHANGED_QUERIES = ["item", "wall", "unmatched", "libraries"];
+const CHANGING_TOOLS = new Set([
+  "update_fields",
+  "set_user_tags",
+  "scrape_item",
+  "scan_library",
+  "rematch_item",
+  "bind_file",
+]);
+const CHANGED_QUERIES = ["item", "wall", "unmatched", "libraries", "user-tags"];
 
 let counter = 0;
 const nextKey = () => `e${++counter}`;

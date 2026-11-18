@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, exists, func, select
 from sqlalchemy.orm import Session
 
 from mortis import libraries
@@ -17,8 +17,9 @@ from mortis.agent.context import Result, ToolContext
 from mortis.api.routes.items import detail_of, scrape_work
 from mortis.api.routes.libraries import enqueue_organize
 from mortis.api.routes.play import PlayChoices, PlayRequest, play
-from mortis.db.models import DataType, Item, Library
+from mortis.db.models import DataType, Item, ItemTag, Library, Tag
 from mortis.errors import UserError
+from mortis.items import user_tags
 from mortis.items.detail import image_url, read_value, year_of
 from mortis.items.edit import ItemError, edit_fields
 from mortis.output.service import rewrite_if_arranged
@@ -31,9 +32,12 @@ TEXT_LIMIT = 300
 PEOPLE_LIMIT = 10
 EPISODE_LIMIT = 200
 CANDIDATE_LIMIT = 20
+TYPE_TAG_LIMIT = 200
 TOP_KINDS = ("work", "collection")
 MAIN_FILE_KINDS = ("video", "game")
 RECOGNIZE_TOOLS = frozenset({"rematch_item", "bind_file"})
+EDIT_TOOLS = frozenset({"update_fields", "set_user_tags"})
+"""改一个条目的工具。一次提问内合起来改了两个及以上条目就要批准。"""
 
 
 @dataclass(frozen=True)
@@ -41,7 +45,7 @@ class Tool:
     name: str
     description: str
     parameters: dict[str, Any]
-    """JSON Schema。只用 integer、string、object 和 enum，参数检查按它来。"""
+    """JSON Schema。只用 integer、string、object、文字数组和 enum，参数检查按它来。"""
     run: Callable[[ToolContext, dict[str, Any]], Result]
     needs_approval: bool = False
     """每次调用都要用户先批准。"""
@@ -98,10 +102,10 @@ def run_tool(ctx: ToolContext, name: str, arguments: str | dict[str, Any]) -> Re
 
 
 def batch_update_targets(calls: Iterable[ToolCall]) -> list[int]:
-    """一组调用里 update_fields 涉及的不同条目，两个及以上就算批量修改。参数不对的不算。"""
+    """一组调用里改字段、改标签涉及的不同条目，两个及以上就算批量修改。参数不对的不算。"""
     targets: set[int] = set()
     for call in calls:
-        if call.name != "update_fields":
+        if call.name not in EDIT_TOOLS:
             continue
         parsed = _parse_arguments(call.arguments)
         if parsed is None or _check_arguments(TOOLS[call.name].parameters, parsed) is not None:
@@ -111,7 +115,7 @@ def batch_update_targets(calls: Iterable[ToolCall]) -> list[int]:
 
 
 def calls_needing_approval(calls: list[ToolCall], changed: Iterable[int] = ()) -> list[ToolCall]:
-    """这一轮里要等用户批准的调用：标了 needs_approval 的；批量修改时这一轮的全部 update_fields。
+    """这一轮里要等用户批准的调用：标了 needs_approval 的；批量修改时这一轮的全部改字段、改标签。
 
     changed 是这次提问里前几轮已经改过的条目。批量按一次提问算：这一轮要改的加上已改过的
     达到两个及以上，就算批量，免得模型一轮改一个绕过批准。
@@ -123,13 +127,13 @@ def calls_needing_approval(calls: list[ToolCall], changed: Iterable[int] = ()) -
         tool = TOOLS.get(call.name)
         if tool is None:
             continue
-        if tool.needs_approval or (batch and call.name == "update_fields"):
+        if tool.needs_approval or (batch and call.name in EDIT_TOOLS):
             held.append(call)
     return held
 
 
 def approval_summary(calls: list[ToolCall], changed: Iterable[int] = ()) -> str:
-    if all(call.name == "update_fields" for call in calls):
+    if all(call.name in EDIT_TOOLS for call in calls):
         count = len(batch_update_targets(calls))
         done = len(set(changed) - set(batch_update_targets(calls)))
         if done:
@@ -205,6 +209,10 @@ def _check_arguments(schema: dict[str, Any], arguments: dict[str, Any]) -> str |
             return f"参数 {key} 要是文字"
         elif expected == "object" and not isinstance(value, dict):
             return f"参数 {key} 要是对象"
+        elif expected == "array" and (
+            not isinstance(value, list) or not all(isinstance(v, str) for v in value)
+        ):
+            return f"参数 {key} 要是一组文字"
         if "enum" in spec and value not in spec["enum"]:
             return f"参数 {key} 只能是 {'、'.join(spec['enum'])}"
     return None
@@ -237,16 +245,27 @@ def _clip(text: str) -> str:
 
 
 def _search_items(ctx: ToolContext, args: dict[str, Any]) -> Result:
-    term = args["query"].strip()
-    if not term:
-        raise ItemError("query 不能为空")
+    term = args.get("query", "").strip()
+    user_tag = args.get("user_tag", "").strip()
+    if not term and not user_tag:
+        raise ItemError("query 和 user_tag 至少给一个")
     kinds = (args["kind"],) if "kind" in args else TOP_KINDS
-    conditions = [
-        Item.kind.in_(kinds),
-        Item.title.icontains(term, autoescape=True)
-        | Item.original_title.icontains(term, autoescape=True)
-        | Item.sort_title.icontains(term, autoescape=True),
-    ]
+    conditions = [Item.kind.in_(kinds)]
+    if term:
+        conditions.append(
+            Item.title.icontains(term, autoescape=True)
+            | Item.original_title.icontains(term, autoescape=True)
+            | Item.sort_title.icontains(term, autoescape=True)
+        )
+    if user_tag:
+        conditions.append(
+            exists().where(
+                ItemTag.item_id == Item.id,
+                ItemTag.tag_id == Tag.id,
+                Tag.tag_kind == user_tags.PREFIX + Item.data_type_id,
+                func.lower(Tag.name) == user_tag.lower(),
+            )
+        )
     if "library_id" in args:
         conditions.append(Item.library_id == args["library_id"])
     session = ctx.session
@@ -333,9 +352,13 @@ def _get_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
         "fields": fields,
         "editable": editable,
         "locked": json.loads(item.locked_fields),
+        "user_tags": detail["user_tags"],
         "external_ids": detail["external_ids"],
         "file_count": direct_files + sum(s["file_count"] for s in detail["seasons"]),
     }
+    if item.kind in user_tags.TAGGABLE_KINDS:
+        known = [row["name"] for row in user_tags.list_tags(session, item.data_type_id)]
+        result["type_user_tags"] = known[:TYPE_TAG_LIMIT]
     if detail["guess"] is not None:
         result["file"] = detail["guess"].model_dump()
     if detail["collection"] is not None:
@@ -410,6 +433,28 @@ def _update_fields(ctx: ToolContext, args: dict[str, Any]) -> Result:
     }
 
 
+def _set_user_tags(ctx: ToolContext, args: dict[str, Any]) -> Result:
+    session = ctx.session
+    item = _item(session, args["item_id"])
+    add: list[str] = args.get("add", [])
+    remove: list[str] = args.get("remove", [])
+    if not add and not remove:
+        raise ItemError("add 和 remove 至少给一个标签")
+    names = user_tags.change_item_tags(session, item, add, remove)
+    rewrite_if_arranged(session, ctx.runner, item)
+    return {"item_id": item.id, "title": item.title, "user_tags": names}
+
+
+def _describe_tags(ctx: ToolContext, args: dict[str, Any]) -> Result:
+    item = ctx.session.get(Item, args["item_id"])
+    return {
+        "item_id": args["item_id"],
+        "title": item.title if item is not None else f"条目 {args['item_id']}",
+        "add": args.get("add", []),
+        "remove": args.get("remove", []),
+    }
+
+
 def _scrape_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
     item = _item(ctx.session, args["item_id"])
     task_id = scrape_work(ctx.session, ctx.runner, item, force=True)
@@ -444,13 +489,18 @@ register(
     Tool(
         name="search_items",
         description=(
-            "按标题、原名、排序名检索所有库里的作品和系列（不含季和集），最多返回 20 条。"
+            "按标题、原名、排序名或自定义标签检索所有库里的作品和系列（不含季和集），"
+            "最多返回 20 条。"
             "播放、修改之前先用它找到条目 id；同名的有多条时把候选列给用户选。"
         ),
         parameters={
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "标题里的关键词"},
+                "user_tag": {
+                    "type": "string",
+                    "description": "只找打了这个自定义标签的，和 query 至少给一个",
+                },
                 "library_id": {"type": "integer", "description": "只在这个库里找"},
                 "kind": {
                     "type": "string",
@@ -458,7 +508,6 @@ register(
                     "description": "work 是作品（电影、剧、游戏），collection 是系列电影",
                 },
             },
-            "required": ["query"],
         },
         run=_search_items,
     )
@@ -498,6 +547,27 @@ register(
         },
         run=_update_fields,
         describe=_describe_update,
+    )
+)
+TAG_NAMES = {"type": "array", "items": {"type": "string"}}
+register(
+    Tool(
+        name="set_user_tags",
+        description=(
+            "给一部作品或一个系列加减用户自己的标签（我的标签），不能给季和集打。"
+            "标签按数据类型分开；加之前先看 get_item 结果里的 type_user_tags，尽量用已有的。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "item_id": ITEM_ID,
+                "add": {**TAG_NAMES, "description": "要加上的标签名"},
+                "remove": {**TAG_NAMES, "description": "要去掉的标签名"},
+            },
+            "required": ["item_id"],
+        },
+        run=_set_user_tags,
+        describe=_describe_tags,
     )
 )
 register(
