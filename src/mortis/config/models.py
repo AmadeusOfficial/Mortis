@@ -482,7 +482,7 @@ class AiConfig(BaseModel):
 
     base_url: str = "https://api.deepseek.com"
     """请求发到 {base_url}/chat/completions。"""
-    model: str = "deepseek-chat"
+    model: str = "deepseek-flash"
     max_rounds: int = Field(default=8, ge=1, le=20)
     """一次提问最多几轮工具调用。"""
 

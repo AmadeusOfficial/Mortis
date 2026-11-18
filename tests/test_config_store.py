@@ -35,7 +35,7 @@ def test_ai_defaults_to_deepseek() -> None:
     ai = AppConfig().ai
     assert (ai.base_url, ai.model, ai.max_rounds) == (
         "https://api.deepseek.com",
-        "deepseek-chat",
+        "deepseek-flash",
         8,
     )
     assert Secrets().ai.api_key == ""
@@ -63,8 +63,8 @@ def test_ai_rejects_bad_values(patch: dict[str, object]) -> None:
 
 def test_ai_section_and_key_roundtrip(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path)
-    saved = store.save_section("ai", AiConfig(model="deepseek-reasoner", max_rounds=3))
-    assert (saved.ai.model, saved.ai.max_rounds) == ("deepseek-reasoner", 3)
+    saved = store.save_section("ai", AiConfig(model="deepseek-v4-pro", max_rounds=3))
+    assert (saved.ai.model, saved.ai.max_rounds) == ("deepseek-v4-pro", 3)
     assert store.load_config().ai == saved.ai
     secrets = store.load_secrets()
     set_secret(secrets, "ai_api_key", "sk-ai")

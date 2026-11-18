@@ -131,7 +131,7 @@ def test_settings_ai_save_and_check(page: Page, base_url: str, data_dir: Path) -
     page.get_by_role("link", name="模型接口", exact=True).click()
     expect(page).to_have_url(base_url + "/settings?section=ai")
     expect(page.get_by_label("接口地址")).to_have_value("https://api.deepseek.com")
-    expect(page.get_by_label("模型名")).to_have_value("deepseek-chat")
+    expect(page.get_by_label("模型名")).to_have_value("deepseek-flash")
     expect(page.get_by_label("最多工具轮数")).to_have_value("8")
 
     page.get_by_role("button", name="测试连接").click()
@@ -145,18 +145,18 @@ def test_settings_ai_save_and_check(page: Page, base_url: str, data_dir: Path) -
 
     page.get_by_label("API Key", exact=True).fill("e2e-ai-key")
     page.get_by_role("button", name="保存API Key").click()
-    page.get_by_label("模型名").fill("deepseek-reasoner")
+    page.get_by_label("模型名").fill("deepseek-v4-pro")
     page.get_by_label("最多工具轮数").fill("21")
     expect(page.get_by_text("要在 1 到 20 之间")).to_be_visible()
     page.get_by_label("最多工具轮数").fill("5")
     # 没保存也能用草稿里的模型名测试。
     page.get_by_role("button", name="测试连接").click()
-    expect(page.get_by_text("连接成功，模型 deepseek-reasoner 可用")).to_be_visible()
+    expect(page.get_by_text("连接成功，模型 deepseek-v4-pro 可用")).to_be_visible()
 
     page.get_by_role("button", name="保存 AI 设置").click()
     expect(page.get_by_text("AI 设置已保存")).to_be_visible()
     page.reload()
-    expect(page.get_by_label("模型名")).to_have_value("deepseek-reasoner")
+    expect(page.get_by_label("模型名")).to_have_value("deepseek-v4-pro")
     expect(page.get_by_label("最多工具轮数")).to_have_value("5")
     assert "e2e-ai-key" in (data_dir / "secrets.toml").read_text(encoding="utf-8")
     assert "e2e-ai-key" not in (data_dir / "config.toml").read_text(encoding="utf-8")

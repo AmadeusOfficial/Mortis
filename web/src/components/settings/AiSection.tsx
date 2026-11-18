@@ -88,7 +88,7 @@ export function AiSection() {
           </SettingRow>
           <SettingRow
             label="模型名"
-            hint="按接口文档填写，要支持工具调用，例如 deepseek-chat"
+            hint="按接口文档填写，要支持工具调用，例如 deepseek-flash"
             htmlFor={modelId}
             hintId={modelHintId}
           >

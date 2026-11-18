@@ -51,7 +51,7 @@ def _client(
 ) -> tuple[OpenAICompatClient, Recorder]:
     recorder = Recorder(respond)
     http = build_client(NetworkConfig(), Secrets(), transport=httpx.MockTransport(recorder))
-    return OpenAICompatClient(BASE, "deepseek-chat", KEY, http), recorder
+    return OpenAICompatClient(BASE, "deepseek-flash", KEY, http), recorder
 
 
 def _stream(body: bytes, status: int = 200) -> Callable[[httpx.Request], httpx.Response]:
@@ -87,7 +87,7 @@ def test_plain_text_streams_and_sends_request() -> None:
     assert str(request.url) == f"{BASE}/chat/completions"
     assert request.headers["authorization"] == f"Bearer {KEY}"
     sent = recorder.body()
-    assert sent["model"] == "deepseek-chat"
+    assert sent["model"] == "deepseek-flash"
     assert sent["stream"] is True
     assert sent["messages"] == MESSAGES
     assert sent["tools"] == TOOLS and sent["tool_choice"] == "auto"

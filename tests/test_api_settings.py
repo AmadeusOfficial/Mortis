@@ -183,7 +183,7 @@ def test_check_ai_success_uses_saved_key_and_draft(data_dir: Path) -> None:
         client.put("/api/secrets", json={"ai_api_key": AI_KEY})
         assert client.post("/api/settings/check-ai").json() == {
             "ok": True,
-            "message": "连接成功，模型 deepseek-chat 可用",
+            "message": "连接成功，模型 deepseek-flash 可用",
         }
         draft = {"base_url": "https://llm.example.com/v1/", "model": "qwen-plus"}
         response = client.post("/api/settings/check-ai", json=draft)
@@ -194,7 +194,7 @@ def test_check_ai_success_uses_saved_key_and_draft(data_dir: Path) -> None:
     assert str(first.url) == "https://api.deepseek.com/chat/completions"
     assert first.headers["Authorization"] == f"Bearer {AI_KEY}"
     payload = json.loads(first.content)
-    assert payload["model"] == "deepseek-chat"
+    assert payload["model"] == "deepseek-flash"
     assert payload["stream"] is False
     assert 0 < payload["max_tokens"] <= 8
     assert str(second.url) == "https://llm.example.com/v1/chat/completions"
