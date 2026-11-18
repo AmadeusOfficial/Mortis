@@ -21,6 +21,7 @@ from mortis.db.models import (
     Task,
     TypeField,
 )
+from mortis.items.user_tags import item_tags
 from mortis.organize.episodes import parse_episode
 from mortis.scrape.apply import level_fields
 from mortis.tasks import repo as task_repo
@@ -348,5 +349,6 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],
         "scraped_at": scraped_at,
+        "user_tags": item_tags(session, item),
         "sections": [{"name": name, "fields": rows} for name, rows in sections.items()],
     }

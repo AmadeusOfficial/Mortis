@@ -26,6 +26,7 @@ from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import sources as source_routes
 from mortis.api.routes import tasks as task_routes
 from mortis.api.routes import tmdb as tmdb_routes
+from mortis.api.routes import user_tags as user_tag_routes
 from mortis.api.routes.agent import ChatClientFactory
 from mortis.catalog.install import ensure_builtin_types
 from mortis.config.models import AppConfig
@@ -171,6 +172,7 @@ def create_app(
     app.include_router(schedule_routes.router)
     app.include_router(task_routes.router)
     app.include_router(item_routes.router)
+    app.include_router(user_tag_routes.router)
     app.include_router(output_routes.router)
     app.include_router(play_routes.router)
     app.include_router(image_routes.router)

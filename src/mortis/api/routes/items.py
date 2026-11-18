@@ -133,6 +133,7 @@ class ItemDetail(BaseModel):
     seasons: list[SeasonOut]
     files: list[FileOut]
     scraped_at: str | None
+    user_tags: list[str]
     sections: list[SectionOut]
     guess: FileGuess | None = None
     """第一个视频或游戏目录的文件名、上级目录名，和从文件名解析出的标题、年份。"""
