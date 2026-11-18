@@ -217,12 +217,25 @@ def test_schemas_are_openai_functions() -> None:
         "scrape_item",
         "scan_library",
         "play_item",
+        "search_candidates",
+        "list_unmatched",
+        "rematch_item",
+        "bind_file",
     ]
     for schema in schemas:
         assert schema["type"] == "function"
         assert schema["function"]["description"]
         assert schema["function"]["parameters"]["type"] == "object"
-    assert {name for name, tool in TOOLS.items() if tool.read_only} == {"search_items", "get_item"}
+    assert {name for name, tool in TOOLS.items() if tool.read_only} == {
+        "search_items",
+        "get_item",
+        "search_candidates",
+        "list_unmatched",
+    }
+    assert {name for name, tool in TOOLS.items() if tool.needs_approval} == {
+        "rematch_item",
+        "bind_file",
+    }
 
 
 def test_search_across_libraries_and_filters(ctx: ToolContext, shelf: dict[str, int]) -> None:
@@ -239,6 +252,7 @@ def test_search_across_libraries_and_filters(ctx: ToolContext, shelf: dict[str, 
         "data_type": "movie",
         "kind": "work",
         "structure": "单部",
+        "poster_url": None,
     }
     assert rows[shelf["collection"]]["structure"] == "系列"
     assert rows[shelf["collection"]]["year"] == 1999

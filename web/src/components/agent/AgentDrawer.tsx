@@ -3,12 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown, { type Components } from "react-markdown";
 import { Link, useLocation } from "react-router";
-import { fetchLibraries, fetchSecretsStatus } from "../../api";
+import { fetchItem, fetchLibraries, fetchSecretsStatus } from "../../api";
 import { IconChevronDown, IconChevronRight, IconSparkle } from "../../icons";
 import { Pill } from "../ui";
 import { type Entry, NO_KEY, useAgent } from "./AgentContext";
 import styles from "./AgentDrawer.module.css";
-import type { ApprovalItem, SearchRow } from "./chatStream";
+import type { ApprovalItem, Candidate, SearchRow } from "./chatStream";
+import { idsText, pickMessage, rematchDraft, targetText } from "./drafts";
 
 const TOOL_LABELS: Record<string, string> = {
   search_items: "检索",
@@ -17,6 +18,10 @@ const TOOL_LABELS: Record<string, string> = {
   scrape_item: "刮削",
   scan_library: "扫描",
   play_item: "播放",
+  search_candidates: "搜候选",
+  list_unmatched: "列未识别",
+  rematch_item: "重新匹配",
+  bind_file: "绑定文件",
 };
 
 const markdown: Components = {
@@ -31,6 +36,9 @@ function record(value: unknown): Record<string, unknown> {
 
 function toolTarget(name: string, args: Record<string, unknown>, result: Record<string, unknown>): string {
   if (name === "search_items") return String(args.query ?? "");
+  if (name === "search_candidates") return String(result.query ?? args.query ?? "");
+  if (name === "list_unmatched") return "";
+  if (args.file_id !== undefined && typeof result.title !== "string") return `文件 ${String(args.file_id)}`;
   if (name === "scan_library") {
     return typeof result.library_name === "string" ? result.library_name : `库 ${String(args.library_id ?? "")}`;
   }
@@ -42,6 +50,55 @@ function searchRows(result: Record<string, unknown>): SearchRow[] {
   return Array.isArray(result.items) ? (result.items as SearchRow[]) : [];
 }
 
+function candidateRows(result: Record<string, unknown>): Candidate[] {
+  return Array.isArray(result.candidates) ? (result.candidates as Candidate[]) : [];
+}
+
+function Poster({ url }: { url: string | null }) {
+  return url ? <img className={styles.poster} src={url} alt="" loading="lazy" /> : <div className={styles.poster} />;
+}
+
+function CandidateCards({ candidates }: { candidates: Candidate[] }) {
+  const { send, busy } = useAgent();
+  return (
+    <div className={styles.cards} role="list" aria-label="候选">
+      {candidates.map((candidate, index) => (
+        <button
+          key={`${candidate.source}:${candidate.external_id}`}
+          type="button"
+          role="listitem"
+          className={styles.card}
+          disabled={busy}
+          onClick={() => send(pickMessage(index, candidate))}
+        >
+          <span className={styles.number}>{index + 1}</span>
+          <Poster url={candidate.poster_url} />
+          <div className={styles.cardText}>
+            <Text size="sm" fw={600} truncate>
+              {candidate.title}
+              {candidate.year !== null && ` (${candidate.year})`}
+            </Text>
+            {candidate.original_title && candidate.original_title !== candidate.title && (
+              <Text size="xs" c="var(--mo-dim)" truncate>
+                {candidate.original_title}
+              </Text>
+            )}
+            <Text size="xs" c="var(--mo-muted)" className="mo-mono">
+              {candidate.source === "tmdb" ? "TMDB" : (candidate.source_name ?? candidate.source)}{" "}
+              {candidate.external_id}
+            </Text>
+            {candidate.overview && (
+              <Text size="xs" c="var(--mo-dim)" lineClamp={2}>
+                {candidate.overview}
+              </Text>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ToolEntry({ entry }: { entry: Extract<Entry, { kind: "tool" }> }) {
   const [expanded, setExpanded] = useState(false);
   const args = record(entry.arguments);
@@ -51,6 +108,8 @@ function ToolEntry({ entry }: { entry: Extract<Entry, { kind: "tool" }> }) {
   const label = TOOL_LABELS[entry.name] ?? entry.name;
   const target = toolTarget(entry.name, args, result);
   const rows = entry.name === "search_items" ? searchRows(result) : [];
+  const candidates = entry.name === "search_candidates" ? candidateRows(result) : [];
+  const counted = entry.name === "search_items" || entry.name === "search_candidates";
   return (
     <div className={styles.tool}>
       <UnstyledButton
@@ -63,9 +122,9 @@ function ToolEntry({ entry }: { entry: Extract<Entry, { kind: "tool" }> }) {
           {target ? `${label}：${target}` : label}
         </Text>
         {pending && <Loader size={12} />}
-        {entry.name === "search_items" && !pending && error === null && (
+        {counted && !pending && error === null && (
           <Text span size="xs" c="var(--mo-muted)">
-            {rows.length} 条
+            {entry.name === "search_items" ? `${rows.length} 条` : `${candidates.length} 个候选`}
           </Text>
         )}
         {result.needs_choice === true && <Pill tone="warn">要选一个</Pill>}
@@ -86,16 +145,22 @@ function ToolEntry({ entry }: { entry: Extract<Entry, { kind: "tool" }> }) {
         <div className={styles.cards}>
           {rows.map((row) => (
             <Link key={row.id} to={`/items/${row.id}`} className={styles.card}>
-              <Text size="sm" fw={600} truncate>
-                {row.title}
-              </Text>
-              <Text size="xs" c="var(--mo-dim)" truncate>
-                {[row.year, row.library_name, row.structure].filter((part) => part !== null && part !== "").join(" · ")}
-              </Text>
+              <Poster url={row.poster_url ?? null} />
+              <div className={styles.cardText}>
+                <Text size="sm" fw={600} truncate>
+                  {row.title}
+                </Text>
+                <Text size="xs" c="var(--mo-dim)" truncate>
+                  {[row.year, row.library_name, row.structure]
+                    .filter((part) => part !== null && part !== "")
+                    .join(" · ")}
+                </Text>
+              </div>
             </Link>
           ))}
         </div>
       )}
+      {candidates.length > 0 && <CandidateCards candidates={candidates} />}
     </div>
   );
 }
@@ -108,16 +173,51 @@ function formatValue(value: unknown): string {
 
 function ApprovalLine({ item }: { item: ApprovalItem }) {
   if (item.tool === "update_fields") {
+    const fields =
+      item.fields ?? Object.entries(item.values ?? {}).map(([key, value]) => ({ key, label: key, value }));
     return (
       <div>
         <Text size="sm" fw={600}>
           {item.title}
         </Text>
-        {Object.entries(item.values ?? {}).map(([key, value]) => (
-          <Text key={key} size="xs" c="var(--mo-dim)">
-            <span className="mo-mono">{key}</span> → {formatValue(value)}
+        {fields.map((field) => (
+          <Text key={field.key} size="xs" c="var(--mo-dim)">
+            {field.label} → {formatValue(field.value)}
           </Text>
         ))}
+      </div>
+    );
+  }
+  if ((item.tool === "rematch_item" || item.tool === "bind_file") && item.target !== undefined) {
+    const current = item.current ?? {};
+    const now =
+      item.tool === "rematch_item"
+        ? `《${current.title ?? item.title ?? ""}》（${current.year ?? "年份未知"}，${idsText(current.external_ids)}）`
+        : `未识别：${current.file_name ?? item.title ?? ""}`;
+    return (
+      <div>
+        <Text size="sm" fw={600}>
+          {TOOL_LABELS[item.tool]}：{item.title}
+        </Text>
+        <div className={styles.change}>
+          <Text span size="xs" c="var(--mo-muted)">
+            现在
+          </Text>
+          <Text span size="xs">
+            {now}
+          </Text>
+          <Text span size="xs" c="var(--mo-muted)">
+            换成
+          </Text>
+          <Text span size="xs" fw={600}>
+            {targetText(item.target)}
+          </Text>
+        </div>
+        {item.note && (
+          <Text size="xs" c="var(--mo-dim)" mt={2}>
+            {item.note}
+          </Text>
+        )}
       </div>
     );
   }
@@ -183,13 +283,36 @@ function EntryView({ entry }: { entry: Entry }) {
   }
 }
 
-/** 抽屉为空时的预设问题，点了填进输入框，不发送。 */
-function usePresets(): string[] {
+interface Preset {
+  label: string;
+  text: string;
+}
+
+function preset(text: string): Preset {
+  return { label: text, text };
+}
+
+/** 抽屉为空时按页面给的预设问题，点了填进输入框，不发送。 */
+function usePresets(): Preset[] {
   const { pathname } = useLocation();
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
+  const itemMatch = /^\/items\/(\d+)/.exec(pathname);
+  const itemId = itemMatch ? Number(itemMatch[1]) : null;
+  const item = useQuery({
+    queryKey: ["item", itemId],
+    queryFn: () => fetchItem(itemId ?? 0),
+    enabled: itemId !== null,
+  });
+  if (itemId !== null) {
+    const detail = item.data;
+    return detail?.kind === "work"
+      ? [{ label: "让 AI 重新识别这部", text: rematchDraft(detail) }, preset("播放")]
+      : [preset("播放")];
+  }
+  if (pathname.startsWith("/unmatched")) return [preset("帮我识别这些未识别的文件")];
   const match = /^\/libraries\/(\d+)/.exec(pathname);
   const library = match ? libraries.data?.find((row) => row.id === Number(match[1])) : undefined;
-  return [library ? `「${library.name}」里有什么？` : "库里都有些什么？", "播放"];
+  return [preset(library ? `「${library.name}」里有什么？` : "库里都有些什么？"), preset("播放")];
 }
 
 export function AgentDrawer() {
@@ -257,12 +380,12 @@ export function AgentDrawer() {
           {entries.length === 0 ? (
             <Stack gap="xs" mt="md">
               <Text size="sm" c="var(--mo-dim)">
-                可以让我查找、播放、改字段、刮削或扫描。一次改两个及以上条目时会先请你批准。
+                可以让我查找、播放、改字段、刮削、扫描或纠正识别。一次改两个及以上条目、换匹配或绑文件时会先请你批准。
               </Text>
               <Group gap="xs">
-                {presets.map((text) => (
-                  <Button key={text} size="xs" variant="default" onClick={() => fill(text)}>
-                    {text}
+                {presets.map((item) => (
+                  <Button key={item.label} size="xs" variant="default" onClick={() => fill(item.text)}>
+                    {item.label}
                   </Button>
                 ))}
               </Group>

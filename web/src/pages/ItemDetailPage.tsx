@@ -37,6 +37,8 @@ import { DeleteItemModal } from "../components/DeleteItemModal";
 import { FieldActions } from "../components/detail/FieldActions";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
+import { useAgent } from "../components/agent/AgentContext";
+import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonRails } from "../components/episodes/SeasonRail";
@@ -59,6 +61,7 @@ import {
   IconPlay,
   IconRefresh,
   IconScrape,
+  IconSparkle,
   IconStar,
   IconSubtitle,
   IconTrash,
@@ -247,6 +250,7 @@ export function ItemDetailPage() {
       notifications.show({ message: "已补充来源，正在刮削" });
     },
   });
+  const agent = useAgent();
   const dataTypeId = item.data?.data_type_id ?? "";
   const pluginType = isPluginType(dataTypes.data, dataTypeId);
   const sources = useQuery({
@@ -573,7 +577,7 @@ export function ItemDetailPage() {
                   整理
                 </Button>
               )}
-              {canDelete && (
+              {isWork && (
                 <Menu position="bottom-end" withinPortal>
                   <Menu.Target>
                     <Button variant="default" aria-label="更多操作">
@@ -582,13 +586,21 @@ export function ItemDetailPage() {
                   </Menu.Target>
                   <Menu.Dropdown>
                     <Menu.Item
-                      color="red"
-                      leftSection={<IconTrash size={14} />}
-                      disabled={busy}
-                      onClick={() => setDeleting(true)}
+                      leftSection={<IconSparkle size={14} />}
+                      onClick={() => agent.openWithDraft(rematchDraft(detail))}
                     >
-                      删除
+                      让 AI 重新识别
                     </Menu.Item>
+                    {canDelete && (
+                      <Menu.Item
+                        color="red"
+                        leftSection={<IconTrash size={14} />}
+                        disabled={busy}
+                        onClick={() => setDeleting(true)}
+                      >
+                        删除
+                      </Menu.Item>
+                    )}
                   </Menu.Dropdown>
                 </Menu>
               )}

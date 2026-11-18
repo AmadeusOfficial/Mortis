@@ -170,6 +170,35 @@ def guess(library: Library, path: str, *, series: bool = False, folder: bool = F
     return parse_folder_name(os.path.basename(folder), _stem(path))
 
 
+def guess_file(session: Session, media_file: MediaFile) -> ParsedName:
+    library = session.get(Library, media_file.library_id)
+    if library is None:
+        raise ItemError("媒体库不存在，可能已被删除", status_code=404)
+    return guess(
+        library,
+        media_file.path,
+        series=is_series(session, library),
+        folder=media_file.file_kind == "game",
+    )
+
+
+def main_files(session: Session, item: Item, limit: int = 10) -> list[MediaFile]:
+    """条目的视频或游戏目录；剧把各集的视频也算上。"""
+    owners: list[int] = [item.id]
+    if item.kind == "work" and is_series(session, item):
+        seasons = list(session.scalars(select(Item.id).where(Item.parent_id == item.id)))
+        episodes = list(session.scalars(select(Item.id).where(Item.parent_id.in_(seasons))))
+        owners += seasons + episodes
+    return list(
+        session.scalars(
+            select(MediaFile)
+            .where(MediaFile.item_id.in_(owners), MediaFile.file_kind.in_(("video", "game")))
+            .order_by(MediaFile.path, MediaFile.id)
+            .limit(limit)
+        )
+    )
+
+
 def _siblings(session: Session, library: Library, media_file: MediaFile) -> list[MediaFile]:
     """同目录、同分段组的视频，加上归它的字幕。不是库根目录且只有这一组时，同目录字幕全归它。"""
     folder = os.path.dirname(media_file.path)

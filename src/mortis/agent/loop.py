@@ -25,8 +25,8 @@ from mortis.tasks.runner import TaskRunner
 APPROVAL_TTL_SECONDS = 600.0
 ARGUMENTS_PREVIEW = 1000
 RESULT_PREVIEW = 4000
-FULL_RESULT_TOOLS = frozenset({"search_items"})
-"""这些工具的结果原样推给页面，好画条目卡片。"""
+FULL_RESULT_TOOLS = frozenset({"search_items", "search_candidates"})
+"""这些工具的结果原样推给页面，好画条目卡片和候选卡片。"""
 EXPIRED = "这次批准已过期，请重新提问"
 MISMATCHED = "这次批准和当前对话对不上，请重新提问"
 REJECTED = "用户拒绝了这次修改"
@@ -44,6 +44,10 @@ SYSTEM_PROMPT = "\n".join(
         "- 用 update_fields 改过的字段会被锁定，以后刮削不再覆盖；"
         "改之前先用 get_item 看清当前值和能改的字段。",
         "- 一次修改两个及以上条目时，系统会先请用户批准。",
+        "- 处理识别错误时，先用 get_item 看文件名、文件夹名和当前匹配"
+        "（未识别的文件用 list_unmatched），再用 search_candidates 搜候选，"
+        "把候选编号列出来（标题、年份、原名、来源编号）让用户选，不要自己选。"
+        "用户选定之后才调用 rematch_item 或 bind_file，系统会请用户批准。",
         "- 做不到的事直接说做不到：删除条目或文件、改设置、直接写数据库、转码、在别的设备上播放。",
         "- 回答简洁，用中文，可以用 Markdown。",
     ]
@@ -178,7 +182,8 @@ def run_chat(
                 yield from execute(call)
         if held:
             with session_factory() as session:
-                items = [describe_call(session, call) for call in held]
+                ctx = ToolContext(session, runner, services)
+                items = [describe_call(ctx, call) for call in held]
             yield (
                 "approval",
                 {"id": approvals.put(held), "summary": approval_summary(held), "items": items},

@@ -10,18 +10,20 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from mortis import libraries
+from mortis.agent import recognize
 from mortis.agent.client import ToolCall
+from mortis.agent.context import Result, ToolContext
 from mortis.api.routes.items import scrape_work
 from mortis.api.routes.libraries import enqueue_organize
 from mortis.api.routes.play import PlayChoices, PlayRequest, play
 from mortis.db.models import DataType, Item, Library
 from mortis.errors import UserError
-from mortis.items.detail import item_detail, read_value, year_of
+from mortis.items.detail import image_url, item_detail, read_value, year_of
 from mortis.items.edit import ItemError, edit_fields
 from mortis.output.service import rewrite_if_arranged
 from mortis.scrape.apply import level_fields
-from mortis.services import Services
-from mortis.tasks.runner import TaskRunner
+
+__all__ = ["TOOLS", "Tool", "ToolContext", "run_tool", "tool_schemas"]
 
 logger = logging.getLogger("mortis.agent")
 
@@ -32,16 +34,7 @@ EPISODE_LIMIT = 200
 CANDIDATE_LIMIT = 20
 TOP_KINDS = ("work", "collection")
 MAIN_FILE_KINDS = ("video", "game")
-
-
-@dataclass(frozen=True)
-class ToolContext:
-    session: Session
-    runner: TaskRunner
-    services: Services
-
-
-Result = dict[str, Any]
+RECOGNIZE_TOOLS = frozenset({"rematch_item", "bind_file"})
 
 
 @dataclass(frozen=True)
@@ -54,6 +47,8 @@ class Tool:
     read_only: bool
     needs_approval: bool = False
     """每次调用都要用户先批准。"""
+    describe: Callable[[ToolContext, dict[str, Any]], Result] | None = None
+    """批准卡片上的一项：现在是什么、要换成什么。不给时列出参数。"""
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -131,21 +126,41 @@ def approval_summary(calls: list[ToolCall]) -> str:
     if all(call.name == "update_fields" for call in calls):
         count = len(batch_update_targets(calls))
         return f"要修改 {count} 个条目，批准后才会执行"
+    if all(call.name in RECOGNIZE_TOOLS for call in calls):
+        return f"要重新识别 {len(calls)} 项，批准后才会执行"
     return f"有 {len(calls)} 个操作要你批准后才会执行"
 
 
-def describe_call(session: Session, call: ToolCall) -> Result:
-    """批准卡片上的一行：哪个条目、要改成什么。"""
+def describe_call(ctx: ToolContext, call: ToolCall) -> Result:
+    """批准卡片上的一项。参数不对时只列出原样的参数，执行时再报错。"""
+    tool = TOOLS.get(call.name)
     parsed = _parse_arguments(call.arguments) or {}
-    if call.name == "update_fields" and isinstance(parsed.get("item_id"), int):
-        item = session.get(Item, parsed["item_id"])
-        return {
-            "tool": call.name,
-            "item_id": parsed["item_id"],
-            "title": item.title if item is not None else f"条目 {parsed['item_id']}",
-            "values": parsed.get("values"),
+    if tool is None or tool.describe is None or _check_arguments(tool.parameters, parsed):
+        return {"tool": call.name, "arguments": parsed}
+    try:
+        return {"tool": call.name, **tool.describe(ctx, parsed)}
+    except UserError as error:
+        ctx.session.rollback()
+        return {"tool": call.name, "arguments": parsed, "error": error.message}
+
+
+def _describe_update(ctx: ToolContext, args: dict[str, Any]) -> Result:
+    item = ctx.session.get(Item, args["item_id"])
+    labels: dict[str, str] = {}
+    if item is not None:
+        labels = {
+            f.field_key: f.label for f in level_fields(ctx.session, item.data_type_id, item.kind)
         }
-    return {"tool": call.name, "arguments": parsed}
+    values: dict[str, Any] = args["values"]
+    return {
+        "item_id": args["item_id"],
+        "title": item.title if item is not None else f"条目 {args['item_id']}",
+        "values": values,
+        "fields": [
+            {"key": key, "label": labels.get(key, key), "value": value}
+            for key, value in values.items()
+        ],
+    }
 
 
 def _parse_arguments(arguments: str | dict[str, Any]) -> dict[str, Any] | None:
@@ -255,6 +270,7 @@ def _search_items(ctx: ToolContext, args: dict[str, Any]) -> Result:
             "data_type": item.data_type_id,
             "kind": item.kind,
             "structure": _structure_label(item.kind, structure),
+            "poster_url": image_url(item.poster_path),
         }
         for item, library_name, structure in rows
     ]
@@ -311,6 +327,9 @@ def _get_item(ctx: ToolContext, args: dict[str, Any]) -> Result:
         "external_ids": detail["external_ids"],
         "file_count": direct_files + sum(s["file_count"] for s in detail["seasons"]),
     }
+    guess = recognize.file_of_item(session, item)
+    if guess is not None:
+        result["file"] = guess
     if detail["collection"] is not None:
         result["collection"] = {
             "id": detail["collection"]["id"],
@@ -473,6 +492,7 @@ register(
         },
         run=_update_fields,
         read_only=False,
+        describe=_describe_update,
     )
 )
 register(
@@ -522,5 +542,79 @@ register(
         },
         run=_play_item,
         read_only=False,
+    )
+)
+FILE_ID = {"type": "integer", "description": "未识别文件的 file_id，从 list_unmatched 的结果里取"}
+SOURCE = {
+    "type": "string",
+    "description": "候选的 source，电影、剧、动漫是 tmdb，其他类型是来源插件 id",
+}
+EXTERNAL_ID = {"type": "string", "description": "候选的 external_id"}
+register(
+    Tool(
+        name="search_candidates",
+        description=(
+            "给一个识别错或没识别的条目、文件搜外部候选，最多 10 个。item_id 和 file_id 二选一；"
+            "query、year 不给时用从文件名解析出的标题和年份。结果原样列给用户选，不要自己选。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "item_id": ITEM_ID,
+                "file_id": FILE_ID,
+                "query": {"type": "string", "description": "搜索词，默认是文件名解析出的标题"},
+                "year": {"type": "integer", "description": "年份，默认是文件名解析出的年份"},
+            },
+        },
+        run=recognize.search_candidates,
+        read_only=True,
+    )
+)
+register(
+    Tool(
+        name="list_unmatched",
+        description="列出没识别出作品的文件，带文件名解析出的标题和年份，最多 50 条。",
+        parameters={
+            "type": "object",
+            "properties": {"library_id": {"type": "integer", "description": "只看这个库"}},
+        },
+        run=recognize.list_unmatched,
+        read_only=True,
+    )
+)
+register(
+    Tool(
+        name="rematch_item",
+        description=(
+            "把一部识别错的作品换成用户从 search_candidates 里选定的候选，然后重新刮削。"
+            "锁定的字段保留。每次都要用户批准，只在用户选定之后调用。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"item_id": ITEM_ID, "source": SOURCE, "external_id": EXTERNAL_ID},
+            "required": ["item_id", "source", "external_id"],
+        },
+        run=recognize.rematch_item,
+        read_only=False,
+        needs_approval=True,
+        describe=recognize.describe_rematch,
+    )
+)
+register(
+    Tool(
+        name="bind_file",
+        description=(
+            "把一个未识别的文件绑到用户从 search_candidates 里选定的候选上，然后刮削。"
+            "每次都要用户批准，只在用户选定之后调用。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"file_id": FILE_ID, "source": SOURCE, "external_id": EXTERNAL_ID},
+            "required": ["file_id", "source", "external_id"],
+        },
+        run=recognize.bind_file,
+        read_only=False,
+        needs_approval=True,
+        describe=recognize.describe_bind,
     )
 )

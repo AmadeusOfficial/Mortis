@@ -187,7 +187,13 @@ def test_shows_and_collections_have_no_delete(
     with page.expect_response(lambda response: "/api/data-types" in response.url):
         page.goto(f"{url}/items/{item}")
     expect(page.get_by_role("heading", name="不能删的")).to_be_visible()
-    expect(page.get_by_role("button", name="更多操作")).to_have_count(0)
+    if kind == "work":
+        page.get_by_role("button", name="更多操作").click()
+        expect(page.get_by_role("menuitem", name="让 AI 重新识别")).to_be_visible()
+        expect(page.get_by_role("menuitem", name="删除")).to_have_count(0)
+        page.keyboard.press("Escape")
+    else:
+        expect(page.get_by_role("button", name="更多操作")).to_have_count(0)
 
     with page.expect_response(lambda response: "/api/data-types" in response.url):
         page.goto(f"{url}/items/{state.ids['教父']}")

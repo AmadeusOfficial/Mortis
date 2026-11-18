@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { type ApprovalItem, type ChatMessage, type ChatRequest, streamChat } from "./chatStream";
@@ -37,10 +38,15 @@ interface AgentState {
 
 const AgentContext = createContext<AgentState | null>(null);
 
+/** 这些工具执行后，页面上的条目、海报墙和未识别列表可能变了。 */
+const CHANGING_TOOLS = new Set(["update_fields", "scrape_item", "scan_library", "rematch_item", "bind_file"]);
+const CHANGED_QUERIES = ["item", "wall", "unmatched", "libraries"];
+
 let counter = 0;
 const nextKey = () => `e${++counter}`;
 
 export function AgentProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [opened, setOpened] = useState(false);
   const [draft, setDraft] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -91,6 +97,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
                   row.kind === "tool" && row.callId === event.data.id ? { ...row, result: event.data.result } : row,
                 ),
               );
+              if (CHANGING_TOOLS.has(event.data.name)) {
+                for (const key of CHANGED_QUERIES) void queryClient.invalidateQueries({ queryKey: [key] });
+              }
               break;
             case "approval":
               push({
@@ -133,7 +142,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [push],
+    [push, queryClient],
   );
 
   const send = useCallback(

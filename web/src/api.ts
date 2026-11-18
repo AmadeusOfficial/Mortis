@@ -576,6 +576,16 @@ export interface ItemDetail {
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
   sections: { name: string; fields: FieldOut[] }[];
+  // 作品的第一个视频或游戏目录，和从它解析出的标题、年份；没有文件时为 null。
+  guess?: FileGuess | null;
+}
+
+export interface FileGuess {
+  file_id: number;
+  file_name: string;
+  folder_name: string;
+  title: string;
+  year: number | null;
 }
 
 export interface RenameMove {

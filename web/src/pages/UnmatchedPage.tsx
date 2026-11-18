@@ -13,12 +13,14 @@ import {
   fetchUnmatched,
   typeSection,
 } from "../api";
+import { useAgent } from "../components/agent/AgentContext";
+import { bindDraft } from "../components/agent/drafts";
 import { SourceSearchPanel } from "../components/match/SourceSearchPanel";
 import { TmdbSearchPanel } from "../components/match/TmdbSearchPanel";
 import { PageHeader, Pill } from "../components/ui";
 import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize } from "../format";
-import { DataTypeIcon, IconCheck, IconSearch } from "../icons";
+import { DataTypeIcon, IconCheck, IconSearch, IconSparkle } from "../icons";
 import classes from "./UnmatchedPage.module.css";
 
 function splitPath(path: string): [string, string] {
@@ -28,6 +30,7 @@ function splitPath(path: string): [string, string] {
 
 export function UnmatchedPage() {
   const queryClient = useQueryClient();
+  const agent = useAgent();
   const libraries = useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
   const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const dataTypes = useDataTypes();
@@ -186,18 +189,32 @@ export function UnmatchedPage() {
 
                   <div className={`${classes.size} mo-mono`}>{formatSize(file.size)}</div>
 
-                  <Button
-                    size="xs"
-                    variant={isSelected ? "filled" : "default"}
-                    leftSection={<IconSearch size={12} />}
-                    aria-label={`匹配${name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selectFile(file);
-                    }}
-                  >
-                    匹配
-                  </Button>
+                  <div className={classes.rowActions}>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      leftSection={<IconSparkle size={12} />}
+                      aria-label={`让 AI 识别${name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        agent.openWithDraft(bindDraft(file));
+                      }}
+                    >
+                      让 AI 识别
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant={isSelected ? "filled" : "default"}
+                      leftSection={<IconSearch size={12} />}
+                      aria-label={`匹配${name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectFile(file);
+                      }}
+                    >
+                      匹配
+                    </Button>
+                  </div>
                 </div>
               );
             })}

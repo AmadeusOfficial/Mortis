@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -17,7 +18,9 @@ from mortis.items.matching import (
     bind_file,
     bind_folder,
     guess,
+    guess_file,
     is_series,
+    main_files,
     rematch,
     rematch_external,
     show_folder,
@@ -103,6 +106,14 @@ class SeasonOut(BaseModel):
     episodes: list[EpisodeOut]
 
 
+class FileGuess(BaseModel):
+    file_id: int
+    file_name: str
+    folder_name: str
+    title: str
+    year: int | None
+
+
 class ItemDetail(BaseModel):
     id: int
     library_id: int
@@ -123,6 +134,8 @@ class ItemDetail(BaseModel):
     files: list[FileOut]
     scraped_at: str | None
     sections: list[SectionOut]
+    guess: FileGuess | None = None
+    """第一个视频或游戏目录的文件名、上级目录名，和从文件名解析出的标题、年份。"""
 
 
 class FieldsUpdate(BaseModel):
@@ -238,6 +251,26 @@ def get_item(session: Session, item_id: int) -> Item:
     return item
 
 
+def file_guess(session: Session, item: Item) -> FileGuess | None:
+    files = main_files(session, item, limit=1) if item.kind == "work" else []
+    if not files:
+        return None
+    media_file = files[0]
+    parsed = guess_file(session, media_file)
+    path = Path(media_file.path)
+    return FileGuess(
+        file_id=media_file.id,
+        file_name=path.name,
+        folder_name=path.parent.name,
+        title=parsed.title,
+        year=parsed.year,
+    )
+
+
+def detail_of(session: Session, item: Item) -> dict[str, Any]:
+    return {**item_detail(session, item), "guess": file_guess(session, item)}
+
+
 def enqueue_scrape(session: Session, runner: TaskRunner, item_id: int, *, force: bool) -> int:
     queued = task_repo.find_queued(session, "scrape", "item_id", item_id)
     if queued is not None:
@@ -312,7 +345,7 @@ def list_items(
 
 @router.get("/items/{item_id}", response_model=ItemDetail)
 def read_item(item_id: int, session: SessionDep) -> dict[str, Any]:
-    return item_detail(session, get_item(session, item_id))
+    return detail_of(session, get_item(session, item_id))
 
 
 @router.get("/items/{item_id}/delete-preview", response_model=DeletePreview)
@@ -370,14 +403,14 @@ def update_fields(
     item = get_item(session, item_id)
     edit_fields(session, item, body.values)
     rewrite_if_arranged(session, runner, item)
-    return item_detail(session, item)
+    return detail_of(session, item)
 
 
 @router.put("/items/{item_id}/locks", response_model=ItemDetail)
 def update_locks(item_id: int, body: LocksUpdate, session: SessionDep) -> dict[str, Any]:
     item = get_item(session, item_id)
     set_locks(session, item, body.locked)
-    return item_detail(session, item)
+    return detail_of(session, item)
 
 
 @router.post("/items/{item_id}/scrape", response_model=Enqueued, status_code=202)
@@ -404,17 +437,39 @@ def rematch_item(
     runner: RunnerDep,
     services: ServicesDep,
 ) -> Enqueued:
-    item = get_item(session, item_id)
+    task_id = rematch_work(
+        session,
+        runner,
+        services,
+        get_item(session, item_id),
+        tmdb_id=body.tmdb_id,
+        source=body.source,
+        external_id=body.external_id,
+    )
+    return Enqueued(task_id=task_id)
+
+
+def rematch_work(
+    session: Session,
+    runner: TaskRunner,
+    services: Services,
+    item: Item,
+    *,
+    tmdb_id: int | None = None,
+    source: str | None = None,
+    external_id: str | None = None,
+) -> int:
+    """TMDB 类型给 tmdb_id；插件类型给来源插件 id 和外部编号。换完入队刮削，锁定的字段保留。"""
     if item.kind != "work":
         raise ItemError("只有电影和剧能重新匹配")
-    if body.source:
-        plugin = _source_of(services, item.data_type_id, body.source)
-        rematch_external(session, item, plugin.provider, _external_id(body.external_id))
-    elif body.tmdb_id is not None:
-        rematch(session, item, body.tmdb_id)
+    if source:
+        plugin = _source_of(services, item.data_type_id, source)
+        rematch_external(session, item, plugin.provider, _external_id(external_id))
+    elif tmdb_id is not None:
+        rematch(session, item, tmdb_id)
     else:
         raise ItemError("要给出 TMDB 编号或来源编号")
-    return Enqueued(task_id=enqueue_scrape(session, runner, item.id, force=False))
+    return enqueue_scrape(session, runner, item.id, force=False)
 
 
 @router.post("/items/{item_id}/sources", response_model=Enqueued, status_code=202)
@@ -435,6 +490,11 @@ def add_item_source(
 
 @router.get("/media-files/unmatched", response_model=list[UnmatchedFile])
 def list_unmatched(session: SessionDep, library_id: int | None = None) -> list[UnmatchedFile]:
+    return unmatched_files(session, library_id)
+
+
+def unmatched_files(session: Session, library_id: int | None) -> list[UnmatchedFile]:
+    """剧库同一个剧目录的视频合成一行。"""
     query = (
         select(MediaFile, Library)
         .join(Library, Library.id == MediaFile.library_id)
@@ -485,23 +545,51 @@ def bind_media_file(
     media_file = session.get(MediaFile, file_id)
     if media_file is None:
         raise HTTPException(status_code=404, detail="没有这个文件")
-    if body.source:
+    return bind_media(
+        session,
+        runner,
+        services,
+        media_file,
+        tmdb_id=body.tmdb_id,
+        source=body.source,
+        external_id=body.external_id,
+        title=body.title,
+        original_title=body.original_title,
+        release_date=body.release_date,
+    )
+
+
+def bind_media(
+    session: Session,
+    runner: TaskRunner,
+    services: Services,
+    media_file: MediaFile,
+    *,
+    tmdb_id: int | None = None,
+    source: str | None = None,
+    external_id: str | None = None,
+    title: str,
+    original_title: str | None = None,
+    release_date: str | None = None,
+) -> Bound:
+    """把未识别的视频或游戏目录绑到一个作品上，再入队刮削。title 只是刮削前的占位。"""
+    if source:
         library = session.get(Library, media_file.library_id)
-        plugin = _source_of(services, library.data_type_id if library else "", body.source)
+        plugin = _source_of(services, library.data_type_id if library else "", source)
         external = ExternalRef(
             provider=plugin.provider,
-            external_id=_external_id(body.external_id),
-            title=body.title.strip(),
-            original_title=body.original_title,
-            release_date=body.release_date,
+            external_id=_external_id(external_id),
+            title=title.strip(),
+            original_title=original_title,
+            release_date=release_date,
         )
         item = bind_folder(session, media_file, external, services.locks)
-    elif body.tmdb_id is not None:
+    elif tmdb_id is not None:
         ref = MovieRef(
-            tmdb_id=body.tmdb_id,
-            title=body.title.strip(),
-            original_title=body.original_title,
-            release_date=body.release_date,
+            tmdb_id=tmdb_id,
+            title=title.strip(),
+            original_title=original_title,
+            release_date=release_date,
         )
         item = bind_file(session, media_file, ref, services.locks)
     else:

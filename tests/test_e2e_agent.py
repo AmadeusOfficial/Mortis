@@ -188,7 +188,7 @@ def test_ask_search_and_open_card(page: Page, world: tuple[World, str], tmp_path
 
     drawer.get_by_role("button", name="清空对话").click()
     expect(drawer.get_by_text("不客气。")).to_have_count(0)
-    expect(drawer.get_by_role("button", name="库里都有些什么？")).to_be_visible()
+    expect(drawer.get_by_role("button", name="让 AI 重新识别这部")).to_be_visible()
 
 
 def _batch(state: World) -> list[Delta]:
@@ -210,8 +210,8 @@ def test_batch_update_needs_approval(page: Page, world: tuple[World, str]) -> No
     card = drawer.get_by_role("group", name="需要批准的修改")
     expect(card.get_by_text("要修改 2 个条目，批准后才会执行")).to_be_visible()
     expect(card.get_by_text("黑客帝国", exact=True)).to_be_visible()
-    expect(card.get_by_text("→ 黑客帝国 4K")).to_be_visible()
-    expect(card.get_by_text("→ 170")).to_be_visible()
+    expect(card.get_by_text("片名 → 黑客帝国 4K")).to_be_visible()
+    expect(card.get_by_text("时长（分钟） → 170")).to_be_visible()
     assert state.item("matrix").title == "黑客帝国"
 
     card.get_by_role("button", name="批准").click()

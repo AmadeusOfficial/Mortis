@@ -298,12 +298,14 @@ def test_batch_update_waits_for_approval(
             "item_id": shelf["matrix"],
             "title": "黑客帝国",
             "values": {"title": "黑客帝国 4K"},
+            "fields": [{"key": "title", "label": "片名", "value": "黑客帝国 4K"}],
         },
         {
             "tool": "update_fields",
             "item_id": shelf["heat"],
             "title": "盗火线",
             "values": {"runtime": 170},
+            "fields": [{"key": "runtime", "label": "时长（分钟）", "value": 170}],
         },
     ]
     assert [m["role"] for m in history] == ["user", "assistant", "tool"]

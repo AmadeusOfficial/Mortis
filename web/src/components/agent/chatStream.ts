@@ -22,13 +22,48 @@ export interface SearchRow {
   data_type: string;
   kind: string;
   structure: string;
+  poster_url: string | null;
+}
+
+/** search_candidates 的一个外部候选。 */
+export interface Candidate {
+  source: string;
+  source_name?: string;
+  external_id: string;
+  title: string;
+  original_title: string | null;
+  year: number | null;
+  poster_url: string | null;
+  overview: string | null;
+}
+
+/** 批准卡片上要换成的作品；拿不到标题时只有来源和编号。 */
+export interface MatchTarget {
+  source: string;
+  external_id: string;
+  title?: string | null;
+  original_title?: string | null;
+  year?: number | null;
 }
 
 export interface ApprovalItem {
   tool: string;
   item_id?: number;
+  file_id?: number;
   title?: string;
   values?: Record<string, unknown>;
+  fields?: { key: string; label: string; value: unknown }[];
+  current?: {
+    title?: string;
+    year?: number | null;
+    external_ids?: Record<string, string>;
+    file_name?: string;
+    guess_title?: string;
+    guess_year?: number | null;
+  };
+  target?: MatchTarget;
+  note?: string;
+  error?: string;
   arguments?: Record<string, unknown>;
 }
 

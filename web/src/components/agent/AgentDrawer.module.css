@@ -116,7 +116,13 @@
   padding: 0 10px 10px;
 }
 .card {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--mo-surface-2);
@@ -128,6 +134,36 @@
 .card:focus-visible {
   border-color: var(--mo-accent-bd);
   background: var(--mo-surface-3);
+}
+.card:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.cardText {
+  flex: 1;
+  min-width: 0;
+}
+.poster {
+  flex: none;
+  width: 40px;
+  height: 60px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--mo-surface-3);
+}
+.number {
+  flex: none;
+  min-width: 18px;
+  color: var(--mo-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.change {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-size: 12.5px;
 }
 
 .approval {

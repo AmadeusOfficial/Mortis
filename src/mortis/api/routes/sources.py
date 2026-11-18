@@ -10,7 +10,7 @@ from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.config.models import AppConfig, validation_problems
 from mortis.db.models import Task
 from mortis.errors import UserError
-from mortis.plugin_api import SourceError
+from mortis.plugin_api import Hit, SourceError, SourcePlugin
 from mortis.plugins.host import open_host
 from mortis.services import Services
 from mortis.sources import imdb
@@ -211,13 +211,7 @@ def refresh_imdb_dataset(session: SessionDep, runner: RunnerDep) -> Enqueued:
     return Enqueued(task_id=task.id)
 
 
-@router.get("/{source_id}/search", response_model=list[HitOut])
-def search_source(
-    source_id: str, services: ServicesDep, query: str = Query(min_length=1, max_length=200)
-) -> list[HitOut]:
-    plugin = services.plugins.source(source_id)
-    if plugin is None:
-        raise UserError("来源插件不存在或没有启用", status_code=404)
+def search_plugin(services: Services, plugin: SourcePlugin, query: str) -> list[Hit]:
     cleaned = query.strip()
     if not cleaned:
         raise UserError("搜索词不能为空")
@@ -225,9 +219,19 @@ def search_source(
         if not plugin.enabled(host):
             raise UserError(f"{plugin.name} 没有启用，先在设置页填好它需要的设置")
         try:
-            hits = plugin.search(host, cleaned)
+            return plugin.search(host, cleaned)
         except SourceError as error:
             raise UserError(error.message, status_code=502) from None
+
+
+@router.get("/{source_id}/search", response_model=list[HitOut])
+def search_source(
+    source_id: str, services: ServicesDep, query: str = Query(min_length=1, max_length=200)
+) -> list[HitOut]:
+    plugin = services.plugins.source(source_id)
+    if plugin is None:
+        raise UserError("来源插件不存在或没有启用", status_code=404)
+    hits = search_plugin(services, plugin, query)
     return [
         HitOut(
             external_id=hit.external_id,
