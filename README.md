@@ -59,12 +59,6 @@ scripts\build_windows.ps1    # 打 Windows zip 和 SHA256SUMS
 
 技术栈：FastAPI · SQLAlchemy · SQLite · React + Mantine · .NET 托盘。开发约定见 [AGENTS.md](AGENTS.md)。
 
-## 致谢
-
-- [Amane](https://github.com/sqzw-x/amane)：托盘程序、数据库迁移和备份的做法改编自 Amane（GPL-3.0）。
-- [tinyMediaManager](https://www.tinymediamanager.org/)：刮削和整理选项参照它设计。
-- [TMDB](https://www.themoviedb.org/)：本产品使用 TMDB API，但未获得 TMDB 的认可或认证。
-
 ## 许可证
 
 [GPL-3.0](LICENSE)
