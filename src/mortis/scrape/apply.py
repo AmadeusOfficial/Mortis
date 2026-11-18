@@ -235,28 +235,43 @@ def _write_ratings(session: Session, item: Item, ratings: list[Mapping[str, Any]
         )
 
 
-def _write_image(
-    session: Session, item: Item, kind: str, pick: Pick | None, files: Mapping[str, str]
+def replace_image(
+    session: Session,
+    item: Item,
+    kind: str,
+    image: Mapping[str, Any] | None,
+    source: str | None = None,
+    file_path: str | None = None,
 ) -> None:
+    """这一种图只留一张；image 为 None 时清空。上传的图没有 url。"""
     session.execute(
         delete(ItemImage).where(ItemImage.item_id == item.id, ItemImage.image_kind == kind)
     )
-    if pick is None:
+    if image is None:
         return
-    first = pick.value[0]
     session.add(
         ItemImage(
             item_id=item.id,
             image_kind=kind,
-            source=pick.source,
-            url=first["url"],
-            file_path=files[first["url"]],
-            language=first.get("language"),
-            width=first.get("width"),
-            height=first.get("height"),
+            source=source,
+            url=image.get("url"),
+            file_path=file_path,
+            language=image.get("language"),
+            width=image.get("width"),
+            height=image.get("height"),
             position=0,
         )
     )
+
+
+def _write_image(
+    session: Session, item: Item, kind: str, pick: Pick | None, files: Mapping[str, str]
+) -> None:
+    if pick is None:
+        replace_image(session, item, kind, None)
+        return
+    first = pick.value[0]
+    replace_image(session, item, kind, first, pick.source, files[first["url"]])
 
 
 def write_plan(

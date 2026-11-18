@@ -295,6 +295,29 @@ def test_forced_rescrape_reuses_downloaded_images(
         assert session.scalar(select(Item.poster_path).where(Item.id == show_id))
 
 
+def test_season_and_show_image_choices(app: FastAPI, show_id: int) -> None:
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        season_id = session.scalars(
+            select(Item.id).where(Item.parent_id == show_id, Item.index_number == 1)
+        ).one()
+        episode_id = session.scalars(select(Item.id).where(Item.parent_id == season_id)).first()
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        rows = client.get(f"/api/items/{season_id}/images/poster/choices").json()
+        assert len(rows) > 1 and rows[0]["selected"] and rows[0]["source"] == "tmdb"
+        detail = client.put(
+            f"/api/items/{season_id}/images/poster", json={"url": rows[1]["url"]}
+        ).json()
+        assert detail["poster_url"] is not None
+        logos = client.get(f"/api/items/{show_id}/images/clearlogo/choices").json()
+        assert logos[0]["language"] == "zh" and logos[0]["region"] == "CN"
+        assert client.get(f"/api/items/{episode_id}/images/thumb/choices").status_code == 422
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        season = session.get(Item, season_id)
+        assert season is not None and "poster" in json.loads(season.locked_fields)
+
+
 def test_scan_scrapes_show_that_got_new_episodes(
     app: FastAPI, show_id: int, root: Path, fake: FakeTmdb
 ) -> None:

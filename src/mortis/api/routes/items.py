@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Body, Header, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from mortis.items.delete import Expected, check_deletable, delete_item, plan_del
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
 from mortis.items.identity import ExternalRef, MovieRef
+from mortis.items.images import choose_image, fetch_preview, image_choices, upload_image
 from mortis.items.matching import (
     add_source,
     bind_file,
@@ -150,6 +151,24 @@ class LocksUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     locked: list[str]
+
+
+class ImageChoiceOut(BaseModel):
+    url: str
+    source: str
+    source_name: str
+    language: str | None
+    region: str | None
+    width: int | None
+    height: int | None
+    preview_url: str
+    selected: bool
+
+
+class ImageChoose(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2000)
 
 
 class RematchRequest(BaseModel):
@@ -486,6 +505,55 @@ def update_fields(
 def update_locks(item_id: int, body: LocksUpdate, session: SessionDep) -> dict[str, Any]:
     item = get_item(session, item_id)
     set_locks(session, item, body.locked)
+    return detail_of(session, item)
+
+
+@router.get("/items/{item_id}/images/{field_key}/choices", response_model=list[ImageChoiceOut])
+def list_image_choices(
+    item_id: int, field_key: str, session: SessionDep, services: ServicesDep
+) -> list[dict[str, Any]]:
+    return image_choices(services, session, get_item(session, item_id), field_key)
+
+
+@router.get("/items/{item_id}/images/{field_key}/preview")
+def preview_image_choice(
+    item_id: int, field_key: str, url: str, session: SessionDep, services: ServicesDep
+) -> Response:
+    content, media_type = fetch_preview(
+        services, session, get_item(session, item_id), field_key, url
+    )
+    return Response(content, media_type=media_type, headers={"Cache-Control": "max-age=86400"})
+
+
+@router.put("/items/{item_id}/images/{field_key}", response_model=ItemDetail)
+def choose_item_image(
+    item_id: int,
+    field_key: str,
+    body: ImageChoose,
+    session: SessionDep,
+    services: ServicesDep,
+    runner: RunnerDep,
+) -> dict[str, Any]:
+    item = get_item(session, item_id)
+    choose_image(services, session, item, field_key, body.url)
+    rewrite_if_arranged(session, runner, item)
+    return detail_of(session, item)
+
+
+@router.put("/items/{item_id}/images/{field_key}/file", response_model=ItemDetail)
+def upload_item_image(
+    item_id: int,
+    field_key: str,
+    content: Annotated[bytes, Body(media_type="application/octet-stream")],
+    session: SessionDep,
+    services: ServicesDep,
+    runner: RunnerDep,
+    content_type: Annotated[str, Header()] = "",
+) -> dict[str, Any]:
+    """请求体就是图片本身，Content-Type 写图片类型。"""
+    item = get_item(session, item_id)
+    upload_image(services, session, item, field_key, content, content_type)
+    rewrite_if_arranged(session, runner, item)
     return detail_of(session, item)
 
 

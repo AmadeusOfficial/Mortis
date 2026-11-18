@@ -231,7 +231,7 @@ def _bind(session: Session, files: list[MediaFile], targets: dict[str, int], sho
     return bound
 
 
-def _season_extras(
+def season_extras(
     raws: Mapping[str, dict[str, Any]], number: int, config: TvScrapeConfig
 ) -> dict[str, dict[str, Any]]:
     """作品层取到的其他来源给这一季的候选值。季和集只由 TMDB 决定有没有，这里只补值。"""
@@ -352,7 +352,7 @@ def scrape_show(
         for season in seasons:
             season_values = {
                 SOURCE: season.values,
-                **_season_extras(gathered.raws, season.number, config),
+                **season_extras(gathered.raws, season.number, config),
             }
             urls += image_urls(season_fields, season_values, season_skip)
             for number, values in season.episodes.items():
@@ -390,7 +390,7 @@ def scrape_show(
                 session,
                 season_row,
                 "season",
-                {SOURCE: season.values, **_season_extras(gathered.raws, season.number, config)},
+                {SOURCE: season.values, **season_extras(gathered.raws, season.number, config)},
                 SEASON_IMAGES,
                 config,
                 order,
