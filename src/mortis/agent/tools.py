@@ -52,6 +52,8 @@ class Tool:
     """JSON Schema。只用 integer、string、object 和 enum，参数检查按它来。"""
     run: Callable[[ToolContext, dict[str, Any]], Result]
     read_only: bool
+    needs_approval: bool = False
+    """每次调用都要用户先批准。"""
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -110,6 +112,40 @@ def batch_update_targets(calls: Iterable[ToolCall]) -> list[int]:
             continue
         targets.add(parsed["item_id"])
     return sorted(targets)
+
+
+def calls_needing_approval(calls: list[ToolCall]) -> list[ToolCall]:
+    """同一轮里要等用户批准的调用：标了 needs_approval 的，和批量修改时的全部 update_fields。"""
+    batch = len(batch_update_targets(calls)) >= 2
+    held: list[ToolCall] = []
+    for call in calls:
+        tool = TOOLS.get(call.name)
+        if tool is None:
+            continue
+        if tool.needs_approval or (batch and call.name == "update_fields"):
+            held.append(call)
+    return held
+
+
+def approval_summary(calls: list[ToolCall]) -> str:
+    if all(call.name == "update_fields" for call in calls):
+        count = len(batch_update_targets(calls))
+        return f"要修改 {count} 个条目，批准后才会执行"
+    return f"有 {len(calls)} 个操作要你批准后才会执行"
+
+
+def describe_call(session: Session, call: ToolCall) -> Result:
+    """批准卡片上的一行：哪个条目、要改成什么。"""
+    parsed = _parse_arguments(call.arguments) or {}
+    if call.name == "update_fields" and isinstance(parsed.get("item_id"), int):
+        item = session.get(Item, parsed["item_id"])
+        return {
+            "tool": call.name,
+            "item_id": parsed["item_id"],
+            "title": item.title if item is not None else f"条目 {parsed['item_id']}",
+            "values": parsed.get("values"),
+        }
+    return {"tool": call.name, "arguments": parsed}
 
 
 def _parse_arguments(arguments: str | dict[str, Any]) -> dict[str, Any] | None:

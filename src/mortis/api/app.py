@@ -1,6 +1,7 @@
 import posixpath
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path, PureWindowsPath
 
 import httpx2 as httpx
@@ -9,6 +10,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from mortis.agent.client import make_chat_client
+from mortis.agent.loop import ApprovalStore
+from mortis.api.routes import agent as agent_routes
 from mortis.api.routes import data_types as data_type_routes
 from mortis.api.routes import files as file_routes
 from mortis.api.routes import images as image_routes
@@ -22,6 +26,7 @@ from mortis.api.routes import settings as settings_routes
 from mortis.api.routes import sources as source_routes
 from mortis.api.routes import tasks as task_routes
 from mortis.api.routes import tmdb as tmdb_routes
+from mortis.api.routes.agent import ChatClientFactory
 from mortis.catalog.install import ensure_builtin_types
 from mortis.config.models import AppConfig
 from mortis.config.store import ConfigError, ConfigStore
@@ -67,6 +72,7 @@ def create_app(
     watch_debounce: float = watch.DEBOUNCE_SECONDS,
     watch_retry: float = watch.RETRY_SECONDS,
     schedule_interval: float = schedule.CHECK_SECONDS,
+    chat_client_factory: ChatClientFactory | None = None,
 ) -> FastAPI:
     """start_automation 不给时跟着 start_worker：定时检查和目录监听一起开关。"""
     resolved = settings if settings is not None else Settings()
@@ -136,6 +142,12 @@ def create_app(
     app.state.task_runner = runner
     app.state.scheduler = scheduler
     app.state.watch_manager = watcher
+    app.state.chat_client_factory = (
+        chat_client_factory
+        if chat_client_factory is not None
+        else partial(make_chat_client, transport=http_transport)
+    )
+    app.state.approvals = ApprovalStore()
 
     @app.exception_handler(UserError)
     async def _user_error(_request: Request, error: UserError) -> JSONResponse:
@@ -166,6 +178,7 @@ def create_app(
     app.include_router(plugin_routes.router)
     app.include_router(source_routes.router)
     app.include_router(file_routes.router)
+    app.include_router(agent_routes.router)
 
     if resolved.web_dist is not None:
         _mount_web(app, resolved.web_dist)
