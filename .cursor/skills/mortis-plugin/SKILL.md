@@ -17,7 +17,7 @@ description: >-
 
 ## 1. 先读
 
-- `docs/` 下的《插件规范》：目录、id、停用规则、import 检查、三种插件的约定。和本技能冲突时以规范为准。
+- `docs/` 下的《插件规范》：目录、id、停用规则、import 检查、三种插件的约定。和本技能冲突时以规范为准。这份文档是公开的，改它的时候不要写进本机路径和内部计划。
 - `src/mortis/plugin_api.py`：接口和每个方法的注释，开头写着 `candidates` 返回值的格式。
 - 参照现成的实现：数据类型带来源看 `plugins/galgame/`，播放看 `plugins/system_player/`。
 - 字段目录的定义在 `src/mortis/catalog/spec.py`，内置类型的字段在 `src/mortis/catalog/` 下。

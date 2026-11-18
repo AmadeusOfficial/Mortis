@@ -220,8 +220,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # 莫提斯
-# 设计文档只在本机维护，不上传
-/docs/
+# 内部设计文档只在本机维护，不上传；docs/ 里是公开文档，会进 git
+/docs-internal/
 .superpowers/
 .dev-data/
 web/node_modules/
