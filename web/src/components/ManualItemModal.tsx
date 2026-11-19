@@ -10,13 +10,14 @@ import {
   Textarea,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   type ManualItemCreate,
   type UnmatchedFile,
   createManualItem,
+  fetchSourceOrders,
   uploadImage,
 } from "../api";
 import { IconClose, IconImage, IconPlus } from "../icons";
@@ -44,6 +45,13 @@ export function ManualItemModal({
   const [overview, setOverview] = useState("");
   const [poster, setPoster] = useState<File | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  // 来源顺序里带着这个类型作品层的字段目录；读不到时照常给选海报，传不上会提示。
+  const orders = useQuery({
+    queryKey: ["source-orders", file.data_type_id],
+    queryFn: () => fetchSourceOrders(file.data_type_id),
+  });
+  const hasPoster =
+    orders.isError || (orders.data?.fields.some((field) => field.key === "poster") ?? false);
 
   useEffect(() => {
     if (poster === null) {
@@ -63,7 +71,7 @@ export function ManualItemModal({
       if (overview.trim() !== "") body.overview = overview.trim();
       const { item_id } = await createManualItem(file.id, body);
       let posterError: string | null = null;
-      if (poster !== null) {
+      if (poster !== null && hasPoster) {
         try {
           await uploadImage(item_id, "poster", poster);
         } catch (error) {
@@ -91,7 +99,7 @@ export function ManualItemModal({
     },
   });
 
-  const posterTooBig = poster !== null && poster.size > MAX_POSTER_BYTES;
+  const posterTooBig = hasPoster && poster !== null && poster.size > MAX_POSTER_BYTES;
   const canSave = title.trim() !== "" && !posterTooBig;
   const guessYear =
     file.guess_year !== null ? `文件名里猜出的年份是 ${file.guess_year}` : undefined;
@@ -108,43 +116,45 @@ export function ManualItemModal({
     >
       <Stack>
         <Group align="flex-start" wrap="nowrap" gap="md">
-          <Stack gap={6} className={classes.posterCol}>
-            <div className={classes.poster}>
-              {posterUrl !== null ? (
-                <img src={posterUrl} alt="海报预览" />
-              ) : (
-                <IconImage size={26} />
-              )}
-            </div>
-            <FileButton
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(picked) => picked !== null && setPoster(picked)}
-            >
-              {(props) => (
+          {hasPoster && (
+            <Stack gap={6} className={classes.posterCol}>
+              <div className={classes.poster}>
+                {posterUrl !== null ? (
+                  <img src={posterUrl} alt="海报预览" />
+                ) : (
+                  <IconImage size={26} />
+                )}
+              </div>
+              <FileButton
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(picked) => picked !== null && setPoster(picked)}
+              >
+                {(props) => (
+                  <Button
+                    {...props}
+                    size="xs"
+                    variant="default"
+                    leftSection={<IconPlus size={12} />}
+                    disabled={create.isPending}
+                  >
+                    {poster === null ? "选海报" : "换一张"}
+                  </Button>
+                )}
+              </FileButton>
+              {poster !== null && (
                 <Button
-                  {...props}
                   size="xs"
-                  variant="default"
-                  leftSection={<IconPlus size={12} />}
+                  variant="subtle"
+                  color="gray"
+                  leftSection={<IconClose size={12} />}
                   disabled={create.isPending}
+                  onClick={() => setPoster(null)}
                 >
-                  {poster === null ? "选海报" : "换一张"}
+                  不要海报
                 </Button>
               )}
-            </FileButton>
-            {poster !== null && (
-              <Button
-                size="xs"
-                variant="subtle"
-                color="gray"
-                leftSection={<IconClose size={12} />}
-                disabled={create.isPending}
-                onClick={() => setPoster(null)}
-              >
-                不要海报
-              </Button>
-            )}
-          </Stack>
+            </Stack>
+          )}
           <Stack gap="sm" style={{ flex: 1, minWidth: 0 }}>
             <TextInput
               label="片名"

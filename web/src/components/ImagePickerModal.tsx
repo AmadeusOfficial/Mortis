@@ -55,10 +55,12 @@ export function languageLabel(language: string | null, region: string | null): s
 function ChoiceGrid({
   itemId,
   field,
+  manual,
   onChanged,
 }: {
   itemId: number;
   field: FieldOut;
+  manual: boolean;
   onChanged: (detail: ItemDetail, message: string) => void;
 }) {
   const [url, setUrl] = useState("");
@@ -177,7 +179,9 @@ function ChoiceGrid({
         </Alert>
       ) : choices.data.length === 0 ? (
         <Text size="sm" c="dimmed">
-          来源快照里没有这种图。先刮削一次，或者上传、粘贴网址。
+          {manual
+            ? "手动条目没有来源，可以上传本地图片，或者粘贴网址。"
+            : "来源快照里没有这种图。先刮削一次，或者上传、粘贴网址。"}
         </Text>
       ) : (
         <>
@@ -196,12 +200,14 @@ export function ImagePickerModal({
   itemId,
   fields,
   initialKey,
+  manual = false,
   onChanged,
   onClose,
 }: {
   itemId: number;
   fields: FieldOut[];
   initialKey: string;
+  manual?: boolean;
   onChanged: (detail: ItemDetail) => void;
   onClose: () => void;
 }) {
@@ -224,7 +230,7 @@ export function ImagePickerModal({
         </Tabs.List>
         {fields.map((field) => (
           <Tabs.Panel key={field.key} value={field.key}>
-            <ChoiceGrid itemId={itemId} field={field} onChanged={changed} />
+            <ChoiceGrid itemId={itemId} field={field} manual={manual} onChanged={changed} />
           </Tabs.Panel>
         ))}
       </Tabs>

@@ -1146,6 +1146,7 @@ export function ItemDetailPage() {
           itemId={detail.id}
           fields={pickableFields}
           initialKey={picking}
+          manual={detail.is_manual}
           onChanged={setDetail}
           onClose={() => setPicking(null)}
         />

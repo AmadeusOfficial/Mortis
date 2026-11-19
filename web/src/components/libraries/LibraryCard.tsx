@@ -180,7 +180,10 @@ export function LibraryCard({
   const samplePosters = library.sample_posters ?? [];
   const scrapedCount = library.scraped_count ?? 0;
   const issueCount = library.issue_count ?? 0;
-  const unscrapedCount = Math.max(0, library.item_count - scrapedCount);
+  const unscrapedCount = Math.max(
+    0,
+    library.item_count - scrapedCount - (library.manual_count ?? 0),
+  );
   const needAttention = issueCount + unscrapedCount;
   const automation = automationSummary(library);
   const hasPosters = samplePosters.length > 0;
@@ -363,8 +366,11 @@ export function LibraryCard({
             : {
                 rename: plan.rename,
                 write: plan.write,
-                scope: `整理刮削过的 ${String(plan.count)} 部电影`,
-                empty: plan.count === 0 ? "这个库还没有刮削过的电影，先刮削再整理。" : null,
+                scope: `整理 ${String(plan.count)} ${itemUnit}（刮削过的和手动条目）`,
+                empty:
+                  plan.count === 0
+                    ? "这个库还没有能整理的条目：先刮削，或在「未识别」里手动建条目。"
+                    : null,
                 previews: plan.previews,
                 canConfirm: plan.count > 0 && (plan.rename || plan.write),
               }

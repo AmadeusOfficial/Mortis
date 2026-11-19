@@ -11,6 +11,7 @@ from mortis.api.app import create_app
 from mortis.config.models import Secrets
 from mortis.db.models import Item, Library, MediaFile, Task, utc_now
 from mortis.items.identity import create_manual_work
+from mortis.organize.service import unscraped_work_ids
 from mortis.output.service import arrangeable_items
 from mortis.settings import Settings
 from tests.fakes import FakeTmdb
@@ -145,6 +146,27 @@ def test_wall_marks_manual_items(client: TestClient, files: dict[str, int]) -> N
     assert wall[manual]["year"] == 2024
     assert wall[bound]["is_manual"] is False
     assert client.get(f"/api/items/{bound}").json()["is_manual"] is False
+
+
+def test_library_counts_manual_apart_from_pending(
+    client: TestClient, app: FastAPI, files: dict[str, int]
+) -> None:
+    manual = client.post(
+        f"/api/media-files/{files['cd1']}/manual", json={"title": "手动片"}
+    ).json()["item_id"]
+    bound = client.post(
+        f"/api/media-files/{files['loose']}/bind", json={"tmdb_id": 949, "title": "盗火线"}
+    ).json()["item_id"]
+    library_id = files["library"]
+    detail = client.get(f"/api/libraries/{library_id}").json()
+    listed = next(row for row in client.get("/api/libraries").json() if row["id"] == library_id)
+    for row in (detail, listed):
+        assert (row["item_count"], row["scraped_count"], row["manual_count"]) == (2, 0, 1)
+    with app.state.session_factory() as session:
+        queued = unscraped_work_ids(session, library_id)
+    assert queued == [bound]
+    assert manual not in queued
+    assert len(queued) == detail["item_count"] - detail["scraped_count"] - detail["manual_count"]
 
 
 def test_manual_item_refuses_scrape_until_rematched(

@@ -16,6 +16,7 @@ from mortis.db.models import (
 )
 from mortis.errors import UserError
 from mortis.items.detail import image_url
+from mortis.items.identity import manual_clause
 from mortis.tasks import repo as task_repo
 from mortis.tasks import schedule
 
@@ -129,6 +130,7 @@ class LibraryStats:
     item_count: int = 0
     file_count: int = 0
     scraped_count: int = 0
+    manual_count: int = 0
     issue_count: int = 0
     sample_posters: list[str] = field(default_factory=list)
 
@@ -141,6 +143,18 @@ def _scraped_counts(session: Session, library_ids: list[int]) -> dict[int, int]:
             select(Item.library_id, func.count(func.distinct(Item.id)))
             .join(ItemSourceRecord, ItemSourceRecord.item_id == Item.id)
             .where(Item.library_id.in_(library_ids), Item.kind == "work")
+            .group_by(Item.library_id)
+        )
+    }
+
+
+def _manual_counts(session: Session, library_ids: list[int]) -> dict[int, int]:
+    """手动条目数。它们没有来源编号，不刮削，也不算待处理。"""
+    return {
+        library_id: count
+        for library_id, count in session.execute(
+            select(Item.library_id, func.count())
+            .where(Item.library_id.in_(library_ids), manual_clause())
             .group_by(Item.library_id)
         )
     }
@@ -194,6 +208,7 @@ def library_stats(session: Session, library_ids: list[int]) -> dict[int, Library
     """每个库的作品、文件、已刮削、有问题的数量和最新的几张贴图。固定几条查询算完。"""
     counts = library_counts(session, library_ids)
     scraped = _scraped_counts(session, library_ids)
+    manual = _manual_counts(session, library_ids)
     works = session.execute(
         select(Item.id, Item.library_id).where(
             Item.library_id.in_(library_ids), Item.kind == "work"
@@ -206,6 +221,7 @@ def library_stats(session: Session, library_ids: list[int]) -> dict[int, Library
             item_count=counts[library_id][0],
             file_count=counts[library_id][1],
             scraped_count=scraped.get(library_id, 0),
+            manual_count=manual.get(library_id, 0),
             issue_count=issues.get(library_id, 0),
             sample_posters=posters.get(library_id, []),
         )

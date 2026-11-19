@@ -423,6 +423,8 @@ export interface Library {
   item_count: number;
   file_count: number;
   scraped_count: number;
+  // 手动条目不刮削，不算待处理。
+  manual_count: number;
   issue_count: number;
   sample_posters: string[];
   paths: string[];

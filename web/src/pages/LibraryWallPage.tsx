@@ -299,7 +299,7 @@ export function LibraryWallPage() {
         : 0;
   const pendingCount =
     libData !== undefined && scrapedTotal !== null
-      ? Math.max(0, libData.item_count - scrapedTotal)
+      ? Math.max(0, libData.item_count - scrapedTotal - (libData.manual_count ?? 0))
       : 0;
   const plan = preview.data;
 
@@ -578,8 +578,11 @@ export function LibraryWallPage() {
               : {
                   rename: plan.rename,
                   write: plan.write,
-                  scope: `整理刮削过的 ${String(plan.count)} 部电影`,
-                  empty: plan.count === 0 ? "这个库还没有刮削过的电影，先刮削再整理。" : null,
+                  scope: `整理 ${String(plan.count)} ${unit}（刮削过的和手动条目）`,
+                  empty:
+                    plan.count === 0
+                      ? "这个库还没有能整理的条目：先刮削，或在「未识别」里手动建条目。"
+                      : null,
                   previews: plan.previews,
                   canConfirm: plan.count > 0 && (plan.rename || plan.write),
                 }

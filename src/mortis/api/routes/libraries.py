@@ -30,6 +30,7 @@ class LibraryOut(BaseModel):
     item_count: int
     file_count: int
     scraped_count: int
+    manual_count: int
     issue_count: int
     sample_posters: list[str]
     schedule_cron: str | None
@@ -89,6 +90,7 @@ def _out(
         item_count=stats.item_count,
         file_count=stats.file_count,
         scraped_count=stats.scraped_count,
+        manual_count=stats.manual_count,
         issue_count=stats.issue_count,
         sample_posters=stats.sample_posters,
         schedule_cron=scan.cron if scan is not None else None,
