@@ -332,7 +332,7 @@ def bind_manual(
     }
     title = str(filled.get("title") or "").strip()
     if not title:
-        raise ItemError("片名不能为空")
+        raise ItemError("标题不能为空")
     game = media_file.file_kind == "game"
     series = not game and is_series(session, library)
     prepared = prepare_values(session, library.data_type_id, "work", filled, skip_unknown=True)

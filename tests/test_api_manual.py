@@ -199,7 +199,7 @@ def test_manual_rejects_bound_file_and_blank_title(
     assert again.status_code == 409
     blank = client.post(f"/api/media-files/{files['loose']}/manual", json={"title": "  "})
     assert blank.status_code == 422
-    assert blank.json()["detail"] == "片名不能为空"
+    assert blank.json()["detail"] == "标题不能为空"
     missing = client.post("/api/media-files/99999/manual", json={"title": "x"})
     assert missing.status_code == 404
 
