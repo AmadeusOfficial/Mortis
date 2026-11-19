@@ -4,42 +4,6 @@
   isolation: isolate;
 }
 
-/* 全页背景图透视（参考 Emby） */
-.backdropWrap {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.backdropImg {
-  position: absolute;
-  inset: -24px;
-  background-size: cover;
-  background-position: center 22%;
-  opacity: 0.68;
-  transform: scale(1.03);
-}
-
-.backdropScrim {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--mo-bg) 76%, transparent) 0%,
-      color-mix(in srgb, var(--mo-bg) 42%, transparent) 44%,
-      color-mix(in srgb, var(--mo-bg) 16%, transparent) 100%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--mo-bg) 18%, transparent) 0%,
-      color-mix(in srgb, var(--mo-bg) 46%, transparent) 62%,
-      var(--mo-bg) 100%
-    );
-}
-
 .topBar {
   display: flex;
   align-items: center;

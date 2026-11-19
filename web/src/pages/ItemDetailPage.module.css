@@ -1,3 +1,9 @@
+.pageRoot {
+  position: relative;
+  max-width: 1480px;
+  isolation: isolate;
+}
+
 .crumb {
   display: inline-flex;
   align-items: center;
@@ -18,36 +24,15 @@
   color: var(--mo-text);
 }
 
-/* 头图 */
+/* 头图（无框通透，由 PageBackdrop 提供全页背景） */
 .hero {
   position: relative;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--mo-line);
-  background: var(--mo-surface);
-  isolation: isolate;
-}
-.heroBg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center 25%;
-  z-index: -2;
-}
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(90deg, var(--mo-bg) 0%, color-mix(in srgb, var(--mo-bg) 78%, transparent) 36%, color-mix(in srgb, var(--mo-bg) 25%, transparent) 72%, color-mix(in srgb, var(--mo-bg) 45%, transparent) 100%),
-    linear-gradient(0deg, color-mix(in srgb, var(--mo-bg) 85%, transparent) 0%, transparent 55%);
 }
 .heroInner {
   display: flex;
   gap: 30px;
   align-items: flex-end;
-  padding: 56px 32px 28px;
+  padding: 20px 0 24px;
 }
 .poster {
   width: 200px;
@@ -374,8 +359,9 @@
   position: sticky;
   top: 20px;
   border-radius: 14px;
-  border: 1px solid var(--mo-line);
-  background: var(--mo-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(19, 25, 36, 0.58);
+  backdrop-filter: blur(14px);
   overflow: hidden;
 }
 .panelHead {

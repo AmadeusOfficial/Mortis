@@ -37,6 +37,7 @@ import {
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { DeleteItemModal } from "../components/DeleteItemModal";
 import { FieldActions } from "../components/detail/FieldActions";
+import { PageBackdrop } from "../components/detail/PageBackdrop";
 import { FieldEditModal } from "../components/FieldEditModal";
 import { FieldValue } from "../components/FieldValue";
 import {
@@ -457,14 +458,18 @@ export function ItemDetailPage() {
     );
   }
 
+  const backdropUrl =
+    detail.fanart_url ??
+    firstImage(byKey.get("fanart")) ??
+    firstImage(byKey.get("backdrop")) ??
+    firstImage(byKey.get("background")) ??
+    firstImage(imageFields[0]) ??
+    detail.poster_url ??
+    detail.show?.poster_url ??
+    null;
+
   const hero = (
     <div className={classes.hero}>
-      {detail.fanart_url !== null && (
-        <div
-          className={classes.heroBg}
-          style={{ backgroundImage: `url("${detail.fanart_url}")` }}
-        />
-      )}
       <span className={classes.scrapedAt}>
         {detail.scraped_at !== null
           ? `上次刮削 ${formatTime(detail.scraped_at)}`
@@ -1122,7 +1127,8 @@ export function ItemDetailPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1480 }}>
+    <div className={classes.pageRoot}>
+      <PageBackdrop url={backdropUrl} />
       <Link to={`/libraries/${detail.library_id}`} className={classes.crumb}>
         <IconBack size={14} /> {detail.library_name}
       </Link>

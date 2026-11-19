@@ -11,6 +11,7 @@ import {
   IconPlay,
 } from "../../icons";
 import { Pill } from "../ui";
+import { PageBackdrop } from "../detail/PageBackdrop";
 import { formatSeasonHeading, sortSeasons } from "./SeasonGrid";
 import classes from "./SeasonDetailView.module.css";
 
@@ -206,15 +207,7 @@ export function SeasonDetailView({
 
   return (
     <div className={classes.root}>
-      {backdropUrl !== null && (
-        <div className={classes.backdropWrap} aria-hidden="true">
-          <div
-            className={classes.backdropImg}
-            style={{ backgroundImage: `url("${backdropUrl}")` }}
-          />
-          <div className={classes.backdropScrim} />
-        </div>
-      )}
+      <PageBackdrop url={backdropUrl} />
 
       {/* 顶部返回 + 切季栏 */}
       <div className={classes.topBar}>

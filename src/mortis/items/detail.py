@@ -309,7 +309,7 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
     show, position = _show_of(session, item)
     if show is not None:
         parent = None
-    if fanart is None and item.kind == "season" and show is not None:
+    if fanart is None and item.kind in ("season", "episode") and show is not None:
         fanart = session.scalar(
             select(ItemImage.file_path)
             .where(
