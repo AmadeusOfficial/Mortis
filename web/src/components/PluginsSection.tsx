@@ -6,7 +6,6 @@ import {
   CopyButton,
   Group,
   Modal,
-  NumberInput,
   PasswordInput,
   Radio,
   Stack,
@@ -16,7 +15,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   type DataType,
@@ -35,12 +34,13 @@ import {
   pluginLoginUrl,
   providesAlone,
   reloadPlugins,
+  updateHook,
   updatePlugin,
 } from "../api";
 import styles from "../pages/SettingsPage.module.css";
 import { IconRefresh } from "../icons";
-import { PathPicker } from "./PathPicker";
 import { PluginImportModal, UninstallModal } from "./PluginImportModal";
+import type { PluginSettingsFormHandle } from "./PluginSettingsForm";
 import { SettingCard, SettingRow } from "./settings/SettingLayout";
 import { Pill } from "./ui";
 
@@ -80,30 +80,6 @@ function formatExpiry(seconds: number): string {
 
 function schemaEntries(schema: JsonSchema | null): [string, JsonSchemaProperty][] {
   return Object.entries(schema?.properties ?? {});
-}
-
-function asText(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  return value === undefined || value === null ? "" : String(value);
-}
-
-function asNumber(value: unknown): number | "" {
-  return typeof value === "number" ? value : "";
-}
-
-function initialValue(property: JsonSchemaProperty, saved: unknown): unknown {
-  if (saved !== undefined && saved !== null) {
-    return saved;
-  }
-  if (property.default !== undefined) {
-    return property.default;
-  }
-  if (property.type === "boolean") {
-    return false;
-  }
-  return property.type === "integer" || property.type === "number" ? 0 : "";
 }
 
 export interface LoginResult {
@@ -271,8 +247,13 @@ export function PluginsSection() {
 
 // 一个事件钩子：订阅的事件、权限声明和运行状态。连续失败会被自动停用，可以在这里重新启用。
 // 停用原因和失败记录只在内存里，重启莫提斯后只显示通用提示。
+// 钩子声明了 Settings 或 Secrets 时可以展开设置，按钩子 id 保存。
 function HookLine({ pluginId, hook }: { pluginId: string; hook: PluginHookState }) {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+  const settingsSchema = hook.settings_schema;
+  const configurable = settingsSchema !== null || hook.secrets_schema !== null;
   const enable = useMutation({
     mutationFn: () => enablePluginHook(pluginId, hook.id),
     onSuccess: () => {
@@ -299,6 +280,16 @@ function HookLine({ pluginId, hook }: { pluginId: string; hook: PluginHookState 
             重新启用
           </Button>
         )}
+        {configurable && (
+          <Button
+            variant="subtle"
+            size="compact-xs"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? "收起设置" : "设置"}
+          </Button>
+        )}
       </Group>
       {hook.disabled && hook.reason !== null && (
         <Text size="xs" c="red">
@@ -309,6 +300,34 @@ function HookLine({ pluginId, hook }: { pluginId: string; hook: PluginHookState 
         <Text size="xs" c="var(--mo-muted)">
           连续失败 {hook.failures} 次{hook.last_error !== null ? `：${hook.last_error}` : ""}
         </Text>
+      )}
+      {open && (
+        <Stack gap="sm" mt={6}>
+          {settingsSchema !== null && (
+            <SettingCard title={`钩子 ${hook.id} 的设置`}>
+              <SettingsEditor
+                schema={settingsSchema}
+                settings={hook.settings}
+                saveLabel="保存钩子设置"
+                save={async (values) => {
+                  const updated = await updateHook(pluginId, hook.id, { settings: values });
+                  refresh();
+                  notifications.show({ color: "green", message: `钩子 ${hook.id} 的设置已保存` });
+                  return updated;
+                }}
+              />
+            </SettingCard>
+          )}
+          {hook.secrets_schema !== null && (
+            <SecretsCard
+              name={`钩子 ${hook.id}`}
+              schema={hook.secrets_schema}
+              secrets={hook.secrets}
+              save={(values) => updateHook(pluginId, hook.id, { secrets: values })}
+              onChanged={refresh}
+            />
+          )}
+        </Stack>
       )}
     </Stack>
   );
@@ -347,7 +366,7 @@ function PluginRow({
         gap="md"
         style={parentDisabled ? { opacity: 0.55 } : undefined}
       >
-        <Stack gap={4} style={{ minWidth: 0 }}>
+        <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
           <Group gap="xs" wrap="wrap">
             <Text size="sm" fw={600}>
               {plugin.name}
@@ -523,92 +542,89 @@ export function SourcePluginSettings({
         )}
       </SettingCard>
 
-      <PluginSettingsForm plugin={plugin} onChanged={refresh} />
+      <PluginSettingsCard plugin={plugin} onChanged={refresh} />
 
       {plugin.oauth ? (
         <PluginLogin plugin={plugin} onChanged={refresh} />
       ) : (
-        <PluginSecretsForm plugin={plugin} onChanged={refresh} />
+        <SecretsCard
+          name={plugin.name}
+          schema={plugin.secrets_schema}
+          secrets={plugin.secrets}
+          save={(values) => updatePlugin(plugin.id, { secrets: values })}
+          onChanged={refresh}
+        />
       )}
     </Stack>
   );
 }
 
-// 设置表单只认 JSON Schema 的一个子集（和 plugin_api 模块文档一致）：
-// boolean 是开关，integer 和 number 是数字框，string 是文本框，
-// format 为 "file-path" 的 string 是带文件选择的路径框；title 当标签，description 当提示，
-// default 当初始值。嵌套对象、数组、enum 都按文本框处理。密钥只有字符串，一律是密码框。
-function PluginSchemaField({
-  fieldKey,
-  property,
-  value,
-  onChange,
-}: {
-  fieldKey: string;
-  property: JsonSchemaProperty;
-  value: unknown;
-  onChange: (next: unknown) => void;
-}) {
-  const inputId = useId();
-  const hintId = useId();
-  const label = property.title ?? fieldKey;
+// 设置表单由 rjsf 按完整 JSON Schema 渲染（见 PluginSettingsForm.tsx）：列表带「+ 添加」、删除和上下移，
+// 嵌套对象经 $ref/$defs 展开，enum 和 Literal 是下拉，boolean 是开关，数字带约束校验；
+// format 为 "file-path" 的 string 是带文件选择的路径框。插件可在字段上写 ui:widget（textarea、file-path）、
+// ui:placeholder、ui:help、ui:order。保存时仍以后端的 Pydantic 校验为准，错误显示在表单上方。
+// rjsf 和 ajv 单独成块，打开设置时才加载。密钥不走这里：只有字符串，一律是密码框，不回传值。
+const SchemaForm = lazy(() => import("./PluginSettingsForm"));
 
-  if (property.type === "boolean") {
-    return (
-      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
-        <Switch
-          id={inputId}
-          aria-describedby={property.description ? hintId : undefined}
-          checked={value === true}
-          onChange={(event) => onChange(event.currentTarget.checked)}
-        />
-      </SettingRow>
-    );
-  }
-  if (property.type === "integer" || property.type === "number") {
-    return (
-      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
-        <NumberInput
-          id={inputId}
-          aria-describedby={property.description ? hintId : undefined}
-          className={styles.monoInput}
-          maw={200}
-          allowDecimal={property.type === "number"}
-          value={asNumber(value)}
-          onChange={(next) => onChange(typeof next === "number" ? next : 0)}
-        />
-      </SettingRow>
-    );
-  }
-  if (property.format === "file-path") {
-    return (
-      <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
-        <Group gap="xs" wrap="nowrap">
-          <PathPicker
-            id={inputId}
-            describedBy={property.description ? hintId : undefined}
-            label={label}
-            mode="file"
-            value={asText(value)}
-            onChange={onChange}
-          />
-        </Group>
-      </SettingRow>
-    );
-  }
+function SettingsEditor({
+  schema,
+  settings,
+  saveLabel,
+  save,
+}: {
+  schema: JsonSchema;
+  settings: Record<string, unknown> | null;
+  saveLabel: string;
+  save: (values: Record<string, unknown>) => Promise<PluginInfo>;
+}) {
+  const [draft, setDraft] = useState<Record<string, unknown>>(() => settings ?? {});
+  const form = useRef<PluginSettingsFormHandle>(null);
+  const mutation = useMutation({ mutationFn: save });
+  const submit = () => {
+    if (form.current?.validate() === false) {
+      return;
+    }
+    mutation.mutate(draft);
+  };
+
   return (
-    <SettingRow label={label} hint={property.description} htmlFor={inputId} hintId={hintId}>
-      <TextInput
-        id={inputId}
-        aria-describedby={property.description ? hintId : undefined}
-        value={asText(value)}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-    </SettingRow>
+    <>
+      <div className={styles.cardBody}>
+        <Suspense
+          fallback={
+            <Text size="sm" c="var(--mo-dim)">
+              正在加载设置表单…
+            </Text>
+          }
+        >
+          <SchemaForm
+            ref={form}
+            schema={schema}
+            value={draft}
+            onChange={setDraft}
+            disabled={mutation.isPending}
+          />
+        </Suspense>
+      </div>
+      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
+        <Stack gap="sm">
+          {mutation.isError && (
+            <Alert color="red" title="保存失败">
+              {mutation.error.message}
+            </Alert>
+          )}
+          <Group>
+            <Button variant="filled" loading={mutation.isPending} onClick={submit}>
+              {saveLabel}
+            </Button>
+          </Group>
+        </Stack>
+      </div>
+    </>
   );
 }
 
-export function PluginSettingsForm({
+export function PluginSettingsCard({
   plugin,
   onChanged,
   title = "设置",
@@ -619,23 +635,8 @@ export function PluginSettingsForm({
   title?: string;
   saveLabel?: string;
 }) {
-  const [draft, setDraft] = useState<Record<string, unknown>>(() =>
-    Object.fromEntries(
-      schemaEntries(plugin.settings_schema).map(([key, property]) => [
-        key,
-        initialValue(property, plugin.settings?.[key]),
-      ]),
-    ),
-  );
-  const save = useMutation({
-    mutationFn: (values: Record<string, unknown>) => updatePlugin(plugin.id, { settings: values }),
-    onSuccess: (updated) => {
-      onChanged();
-      notifications.show({ color: "green", message: `${updated.name} 的设置已保存` });
-    },
-  });
-  const entries = schemaEntries(plugin.settings_schema);
-  if (entries.length === 0) {
+  const schema = plugin.settings_schema;
+  if (schema === null || schemaEntries(schema).length === 0) {
     return (
       <SettingCard title={title}>
         <div className={styles.cardBody}>
@@ -646,35 +647,19 @@ export function PluginSettingsForm({
       </SettingCard>
     );
   }
-  const set = (key: string, value: unknown) => setDraft({ ...draft, [key]: value });
-
   return (
     <SettingCard title={title} description={`配置 ${plugin.name} 的运行参数`}>
-      <div className={styles.fieldList}>
-        {entries.map(([key, property]) => (
-          <PluginSchemaField
-            key={key}
-            fieldKey={key}
-            property={property}
-            value={draft[key]}
-            onChange={(next) => set(key, next)}
-          />
-        ))}
-      </div>
-      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--mo-line)" }}>
-        <Stack gap="sm">
-          {save.isError && (
-            <Alert color="red" title="保存失败">
-              {save.error.message}
-            </Alert>
-          )}
-          <Group>
-            <Button variant="filled" loading={save.isPending} onClick={() => save.mutate(draft)}>
-              {saveLabel}
-            </Button>
-          </Group>
-        </Stack>
-      </div>
+      <SettingsEditor
+        schema={schema}
+        settings={plugin.settings}
+        saveLabel={saveLabel}
+        save={async (values) => {
+          const updated = await updatePlugin(plugin.id, { settings: values });
+          onChanged();
+          notifications.show({ color: "green", message: `${updated.name} 的设置已保存` });
+          return updated;
+        }}
+      />
     </SettingCard>
   );
 }
@@ -731,27 +716,40 @@ function PluginSecretRow({
   );
 }
 
-function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChanged: () => void }) {
+// 来源插件和钩子共用的密钥表单；save 决定写到哪一条。
+function SecretsCard({
+  name,
+  schema,
+  secrets,
+  save: saveSecrets,
+  onChanged,
+}: {
+  name: string;
+  schema: JsonSchema | null;
+  secrets: Record<string, boolean> | null;
+  save: (values: Record<string, string>) => Promise<PluginInfo>;
+  onChanged: () => void;
+}) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const save = useMutation({
-    mutationFn: (values: Record<string, string>) => updatePlugin(plugin.id, { secrets: values }),
-    onSuccess: (saved, values) => {
+    mutationFn: saveSecrets,
+    onSuccess: (_saved, values) => {
       setDraft({});
       onChanged();
       const cleared = Object.values(values).every((value) => value.trim() === "");
       notifications.show({
         color: "green",
-        message: cleared ? `${saved.name} 的密钥已清除` : `${saved.name} 的密钥已保存`,
+        message: cleared ? `${name} 的密钥已清除` : `${name} 的密钥已保存`,
       });
     },
   });
-  const entries = schemaEntries(plugin.secrets_schema);
+  const entries = schemaEntries(schema);
   if (entries.length === 0) {
     return (
       <SettingCard title="密钥">
         <div className={styles.cardBody}>
           <Text size="sm" c="var(--mo-dim)">
-            {plugin.name} 没有需要填的密钥。
+            {name} 没有需要填的密钥。
           </Text>
         </div>
       </SettingCard>
@@ -770,7 +768,7 @@ function PluginSecretsForm({ plugin, onChanged }: { plugin: PluginInfo; onChange
             key={key}
             fieldKey={key}
             property={property}
-            isSet={plugin.secrets?.[key] === true}
+            isSet={secrets?.[key] === true}
             value={draft[key] ?? ""}
             busy={save.isPending}
             onChange={(next) => setDraft({ ...draft, [key]: next })}

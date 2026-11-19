@@ -290,6 +290,11 @@ export interface PluginHookState extends PluginHook {
   failures: number;
   last_error: string | null;
   runs: number;
+  // 钩子声明了 Settings、Secrets 才有；密钥只回传填没填。
+  settings_schema: JsonSchema | null;
+  settings: Record<string, unknown> | null;
+  secrets_schema: JsonSchema | null;
+  secrets: Record<string, boolean> | null;
 }
 
 export interface PluginInfo {
@@ -785,6 +790,13 @@ export const updatePlugin = (id: string, body: PluginUpdate) =>
   request<PluginInfo>("PUT", `/api/plugins/${id}`, body);
 export const enablePluginHook = (pluginId: string, hookId: string) =>
   request<PluginInfo>("POST", `/api/plugins/${pluginId}/hooks/${hookId}/enable`);
+// 只改钩子的设置和密钥；secrets 里不出现的键不改，空字符串表示清除。
+export interface HookUpdate {
+  settings?: Record<string, unknown>;
+  secrets?: Record<string, string>;
+}
+export const updateHook = (pluginId: string, hookId: string, body: HookUpdate) =>
+  request<PluginInfo>("PUT", `/api/plugins/${pluginId}/hooks/${hookId}`, body);
 export interface PackageFile {
   path: string;
   size: number;

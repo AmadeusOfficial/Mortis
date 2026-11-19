@@ -4,7 +4,7 @@ import { useId } from "react";
 import { Link } from "react-router";
 import { type PluginInfo, providesAlone } from "../../api";
 import styles from "../../pages/SettingsPage.module.css";
-import { PluginSettingsForm, usePlugins } from "../PluginsSection";
+import { PluginSettingsCard, usePlugins } from "../PluginsSection";
 import { Pill } from "../ui";
 import { SaveBar, SettingCard, SettingRow } from "./SettingLayout";
 import { useSection } from "./GeneralSections";
@@ -165,7 +165,7 @@ export function PlayerCard({ plugin, onChanged }: { plugin: PluginInfo; onChange
         </div>
       </SettingCard>
       {hasSettings && plugin.enabled && plugin.error === null && (
-        <PluginSettingsForm
+        <PluginSettingsCard
           plugin={plugin}
           onChanged={onChanged}
           title={`${plugin.name} 设置`}
