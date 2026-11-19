@@ -23,6 +23,7 @@ import uuid
 import zipfile
 import zlib
 from collections.abc import Callable, Iterable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Any
@@ -405,7 +406,10 @@ class PluginInstaller:
         *,
         limits: Limits | None = None,
         clock: Callable[[], float] = time.monotonic,
+        pause: Callable[[str], AbstractContextManager[bool]] | None = None,
     ) -> None:
+        self.pause = pause
+        """按插件暂停任务的入口（TaskRunner.pause_plugin）；覆盖升级和卸载时用。"""
         self.user_dir = user_dir
         self.registry = registry
         self.locks = locks
@@ -417,6 +421,12 @@ class PluginInstaller:
         self._staged: dict[str, _Staged] = {}
         self.pending_restart: set[str] = set()
         _remove(self._tmp)
+
+    def _paused(self, plugin_id: str) -> AbstractContextManager[bool]:
+        """没接任务运行器（测试、脚本）时什么也不暂停。"""
+        if self.pause is None:
+            return nullcontext(True)
+        return self.pause(plugin_id)
 
     # -- 接收和检查
 
@@ -610,7 +620,8 @@ class PluginInstaller:
         previous = self.registry.get(manifest.id)
         replaced = staged.existing_hash is not None
         if replaced:
-            with self.locks.hold(CATALOG_LOCK):
+            # 先停这个插件的新钩子任务、等旧的跑完，再拿目录写锁换文件；出错也会恢复。
+            with self._paused(manifest.id), self.locks.hold(CATALOG_LOCK):
                 self._swap(staged)
             self.pending_restart.add(manifest.id)
         else:
@@ -676,11 +687,12 @@ class PluginInstaller:
                 raise UserError("只能卸载数据目录里的插件", status_code=403)
             old = folder.with_name(f".{folder.name}.old")
             _remove(old)
-            try:
-                _move(folder, old)
-            except OSError as error:
-                raise UserError(f"卸载失败（文件可能正被占用）：{error}") from None
-            _remove(old)
+            with self._paused(plugin_id):
+                try:
+                    _move(folder, old)
+                except OSError as error:
+                    raise UserError(f"卸载失败（文件可能正被占用）：{error}") from None
+                _remove(old)
             self.pending_restart.discard(plugin_id)
             self.reload()
             return info.id, info.name

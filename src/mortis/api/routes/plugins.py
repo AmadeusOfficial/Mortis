@@ -225,6 +225,7 @@ def _installer(services: Services, request: Request) -> PluginInstaller:
                 services.plugins,
                 services.locks,
                 lambda: _reload(services, request),
+                pause=request.app.state.task_runner.pause_plugin,
             )
             state.plugin_installer = installer
         return installer

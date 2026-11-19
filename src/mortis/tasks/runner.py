@@ -4,6 +4,8 @@ import json
 import logging
 import threading
 import traceback
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -18,6 +20,8 @@ from mortis.tasks.logs import task_log_path
 
 HOOK_CONCURRENCY = 2
 """同时运行的钩子任务上限（所有插件合计），另外每个插件同时只跑一个。"""
+PAUSE_TIMEOUT = 30.0
+"""按插件暂停时，等已在跑的钩子任务结束的上限（秒）。"""
 _LOG = logging.getLogger(__name__)
 
 
@@ -42,6 +46,9 @@ class TaskRunner:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._lock = threading.Lock()
+        self._idle = threading.Condition(self._lock)
+        """钩子任务结束时通知；pause_plugin 等它。和 _lock 是同一把锁。"""
+        self._paused_plugins: dict[str, int] = {}
         self._running: set[int] = set()
         self._hook_plugins: dict[int, str] = {}
         self._cancel_requested: set[int] = set()
@@ -87,6 +94,34 @@ class TaskRunner:
         with self._lock:
             return self._paused
 
+    @contextmanager
+    def pause_plugin(self, plugin_id: str, timeout: float = PAUSE_TIMEOUT) -> Iterator[bool]:
+        """覆盖升级、卸载插件时用：期间不再派发这个插件的钩子任务（payload.plugin_id），
+        并等已经在跑的钩子任务结束，最多等 timeout 秒；等到了产出 True，超时产出 False
+        （调用方照常往下走，文件被占用时由它自己的回滚兜底）。可嵌套；退出时一定恢复。
+
+        只管带 plugin_id 的任务，也就是钩子任务；刮削、整理这类任务用的来源插件对象在内存里，
+        覆盖升级只换磁盘文件，不影响它们，所以不在这里拦。
+        """
+        with self._idle:
+            self._paused_plugins[plugin_id] = self._paused_plugins.get(plugin_id, 0) + 1
+        try:
+            with self._idle:
+                drained = self._idle.wait_for(
+                    lambda: plugin_id not in self._hook_plugins.values(), timeout
+                )
+            if not drained:
+                _LOG.warning("等插件 %s 的钩子任务结束超过 %s 秒，继续", plugin_id, timeout)
+            yield drained
+        finally:
+            with self._idle:
+                left = self._paused_plugins.get(plugin_id, 0) - 1
+                if left > 0:
+                    self._paused_plugins[plugin_id] = left
+                else:
+                    self._paused_plugins.pop(plugin_id, None)
+            self._wake.set()
+
     def _loop(self) -> None:
         while not self._stop.is_set():
             if not self.run_once():
@@ -100,7 +135,7 @@ class TaskRunner:
         with self._lock:
             if self._paused:
                 return False
-            busy = set(self._hook_plugins.values())
+            busy = set(self._hook_plugins.values()) | set(self._paused_plugins)
             full = len(self._hook_plugins) >= self.hook_concurrency
             with self.session_factory() as session:
                 task = repo.claim_next(
@@ -181,6 +216,7 @@ class TaskRunner:
                 self._hook_plugins.pop(task_id, None)
                 self._progress.pop(task_id, None)
                 self._cancel_requested.discard(task_id)
+                self._idle.notify_all()
 
     def _publish_failed(
         self, task_id: int, task_type: str, payload: dict[str, Any], error: str
