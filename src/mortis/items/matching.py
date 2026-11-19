@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any
 
 from sqlalchemy import delete, select, update
@@ -35,6 +36,8 @@ from mortis.organize.names import (
     subtitle_belongs_to,
 )
 from mortis.services import KeyedLocks
+
+_DIGITS = re.compile(r"([0-9]+)")
 
 
 def is_series(session: Session, item_or_library: Item | Library) -> bool:
@@ -254,7 +257,17 @@ def _episode_numbers(paths: list[str]) -> dict[str, tuple[int, int]]:
         parsed[path] = (1 if number.season is None else number.season, number.episodes[0])
     if len(parsed) == len(paths) and len(set(parsed.values())) == len(parsed):
         return parsed
-    return {path: (1, index) for index, path in enumerate(sorted(paths), start=1)}
+    ordered = sorted(paths, key=_natural_key)
+    return {path: (1, index) for index, path in enumerate(ordered, start=1)}
+
+
+def _natural_key(path: str) -> tuple[tuple[int, int, str], ...]:
+    """数字段按整数比，其余按 casefold 比：P2 排在 P10 前面。"""
+    return tuple(
+        (1, int(part), "") if part.isascii() and part.isdigit() else (0, 0, part.casefold())
+        for part in _DIGITS.split(path)
+        if part
+    )
 
 
 def _build_episodes(session: Session, show: Item, files: list[MediaFile]) -> None:

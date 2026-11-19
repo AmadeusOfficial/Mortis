@@ -306,6 +306,21 @@ def test_manual_show_without_numbers_counts_by_path(
     assert _owner(app, ids["sub"]) == ("episode", 2, "P2 正片")
 
 
+def test_manual_show_counts_parts_in_natural_order(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "多P合集"
+    show.mkdir(parents=True)
+    library = _library(client, root, "tv")
+    names = ["P1 开场.mp4", "P2 正片.mp4", "p10 番外.mp4", "P12 结尾.mp4"]
+    ids = _add_files(app, library, {name: (show / name, "video") for name in reversed(names)})
+    _manual(client, ids[names[0]], "多P合集")
+
+    for number, name in enumerate(names, start=1):
+        assert _owner(app, ids[name]) == ("episode", number, Path(name).stem)
+
+
 @pytest.mark.parametrize(
     "names",
     [
