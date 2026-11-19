@@ -275,10 +275,13 @@ def build_show_nfo(session: Session, layout: ShowLayout, config: TvScrapeConfig)
 
 
 def build_season_nfo(
-    session: Session, layout: ShowLayout, season: _Season, config: TvScrapeConfig
+    session: Session,
+    layout: ShowLayout,
+    season: _Season,
+    config: TvScrapeConfig,
+    show_ids: dict[str, str],
 ) -> bytes:
     item = season.item
-    ids = _external_ids(session, layout.show)
     root = ET.Element("season")
     _text(root, "seasonnumber", item.index_number)
     _text(root, "title", item.title)
@@ -289,12 +292,12 @@ def build_season_nfo(
     poster = _poster_url(item, season_candidates(season.raw, config))
     if poster:
         _text(root, "thumb", poster, aspect="poster")
-    if ids:
-        _text(root, "tvdbid", ids.get("tvdb"))
-        _text(root, "imdbid", ids.get("imdb"))
-        _text(root, "tmdbid", ids.get("tmdb"))
-    if "tmdb" in ids:
-        _text(root, "uniqueid", ids["tmdb"], type="tmdb")
+    if show_ids:
+        _text(root, "tvdbid", show_ids.get("tvdb"))
+        _text(root, "imdbid", show_ids.get("imdb"))
+        _text(root, "tmdbid", show_ids.get("tmdb"))
+    if "tmdb" in show_ids:
+        _text(root, "uniqueid", show_ids["tmdb"], type="tmdb")
     _text(root, "premiered", item.release_date)
     if config.output.nfo_write_lockdata:
         _text(root, "lockdata", "true")
@@ -307,6 +310,7 @@ def build_episode_nfo(
     season: _Season,
     episode: Item,
     config: TvScrapeConfig,
+    show_ids: dict[str, str],
 ) -> bytes:
     output = config.output
     show_extra = json.loads(layout.show.fields)
@@ -320,7 +324,7 @@ def build_episode_nfo(
     _text(root, "episode", episode.index_number)
     _text(root, "displayseason", -1)
     _text(root, "displayepisode", -1)
-    if ids or _external_ids(session, layout.show):
+    if ids or show_ids:
         _text(root, "id")
     if "tmdb" in ids:
         _text(root, "uniqueid", ids["tmdb"], default="true", type="tmdb")
@@ -364,6 +368,7 @@ def write_show_files(
 ) -> WriteReport:
     """写出一部剧的全部文件并记进 media_files。只 flush，调用方提交。"""
     layout = show_layout(session, show)
+    show_ids = _external_ids(session, show)
     owners = [show.id] + [s.item.id for s in layout.seasons]
     owners += [e.item.id for s in layout.seasons for e in s.episodes]
     targets: list[Target] = []
@@ -404,7 +409,7 @@ def write_show_files(
                 Target(
                     folder / "season.nfo",
                     "nfo",
-                    content=build_season_nfo(session, layout, season, config),
+                    content=build_season_nfo(session, layout, season, config, show_ids),
                     owner=season.item.id,
                 )
             )
@@ -414,7 +419,9 @@ def write_show_files(
                 Target(
                     Path(f"{stem}.nfo"),
                     "nfo",
-                    content=build_episode_nfo(session, layout, season, episode.item, config),
+                    content=build_episode_nfo(
+                        session, layout, season, episode.item, config, show_ids
+                    ),
                     owner=episode.item.id,
                 )
             )

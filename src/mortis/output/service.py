@@ -31,8 +31,16 @@ if TYPE_CHECKING:
 type ArrangeConfig = MovieScrapeConfig | TvScrapeConfig
 
 
+NOT_ARRANGED = "这种类型不整理"
+
+
+def arranges(config: AppConfig, data_type_id: str) -> bool:
+    """只有电影、电视剧、动漫写 NFO 和重命名；插件类型不整理。"""
+    return isinstance(type_config(config, data_type_id), MovieScrapeConfig | TvScrapeConfig)
+
+
 def arrange_config(config: AppConfig, data_type_id: str) -> ArrangeConfig:
-    """插件类型不写 NFO、不重命名；预览按电影模板算，界面上不给它们整理。"""
+    """插件类型不整理（见 arranges），这里给它们电影的设置只为调用方不用判空。"""
     section = type_config(config, data_type_id)
     if isinstance(section, MovieScrapeConfig | TvScrapeConfig):
         return section
@@ -60,8 +68,12 @@ def write_for(
 def _video_owner(item_id: Any) -> Any:
     """视频挂在这个条目上，或挂在它下面的集上。item_id 可以是外层查询的 Item.id。"""
     season, episode = aliased(Item), aliased(Item)
-    seasons = select(season.id).where(season.parent_id == item_id, season.kind == "season")
-    episodes = select(episode.id).where(episode.parent_id.in_(seasons))
+    episodes = (
+        select(episode.id)
+        .join(season, episode.parent_id == season.id)
+        .where(season.parent_id == item_id, season.kind == "season")
+        .correlate_except(season, episode)
+    )
     return (MediaFile.item_id == item_id) | MediaFile.item_id.in_(episodes)
 
 
@@ -121,6 +133,8 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     folder: str | None = None
     with ctx.services.locks.hold("catalog-write"), ctx.session_factory() as session:
         item = _work(session, item_id)
+        if not arranges(ctx.services.config_store.load_config(), item.data_type_id):
+            raise TaskError(NOT_ARRANGED)
         config = config_for(ctx.services, item)
         title = item.title
         library_id, data_type_id = item.library_id, item.data_type_id
@@ -207,8 +221,11 @@ def rewrite_if_arranged(
         enqueue_arrange(session, runner, work_id, **options)
 
 
-def arrangeable_items(session: Session, library_id: int) -> list[int]:
-    """整库整理只管有视频的电影和剧：刮削过的，或手动条目。"""
+def arrangeable_items(session: Session, library_id: int, config: AppConfig) -> list[int]:
+    """整库整理只管有视频的电影和剧：刮削过的，或手动条目。插件类型的库一个也不管。"""
+    library = session.get(Library, library_id)
+    if library is None or not arranges(config, library.data_type_id):
+        return []
     return list(
         session.scalars(
             select(Item.id)
@@ -228,7 +245,7 @@ def handle_arrange_library(payload: dict[str, Any], ctx: TaskContext) -> TaskRes
     with ctx.services.locks.hold(f"library:{library_id}"), ctx.session_factory() as session:
         if session.get(Library, library_id) is None:
             raise TaskError("媒体库不存在，可能已被删除")
-        ids = arrangeable_items(session, library_id)
+        ids = arrangeable_items(session, library_id, ctx.services.config_store.load_config())
     ctx.log(f"排了 {len(ids)} 个整理任务")
     return TaskResult(
         result={"queued": len(ids)},

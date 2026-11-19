@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
-from mortis.db.models import Item, MediaFile, Task, utc_now
+from mortis.db.models import Item, Library, MediaFile, Task, utc_now
+from mortis.items.identity import create_manual_work
 from mortis.output.service import arrangeable_items
 from mortis.settings import Settings
 from tests.fakes import FakeTmdb
@@ -460,7 +461,44 @@ def test_library_arrange_counts_manual_not_unscraped(
     assert listed["count"] == 1
     assert [row["item_id"] for row in listed["previews"]] == [manual]
     with app.state.session_factory() as session:
-        assert arrangeable_items(session, files["library"]) == [manual]
+        config = app.state.config_store.load_config()
+        assert arrangeable_items(session, files["library"], config) == [manual]
+
+
+def test_manual_movie_without_date_has_no_empty_brackets(
+    client: TestClient, app: FastAPI, files: dict[str, int], tmp_path: Path
+) -> None:
+    _rename_movies(app)
+    item_id = _manual(client, files["cd1"], "手动片")
+    preview = client.get(f"/api/items/{item_id}/arrange-preview").json()
+    assert preview["folder_to"] == str(tmp_path / "电影" / "手动片")
+    assert client.post(f"/api/items/{item_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+    assert (tmp_path / "电影" / "手动片" / "手动片.cd1.mp4").is_file()
+
+
+def test_library_arrange_ignores_shows_in_other_libraries(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    """一个库里没有视频的作品，不因为另一个库有视频挂在集上的剧就被算进去。"""
+    movies = _library(client, tmp_path / "电影", "movie")
+    with app.state.session_factory() as session:
+        library = session.get(Library, movies)
+        empty = create_manual_work(session, library, "没有视频")
+        session.commit()
+        empty_id = empty.id
+    root = tmp_path / "剧"
+    show = root / "某剧"
+    show.mkdir(parents=True)
+    shows = _library(client, root, "tv")
+    ids = _add_files(app, shows, {"e1": (show / "Show.S01E01.mkv", "video")})
+    show_id = _manual(client, ids["e1"], "某剧")
+    with app.state.session_factory() as session:
+        config = app.state.config_store.load_config()
+        assert empty_id not in arrangeable_items(session, movies, config)
+        assert arrangeable_items(session, movies, config) == []
+        assert arrangeable_items(session, shows, config) == [show_id]
+    assert client.get(f"/api/libraries/{movies}/arrange-preview").json()["count"] == 0
 
 
 def test_manual_galgame_is_not_arranged(client: TestClient, app: FastAPI, tmp_path: Path) -> None:
@@ -470,9 +508,29 @@ def test_manual_galgame_is_not_arranged(client: TestClient, app: FastAPI, tmp_pa
     item_id = _manual(client, ids["game"], "同人小游戏")
     preview = client.get(f"/api/items/{item_id}/arrange-preview")
     assert preview.status_code == 422
-    assert preview.json()["detail"] == "这个条目没有视频文件"
+    assert preview.json()["detail"] == "这种类型不整理"
     assert client.get(f"/api/libraries/{library}/arrange-preview").json()["count"] == 0
     assert sorted(p.name for p in root.rglob("*")) == ["同人小游戏"]
+
+
+def test_plugin_type_with_video_is_not_arranged(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "游戏"
+    library = _library(client, root, "galgame")
+    (root / "某游戏").mkdir(parents=True)
+    ids = _add_files(app, library, {"op": (root / "某游戏" / "op.mp4", "video")})
+    item_id = _manual(client, ids["op"], "某游戏")
+    for response in (
+        client.get(f"/api/items/{item_id}/arrange-preview"),
+        client.post(f"/api/items/{item_id}/arrange"),
+    ):
+        assert response.status_code == 422
+        assert response.json()["detail"] == "这种类型不整理"
+    assert client.get(f"/api/libraries/{library}/arrange-preview").json()["count"] == 0
+    with app.state.session_factory() as session:
+        config = app.state.config_store.load_config()
+        assert arrangeable_items(session, library, config) == []
 
 
 def test_manual_show_arranges_and_writes_nfo(

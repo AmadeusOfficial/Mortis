@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from mortis.db.models import Item, ItemExternalId, ItemSourceRecord, MediaFile, utc_now
+from mortis.output.service import arrangeable_items, has_video
 from mortis.rename.template import render
 from mortis.rename.tv_plan import _episode_numbers
 from tests.test_scrape_tv import EPISODE, _run, _scrape, app, fake, root, show_id
@@ -170,6 +171,24 @@ def test_library_arrange_covers_shows(app: FastAPI, show_id: int, root: Path) ->
     assert (preview["count"], len(preview["previews"])) == (1, 1)
     assert _run(app, "arrange_library", {"library_id": library_id}).status == "succeeded"
     assert (root / SHOW / "Season 1").is_dir()
+
+
+def test_library_arrange_counts_show_with_videos_only_on_episodes(
+    app: FastAPI, show_id: int
+) -> None:
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        library_id = session.get(Item, show_id).library_id  # type: ignore[union-attr]
+        extras = session.scalars(
+            select(MediaFile).where(MediaFile.item_id == show_id, MediaFile.file_kind == "video")
+        ).all()
+        assert extras
+        for row in extras:
+            session.delete(row)
+        session.commit()
+        config = app.state.config_store.load_config()
+        assert has_video(session, show_id)
+        assert arrangeable_items(session, library_id, config) == [show_id]
 
 
 def test_tv_colon_keeps_fullwidth() -> None:

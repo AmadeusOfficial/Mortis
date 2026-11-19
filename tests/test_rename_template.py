@@ -131,6 +131,19 @@ def test_tokens_export() -> None:
     )
 
 
+def test_empty_brackets_removed() -> None:
+    assert render("${title} (${year})", {"title": "某片"}, space="", colon="-") == "某片"
+    assert render("${title} (${year})", {"title": "某片", "year": "2024"}, space="", colon="-") == (
+        "某片 (2024)"
+    )
+    assert render("${title} (${year})", {"title": "某片"}, space=".", colon="-") == "某片"
+    assert render(FOLDER_TEMPLATE, {"title": "Lord of War"}, space=".", colon="-") == "Lord.of.War"
+    template = "${title} [ ${edition} ] {${tmdb}} (${year})"
+    assert render(template, {"title": "某片", "year": "2024"}, space="", colon="-") == (
+        "某片 (2024)"
+    )
+
+
 def test_plex_tmdb_marker() -> None:
     template = "${title} (${year}) ${{tmdb-,tmdb,}}"
     tokens = {"title": "低俗小说", "year": "1994", "tmdb": "680"}

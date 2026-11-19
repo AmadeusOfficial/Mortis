@@ -17,6 +17,8 @@ TOKENS = (
 _IDENT = re.compile(r"[A-Za-z][A-Za-z0-9]*\Z")
 _FORBIDDEN = '<>"\\/|?*'
 _SEPARATORS = ".-_"
+# 照 TMM：变量为空留下的空括号去掉。
+_EMPTY_BRACKETS = re.compile(r"\(\s*\)|\[\s*\]|\{\s*\}")
 _DEVICE_NAMES = (
     {"CON", "PRN", "AUX", "NUL"}
     | {f"COM{index}" for index in range(1, 10)}
@@ -130,7 +132,8 @@ def render(
         original = template[start : end + 1]
         pieces.append(_expand(template[start + 2 : end], original, tokens, colon, colons))
         index = end + 1
-    text = " ".join("".join(pieces).split())
+    text = _EMPTY_BRACKETS.sub("", "".join(pieces))
+    text = " ".join(text.split())
     if space:
         text = text.replace(" ", space)
     text = _collapse(text, space)

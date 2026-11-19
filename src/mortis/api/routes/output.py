@@ -13,10 +13,12 @@ from mortis.db.models import Item, MediaFile
 from mortis.items.edit import ItemError
 from mortis.items.identity import is_manual
 from mortis.output.service import (
+    NOT_ARRANGED,
     ArrangeConfig,
     arrange_config,
     arrange_steps,
     arrangeable_items,
+    arranges,
     config_for,
     enqueue_arrange,
     has_video,
@@ -25,6 +27,7 @@ from mortis.output.service import (
 )
 from mortis.output.tv import show_layout
 from mortis.rename.plan import RenamePlan
+from mortis.services import Services
 from mortis.tasks import repo as task_repo
 
 router = APIRouter(prefix="/api")
@@ -56,8 +59,10 @@ class LibraryArrangePreview(BaseModel):
     previews: list[ArrangePreview]
 
 
-def _arrangeable(session: Session, item_id: int) -> Item:
+def _arrangeable(session: Session, item_id: int, services: Services) -> Item:
     item = get_item(session, item_id)
+    if not arranges(services.config_store.load_config(), item.data_type_id):
+        raise ItemError(NOT_ARRANGED)
     if item.kind != "work":
         raise ItemError("系列电影没有自己的文件，季和集跟着剧一起整理")
     if not has_video(session, item.id):
@@ -101,7 +106,7 @@ def _preview(session: Session, item: Item, config: ArrangeConfig) -> ArrangePrev
 
 @router.get("/items/{item_id}/arrange-preview", response_model=ArrangePreview)
 def preview_item(item_id: int, session: SessionDep, services: ServicesDep) -> ArrangePreview:
-    item = _arrangeable(session, item_id)
+    item = _arrangeable(session, item_id, services)
     return _preview(session, item, config_for(services, item))
 
 
@@ -109,7 +114,7 @@ def preview_item(item_id: int, session: SessionDep, services: ServicesDep) -> Ar
 def arrange_item(
     item_id: int, session: SessionDep, runner: RunnerDep, services: ServicesDep
 ) -> Enqueued:
-    item = _arrangeable(session, item_id)
+    item = _arrangeable(session, item_id, services)
     preview = _preview(session, item, config_for(services, item))
     if preview.problems:
         raise ItemError("；".join(preview.problems))
@@ -121,8 +126,9 @@ def preview_library(
     library_id: int, session: SessionDep, services: ServicesDep
 ) -> LibraryArrangePreview:
     library = libraries.get_library(session, library_id)
-    config = arrange_config(services.config_store.load_config(), library.data_type_id)
-    ids = arrangeable_items(session, library.id)
+    app_config = services.config_store.load_config()
+    config = arrange_config(app_config, library.data_type_id)
+    ids = arrangeable_items(session, library.id, app_config)
     rename, write = arrange_steps(session, -1, config, {})
     previews = []
     if rename:
