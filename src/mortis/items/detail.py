@@ -204,19 +204,30 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
     by_id = {e.id: e for e in episodes}
     covered: set[tuple[int | None, int | None]] = set()
     owners: set[int] = set()
-    for item_id, path in session.execute(
-        select(MediaFile.item_id, MediaFile.path).where(
-            MediaFile.item_id.in_(by_id), MediaFile.file_kind == "video"
+    ep_files: dict[int, list[dict[str, Any]]] = {}
+    for f in session.scalars(
+        select(MediaFile)
+        .where(
+            MediaFile.item_id.in_(by_id),
+            MediaFile.file_kind.in_(("video", "subtitle", "game")),
+        )
+        .order_by(
+            case({"video": 0, "subtitle": 1, "game": 2}, value=MediaFile.file_kind, else_=3),
+            MediaFile.path,
         )
     ):
-        episode = by_id[item_id]
-        owners.add(item_id)
-        stem = os.path.splitext(os.path.basename(path))[0]
-        parsed = parse_episode(stem, os.path.basename(os.path.dirname(path)))
-        first = episode.index_number or 0
-        offset = first - parsed.episodes[0] if parsed else 0
-        for number in parsed.episodes if parsed else (first,):
-            covered.add((episode.parent_id, number + offset))
+        ep_files.setdefault(f.item_id, []).append(
+            {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size}
+        )
+        if f.file_kind == "video":
+            episode = by_id[f.item_id]
+            owners.add(f.item_id)
+            stem = os.path.splitext(os.path.basename(f.path))[0]
+            parsed = parse_episode(stem, os.path.basename(os.path.dirname(f.path)))
+            first = episode.index_number or 0
+            offset = first - parsed.episodes[0] if parsed else 0
+            for number in parsed.episodes if parsed else (first,):
+                covered.add((episode.parent_id, number + offset))
     thumbs = _first_images(session, [e.id for e in episodes], "thumb")
     by_season: dict[int, list[dict[str, Any]]] = {s.id: [] for s in seasons}
     show_missing = show_missing_episodes(session, show, True)
@@ -235,6 +246,7 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
                 "has_file": has_file,
                 "playable": episode.id in owners,
                 "still_url": image_url(thumbs.get(episode.id)),
+                "files": ep_files.get(episode.id, []),
             }
         )
     return [

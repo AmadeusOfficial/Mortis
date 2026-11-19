@@ -101,6 +101,7 @@ class EpisodeOut(BaseModel):
     playable: bool = False
     """视频绑在这一集上。连播的两集共用一个文件时，只有绑定的那集能直接播放。"""
     still_url: str | None
+    files: list[FileOut] = []
 
 
 class SeasonOut(BaseModel):

@@ -118,6 +118,19 @@ def _seed_tv(data_dir: Path, tmp_path: Path) -> tuple[Settings, dict[str, int]]:
                 updated_at=now,
             )
         )
+        sub = tmp_path / "anime" / "ep01.ass"
+        sub.write_bytes(b"s")
+        session.add(
+            MediaFile(
+                library_id=library.id,
+                item_id=ep1.id,
+                path=str(sub),
+                file_kind="subtitle",
+                size=128,
+                created_at=now,
+                updated_at=now,
+            )
+        )
         session.commit()
         ids = {"show": show.id, "s1": s1.id, "s2": s2.id, "ep1": ep1.id}
     return settings, ids
@@ -132,6 +145,7 @@ def test_season_detail_includes_show_seasons_episode_meta_and_fanart_fallback(tm
         ep1 = show_res["seasons"][0]["episodes"][0]
         assert ep1["overview"] == "小新去买东西"
         assert ep1["runtime"] == 25
+        assert [f["file_kind"] for f in ep1["files"]] == ["video", "subtitle"]
 
         season_res = client.get(f"/api/items/{ids['s1']}").json()
         assert season_res["kind"] == "season"

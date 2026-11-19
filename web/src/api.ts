@@ -579,6 +579,7 @@ export interface EpisodeInfo {
   // 视频绑在这一集上，可以直接播放；连播两集共用文件时只有绑定的那集是 true。
   playable: boolean;
   still_url: string | null;
+  files?: { id: number; path: string; file_kind: string; size: number | null }[];
 }
 
 export interface SeasonInfo {

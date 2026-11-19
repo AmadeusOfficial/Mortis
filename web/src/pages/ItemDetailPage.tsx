@@ -5,9 +5,7 @@ import {
   Button,
   Loader,
   Menu,
-  Paper,
   SimpleGrid,
-  Tabs,
   Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -49,7 +47,11 @@ import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonDetailView } from "../components/episodes/SeasonDetailView";
-import { SeasonGrid } from "../components/episodes/SeasonGrid";
+import {
+  SeasonGrid,
+  formatSeasonHeading,
+  sortSeasons,
+} from "../components/episodes/SeasonGrid";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { Pill, ratingText, sourceLabel } from "../components/ui";
@@ -927,15 +929,99 @@ export function ItemDetailPage() {
       ))
     );
 
+  const seasonFileGroups = isWork && series
+    ? sortSeasons(detail.seasons)
+        .map((season) => ({
+          season,
+          entries: season.episodes.flatMap((ep) =>
+            (ep.files ?? []).map((file) => ({ episode: ep, file })),
+          ),
+        }))
+        .filter((group) => group.entries.length > 0)
+    : [];
+  const totalFileCount =
+    isWork && series
+      ? seasonFileGroups.reduce((sum, g) => sum + g.entries.length, 0)
+      : sourceFiles.length;
+  const filledFieldsCount = allFields.filter(
+    (field) => !isEmpty(field.value),
+  ).length;
+
   const filesTab =
-    sourceFiles.length === 0 ? (
-      <div className={classes.empty}>
-        {detail.seasons.length > 0
-          ? "文件在各集里，点开一集查看"
-          : "没有关联的文件"}
-      </div>
+    isWork && series ? (
+      seasonFileGroups.length === 0 ? (
+        <div className={classes.empty}>还没有绑定到集的文件</div>
+      ) : (
+        <div className={classes.fileGroups}>
+          {seasonFileGroups.map(({ season, entries }) => (
+            <div key={season.id} className={classes.section}>
+              {sectionHead(
+                formatSeasonHeading(season),
+                <small className="mo-mono">{entries.length} 个文件</small>,
+              )}
+              <div className={classes.fileList}>
+                {entries.map(({ episode, file }) => (
+                  <div key={file.id} className={classes.file}>
+                    <span className={`${classes.fileEpTag} mo-mono`}>
+                      {episode.number !== null
+                        ? `E${String(episode.number).padStart(2, "0")}`
+                        : "SP"}
+                    </span>
+                    <span
+                      className={`${classes.fileIcon} ${file.file_kind === "video" ? "" : classes.minor}`}
+                    >
+                      {FILE_KIND_ICONS[file.file_kind] ?? <IconFile size={16} />}
+                    </span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className={classes.path}>{file.path}</div>
+                      <Text size="xs" c="dimmed" mt={2}>
+                        {episode.number !== null
+                          ? `第 ${episode.number} 集 `
+                          : ""}
+                        {episode.title} · {FILE_KIND_LABELS[file.file_kind]} ·{" "}
+                        {formatSize(file.size)}
+                      </Text>
+                    </div>
+                    <div className={classes.fileTools}>
+                      {file.file_kind === "video" && episode.playable && (
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`播放第 ${episode.number ?? "?"} 集`}
+                          title="播放"
+                          loading={player.playingId === episode.id}
+                          onClick={() =>
+                            player.play(
+                              episode.id,
+                              `第 ${episode.number ?? "?"} 集 ${episode.title}`,
+                            )
+                          }
+                        >
+                          <IconPlay size={15} />
+                        </ActionIcon>
+                      )}
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        aria-label="在资源管理器中显示"
+                        title="在资源管理器中显示"
+                        loading={reveal.isPending && reveal.variables === file.id}
+                        onClick={() => reveal.mutate(file.id)}
+                      >
+                        <IconFolder size={16} />
+                      </ActionIcon>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    ) : sourceFiles.length === 0 ? (
+      <div className={classes.empty}>没有关联的文件</div>
     ) : (
-      <Paper withBorder radius="lg" style={{ overflow: "hidden" }}>
+      <div className={classes.fileList}>
         {sourceFiles.map((file) => (
           <div key={file.id} className={classes.file}>
             <span
@@ -961,48 +1047,43 @@ export function ItemDetailPage() {
             </ActionIcon>
           </div>
         ))}
-      </Paper>
+      </div>
     );
 
-  const panel = (
-    <aside className={classes.panel} aria-label="资料">
-      <div className={classes.panelHead}>
-        <h3>资料</h3>
-        <Text size="xs" c="dimmed" ml="auto">
-          {allFields.filter((field) => !isEmpty(field.value)).length} /{" "}
-          {allFields.length} 项有值
-        </Text>
-      </div>
+  const detailsTab = (
+    <div className={classes.detailsWrap}>
       {panelSections.map((section) => (
-        <div key={section.name}>
+        <div key={section.name} className={classes.section}>
           {panelSections.length > 1 && (
             <div className={classes.group}>{section.name}</div>
           )}
-          {section.fields.map((field) => (
-            <div
-              key={field.key}
-              className={`${classes.kv} ${classes.hoverRow}`}
-            >
-              <span className={classes.kvLabel}>{field.label}</span>
-              <div className={classes.kvValue}>
-                {field.value_type === "tags" &&
-                Array.isArray(field.value) &&
-                field.value.length > 0 ? (
-                  <TagsValue tags={field.value as string[]} />
-                ) : (
-                  <FieldValue field={field} />
-                )}
+          <div className={classes.kvGrid}>
+            {section.fields.map((field) => (
+              <div
+                key={field.key}
+                className={`${classes.kv} ${classes.hoverRow}`}
+              >
+                <span className={classes.kvLabel}>{field.label}</span>
+                <div className={classes.kvValue}>
+                  {field.value_type === "tags" &&
+                  Array.isArray(field.value) &&
+                  field.value.length > 0 ? (
+                    <TagsValue tags={field.value as string[]} />
+                  ) : (
+                    <FieldValue field={field} />
+                  )}
+                </div>
+                {actions(field)}
               </div>
-              {actions(field)}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ))}
       <div className={classes.hint}>
         <IconInfo size={14} />
         手改的字段会自动锁定，再次刮削不覆盖。
       </div>
-    </aside>
+    </div>
   );
 
   const modals = (
@@ -1126,6 +1207,8 @@ export function ItemDetailPage() {
     );
   }
 
+  const activeTab = tab ?? "overview";
+
   return (
     <div className={classes.pageRoot}>
       <PageBackdrop url={backdropUrl} />
@@ -1135,40 +1218,90 @@ export function ItemDetailPage() {
       {hero}
       {player.chooser}
       <div className={classes.body}>
-        <Tabs value={tab} onChange={setTab} keepMounted={false}>
-          <Tabs.List mb="lg">
-            <Tabs.Tab value="overview">概览</Tabs.Tab>
-            <Tabs.Tab value="people">
-              演职员{" "}
-              {peopleCount > 0 && (
-                <span className="mo-mono">{peopleCount}</span>
-              )}
-            </Tabs.Tab>
-            <Tabs.Tab value="images">
-              图片{" "}
-              <span className="mo-mono">
-                {imagesFilled}/{imageFields.length}
+        <nav className={classes.tabBar} role="tablist" aria-label="详情分页">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "overview"}
+            className={`${classes.tabBtn} ${
+              activeTab === "overview" ? classes.tabBtnActive : ""
+            }`}
+            onClick={() => setTab("overview")}
+          >
+            概览
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "details"}
+            className={`${classes.tabBtn} ${
+              activeTab === "details" ? classes.tabBtnActive : ""
+            }`}
+            onClick={() => setTab("details")}
+          >
+            资料{" "}
+            <span className={`${classes.tabCount} mo-mono`}>
+              {filledFieldsCount}/{allFields.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "people"}
+            className={`${classes.tabBtn} ${
+              activeTab === "people" ? classes.tabBtnActive : ""
+            }`}
+            onClick={() => setTab("people")}
+          >
+            演职员{" "}
+            {peopleCount > 0 && (
+              <span className={`${classes.tabCount} mo-mono`}>
+                {peopleCount}
               </span>
-            </Tabs.Tab>
-            <Tabs.Tab value="files">
-              文件{" "}
-              {sourceFiles.length > 0 && (
-                <span className="mo-mono">{sourceFiles.length}</span>
-              )}
-            </Tabs.Tab>
-          </Tabs.List>
-          <Tabs.Panel value="overview">{overviewTab}</Tabs.Panel>
-          <Tabs.Panel value="people">{peopleTab}</Tabs.Panel>
-          <Tabs.Panel value="images">
-            {imageFields.length === 0 ? (
-              <div className={classes.empty}>这个类型没有图片字段</div>
-            ) : (
-              <div className={classes.images}>{imageFields.map(imageSlot)}</div>
             )}
-          </Tabs.Panel>
-          <Tabs.Panel value="files">{filesTab}</Tabs.Panel>
-        </Tabs>
-        {panel}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "images"}
+            className={`${classes.tabBtn} ${
+              activeTab === "images" ? classes.tabBtnActive : ""
+            }`}
+            onClick={() => setTab("images")}
+          >
+            图片{" "}
+            <span className={`${classes.tabCount} mo-mono`}>
+              {imagesFilled}/{imageFields.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "files"}
+            className={`${classes.tabBtn} ${
+              activeTab === "files" ? classes.tabBtnActive : ""
+            }`}
+            onClick={() => setTab("files")}
+          >
+            文件{" "}
+            {totalFileCount > 0 && (
+              <span className={`${classes.tabCount} mo-mono`}>
+                {totalFileCount}
+              </span>
+            )}
+          </button>
+        </nav>
+
+        {activeTab === "overview" && overviewTab}
+        {activeTab === "details" && detailsTab}
+        {activeTab === "people" && peopleTab}
+        {activeTab === "images" &&
+          (imageFields.length === 0 ? (
+            <div className={classes.empty}>这个类型没有图片字段</div>
+          ) : (
+            <div className={classes.images}>{imageFields.map(imageSlot)}</div>
+          ))}
+        {activeTab === "files" && filesTab}
       </div>
       {modals}
     </div>

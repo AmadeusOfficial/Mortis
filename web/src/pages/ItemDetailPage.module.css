@@ -130,20 +130,59 @@
   backdrop-filter: blur(6px);
 }
 
-/* 下方两栏 */
+/* 单栏主体 + 无框胶囊 Tab 栏 */
 .body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 24px;
-  margin-top: 22px;
-  align-items: start;
+  margin-top: 8px;
 }
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--mo-dim);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.tabBtn:hover {
+  color: var(--mo-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tabBtnActive {
+  color: var(--mo-text);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.tabCount {
+  font-size: 11.5px;
+  opacity: 0.72;
+}
+
 @media (max-width: 75em) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .heroInner {
-    padding: 40px 18px 20px;
+    padding: 16px 0 18px;
     gap: 18px;
   }
   .poster {
@@ -249,7 +288,7 @@
   text-overflow: ellipsis;
 }
 
-/* 图片格 */
+/* 图片格（轻柔毛玻璃） */
 .images {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -258,8 +297,8 @@
 .slot {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--mo-line);
-  background: var(--mo-surface);
+  background: rgba(19, 25, 36, 0.48);
+  backdrop-filter: blur(10px);
 }
 .slotPic {
   aspect-ratio: 16 / 10;
@@ -267,7 +306,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--mo-bg);
+  background: rgba(255, 255, 255, 0.03);
 }
 .slotPic img {
   max-width: 100%;
@@ -323,16 +362,42 @@
   gap: 6px;
 }
 
-/* 文件 */
+/* 文件（无框圆角行） */
+.fileGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .file {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--mo-line);
+  align-items: center;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 10px;
+  transition: background-color 120ms ease;
 }
-.file:last-child {
-  border-bottom: 0;
+.file:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+.fileEpTag {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--mo-dim);
+  white-space: nowrap;
+}
+.fileTools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .fileIcon {
   width: 32px;
@@ -346,55 +411,48 @@
 }
 .fileIcon.minor {
   color: var(--mo-dim);
-  background: var(--mo-surface-2);
+  background: rgba(255, 255, 255, 0.07);
 }
 .path {
   font-family: var(--mantine-font-family-monospace);
-  font-size: 12px;
+  font-size: 12.5px;
   word-break: break-all;
 }
 
-/* 右侧资料栏 */
-.panel {
-  position: sticky;
-  top: 20px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(19, 25, 36, 0.58);
-  backdrop-filter: blur(14px);
-  overflow: hidden;
-}
-.panelHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--mo-line);
-}
-.panelHead h3 {
-  font-size: 15px;
-  font-weight: 700;
+/* 资料 Tab（无框双列键值对） */
+.detailsWrap {
+  max-width: 1120px;
 }
 .group {
-  padding: 10px 16px 4px;
-  font-size: 11px;
+  margin-bottom: 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--mo-muted);
-  background: var(--mo-surface-2);
-  border-bottom: 1px solid var(--mo-line);
+}
+.kvGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 36px;
+}
+@media (max-width: 56em) {
+  .kvGrid {
+    grid-template-columns: 1fr;
+  }
 }
 .kv {
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) auto;
-  gap: 0 10px;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 0 12px;
   align-items: start;
-  padding: 9px 16px;
-  border-bottom: 1px solid var(--mo-line);
-  font-size: 13px;
+  padding: 9px 12px;
+  margin: 0 -12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  transition: background-color 120ms ease;
 }
 .kv:hover {
-  background: var(--mo-surface-2);
+  background: rgba(255, 255, 255, 0.055);
 }
 .kvLabel {
   color: var(--mo-muted);
@@ -425,7 +483,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  margin-top: 18px;
   font-size: 12px;
   color: var(--mo-muted);
 }
