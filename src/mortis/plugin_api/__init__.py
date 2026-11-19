@@ -38,25 +38,63 @@ from pydantic import BaseModel, ConfigDict
 
 # 字段目录的两个类型定义在宿主的 catalog 模块里；作者只从本模块引用。
 from mortis.catalog.spec import DataTypeSpec, FieldSpec
+from mortis.plugin_api.events import (
+    AnyEvent,
+    ArrangeFinished,
+    Event,
+    EventType,
+    ItemCreated,
+    PlayStarted,
+    ScanFinished,
+    ScrapeFailed,
+    ScrapeFinished,
+    ScrapeStarted,
+    TaskFailed,
+)
+from mortis.plugin_api.hooks import (
+    HookError,
+    HookHost,
+    HookLimitError,
+    HookPermissionError,
+    ItemView,
+    TagResult,
+)
 
 __all__ = [
     "Account",
+    "AnyEvent",
+    "ArrangeFinished",
     "DataTypePlugin",
     "DataTypeSpec",
+    "Event",
+    "EventType",
     "FieldSpec",
     "Hit",
+    "HookError",
+    "HookHost",
+    "HookLimitError",
+    "HookPermissionError",
     "HookPlugin",
     "Host",
+    "ItemCreated",
+    "ItemView",
     "NoSecrets",
     "NoSettings",
     "OAuth",
     "PlayerError",
     "PlayerHost",
+    "PlayStarted",
     "PlayerPlugin",
     "Plugin",
+    "ScanFinished",
+    "ScrapeFailed",
+    "ScrapeFinished",
+    "ScrapeStarted",
     "SourceAuthError",
     "SourceError",
     "SourcePlugin",
+    "TagResult",
+    "TaskFailed",
 ]
 
 
@@ -275,18 +313,21 @@ class PlayerPlugin(ABC):
 
 
 class HookPlugin(ABC):
-    """事件钩子扩展点（预留）。宿主在库提交成功之后发布事件，处理函数不能中断或改写宿主流程。
+    """事件钩子扩展点。宿主在库提交成功之后发布事件，处理函数不能中断或改写宿主流程。
 
-    订阅哪个事件、限定哪些数据类型、要写什么，都写在 plugin.toml 的 `[[hooks]]` 里；
-    代码里的对象只用 id 和清单对上。事件对象和 HookHost 由事件钩子的运行时补全，
+    订阅哪个事件（必须是 `EventType` 里有的）、限定哪些数据类型、要写什么权限，都写在
+    plugin.toml 的 `[[hooks]]` 里（一个钩子对象订阅一个事件）；代码里的对象只用 id 和清单对上。
     `on_event(host, event)` 的两个槽位固定不变，新增的上下文挂在 host 或 event 的属性上。
+
+    钩子在后台任务里运行：同一个插件同时只跑一个，连续失败几次会被自动停用；
+    超时只记录，宿主不会强行结束它。钩子里不再产生事件，钩子失败也不触发 `task.failed`。
     """
 
     id: ClassVar[str]
     name: ClassVar[str]
 
     @abstractmethod
-    def on_event(self, host: Any, event: Any) -> None: ...
+    def on_event(self, host: HookHost, event: Event) -> None: ...
 
 
 @dataclass(frozen=True)

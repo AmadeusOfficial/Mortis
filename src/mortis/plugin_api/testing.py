@@ -7,13 +7,23 @@
     assert host.requests[0].url == "https://api.example/search"
 """
 
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
 from mortis.plugin_api import NoSecrets, NoSettings, PlayerError
+from mortis.plugin_api.hooks import (
+    DEFAULT_LIMITS,
+    HookBudget,
+    HookLimits,
+    ItemView,
+    TagResult,
+    require_tag_permission,
+)
 
 __all__ = ["FakeHookHost", "FakeHost", "FakePlayerHost", "FakeRequest"]
 
@@ -114,14 +124,117 @@ class FakePlayerHost:
 
 @dataclass
 class FakeHookHost:
-    """事件钩子拿到的宿主的占位，由事件钩子的运行时（HookHost）实现后补全。
+    """事件钩子拿到的宿主，规则和真宿主一致：写权限、锁定字段、只能删自己加的标签、
+    用户删除过的标签补不回来、每次事件的额度。一个实例对应一次事件。
 
-    现在只有设置和日志；补全时在这里加上只读的条目视图、标签增删，并记下调用，
-    规则（权限、锁定字段、只能删自己加的标签）和真宿主保持一致。
+    - `writes`：清单里声明的权限，比如 `("tags:keyword",)`，默认什么都不能写。
+    - `items`：库里的条目视图，`add_tags` 和 `remove_tags` 会同步更新它们的 `tags`。
+    - `locked_kinds`：字段被锁定的标签类别，对它们的写入整批跳过。
+    - `removed_by_user`：用户手动删除过的 `(条目 id, 标签类别, 标签名)`。
+    - `responses`：联网用的假响应，规则同 `FakeHost`。
+    - `added`：本插件加过的标签 `{(条目 id, 标签类别): [名字]}`；`tag_calls` 记下每次调用。
     """
 
     settings: BaseModel = field(default_factory=NoSettings)
+    writes: tuple[str, ...] = ()
+    items: dict[int, ItemView] = field(default_factory=dict)
+    locked_kinds: set[str] = field(default_factory=set)
+    removed_by_user: set[tuple[int, str, str]] = field(default_factory=set)
+    responses: dict[str, Response] = field(default_factory=dict)
+    limits: HookLimits = DEFAULT_LIMITS
+    data_dir: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="mortis-hook-")))
+    requests: list[FakeRequest] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
+    added: dict[tuple[int, str], list[str]] = field(default_factory=dict)
+    tag_calls: list[tuple[str, int, str, list[str]]] = field(default_factory=list)
+    budget: HookBudget = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.budget = HookBudget(self.limits)
 
     def log(self, message: str) -> None:
         self.logs.append(message)
+
+    def get_item(self, item_id: int) -> ItemView | None:
+        self.budget.spend_read()
+        return self.items.get(item_id)
+
+    def add_tags(self, item_id: int, tag_kind: str, names: list[str]) -> TagResult:
+        require_tag_permission(self.writes, tag_kind)
+        wanted = list(dict.fromkeys(name for name in self.budget.spend_tags(names) if name))
+        self.tag_calls.append(("add", item_id, tag_kind, wanted))
+        if tag_kind in self.locked_kinds:
+            return TagResult(locked=tuple(wanted))
+        mine = self.added.setdefault((item_id, tag_kind), [])
+        applied: list[str] = []
+        unchanged: list[str] = []
+        removed: list[str] = []
+        for name in wanted:
+            if (item_id, tag_kind, name) in self.removed_by_user:
+                removed.append(name)
+            elif name in mine:
+                unchanged.append(name)
+            else:
+                mine.append(name)
+                applied.append(name)
+        self._show(item_id, tag_kind, add=applied)
+        return TagResult(
+            applied=tuple(applied), unchanged=tuple(unchanged), removed_by_user=tuple(removed)
+        )
+
+    def remove_tags(self, item_id: int, tag_kind: str, names: list[str]) -> TagResult:
+        require_tag_permission(self.writes, tag_kind)
+        wanted = list(dict.fromkeys(name for name in self.budget.spend_tags(names) if name))
+        self.tag_calls.append(("remove", item_id, tag_kind, wanted))
+        if tag_kind in self.locked_kinds:
+            return TagResult(locked=tuple(wanted))
+        mine = self.added.get((item_id, tag_kind), [])
+        applied = [name for name in wanted if name in mine]
+        for name in applied:
+            mine.remove(name)
+        self._show(item_id, tag_kind, drop=applied)
+        return TagResult(
+            applied=tuple(applied), not_owned=tuple(n for n in wanted if n not in applied)
+        )
+
+    def _show(
+        self, item_id: int, tag_kind: str, *, add: Sequence[str] = (), drop: Sequence[str] = ()
+    ) -> None:
+        view = self.items.get(item_id)
+        if view is None:
+            return
+        shown = [name for name in view.tags.get(tag_kind, ()) if name not in drop]
+        shown += [name for name in add if name not in shown]
+        tags = {**view.tags, tag_kind: tuple(shown)}
+        self.items[item_id] = view.model_copy(update={"tags": tags})
+
+    def _answer(self, request: FakeRequest) -> Any:
+        self.budget.spend_http()
+        self.requests.append(request)
+        if request.url not in self.responses:
+            raise AssertionError(f"没登记这个请求的响应：{request.method} {request.url}")
+        answer = self.responses[request.url]
+        if callable(answer):
+            answer = answer(request)
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    def get_json(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        return self._answer(FakeRequest("GET", url, params=params, headers=headers))
+
+    def post_json(
+        self,
+        url: str,
+        *,
+        json: Any = None,
+        data: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        return self._answer(FakeRequest("POST", url, json=json, data=data, headers=headers))

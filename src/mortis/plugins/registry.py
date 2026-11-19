@@ -8,6 +8,7 @@
 
 import ast
 import logging
+import re
 import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -27,6 +28,8 @@ from mortis.plugin_api import (
     Plugin,
     SourcePlugin,
 )
+from mortis.plugin_api.events import event_model
+from mortis.plugins.hook_state import HookHealth, HookStatus
 from mortis.plugins.loader import (
     Manifest,
     ManifestHook,
@@ -78,11 +81,32 @@ class PluginInfo:
     def active(self) -> bool:
         return self.enabled and (self.plugin is not None or self.package is not None)
 
+    @property
+    def subscriptions(self) -> tuple[str, ...]:
+        """订阅的事件名（去重，按声明顺序），设置页显示用。"""
+        return tuple(dict.fromkeys(entry.event for entry in self.hooks))
+
+    @property
+    def hook_writes(self) -> tuple[str, ...]:
+        """各钩子声明的写权限（去重），设置页显示用。"""
+        return tuple(dict.fromkeys(w for entry in self.hooks for w in entry.writes))
+
     def provides(self, capability: Capability) -> bool:
         return capability in self.capabilities
 
 
+@dataclass(frozen=True)
+class Subscriber:
+    """订阅了某个事件的钩子：所在包 id、钩子对象、清单里的声明（事件、数据类型、权限）。"""
+
+    plugin_id: str
+    hook: HookPlugin
+    entry: ManifestHook
+
+
 FILE_KINDS = frozenset({"video", "game"})
+WRITE_PERMISSION = re.compile(r"tags:[a-z][a-z0-9_]*")
+"""钩子能声明的写权限。现在只有标签：`tags:<标签类别>`。"""
 
 
 def _ordered(found: Iterable[str]) -> tuple[Capability, ...]:
@@ -283,6 +307,15 @@ def _validate_package(manifest: Manifest, package: Plugin) -> _Content:
     _check_listed("sources", [e.id for e in manifest.sources], [s.id for s in sources])
     _check_listed("players", [e.id for e in manifest.players], [p.id for p in players])
     _check_listed("hooks", [e.id for e in manifest.hooks], [h.id for h in hooks])
+    for hook_entry in manifest.hooks:
+        if event_model(hook_entry.event) is None:
+            raise PluginLoadError(f"钩子 {hook_entry.id} 订阅了不存在的事件「{hook_entry.event}」")
+        for permission in hook_entry.writes:
+            if not WRITE_PERMISSION.fullmatch(permission):
+                raise PluginLoadError(
+                    f"钩子 {hook_entry.id} 声明了不认识的权限「{permission}」，"
+                    "现在只支持 tags:<标签类别>"
+                )
     return _Content(tuple(sources), tuple(players), tuple(hooks), data_type, False)
 
 
@@ -504,6 +537,8 @@ class PluginRegistry:
         self.folders = list(folders)
         self._guard = threading.Lock()
         self._plugins: dict[str, PluginInfo] = {}
+        self._off: set[str] = set()
+        self.health = HookHealth()
 
     def load(self, disabled: Iterable[str] = ()) -> None:
         """后面的目录按整个插件包覆盖同 primary id 的插件（父 + 全部子来源一起换）。
@@ -525,6 +560,11 @@ class PluginRegistry:
                 self._place_folder(packages, owners, folder, origin, off)
         with self._guard:
             self._plugins = {info.id: info for infos in packages.values() for info in infos}
+            self._off = set(off)
+        # 熔断后写进了 disabled；用户把它从名单里去掉再重新加载，就是重新启用。
+        for hook_id in self.health.tripped_ids():
+            if hook_id not in off:
+                self.health.reset(hook_id)
 
     @staticmethod
     def _place_folder(
@@ -571,14 +611,50 @@ class PluginRegistry:
         with self._guard:
             return sorted(self._plugins.values(), key=_sort_key)
 
+    def hook_disabled(self, hook_id: str) -> bool:
+        """钩子单独被停用：设置文件的 `[plugins] disabled` 里有它，或者运行中熔断了。"""
+        return hook_id in self._off or self.health.tripped(hook_id)
+
     def hooks(self) -> list[tuple[str, HookPlugin]]:
-        """启用的包带的钩子，每项是 (包 id, 钩子对象)。事件运行时从这里取。"""
+        """启用的包带的、没被单独停用的钩子，每项是 (包 id, 钩子对象)。事件运行时从这里取。"""
         return [
             (info.id, hook)
             for info in self.all()
             if info.active and info.package is not None
             for hook in info.package.hooks
+            if not self.hook_disabled(hook.id)
         ]
+
+    def hook_status(self, hook_id: str) -> HookStatus:
+        """设置页用：这个钩子是否停用、为什么、连续失败几次。"""
+        return self.health.status(hook_id, off=hook_id in self._off)
+
+    def subscribers(self, event_type: str, data_type: str) -> list[Subscriber]:
+        """订阅了这个事件、并且数据类型对得上的钩子。
+
+        钩子清单里 data_types 为空表示不限；写了名单时，事件没有数据类型也不投递。
+        """
+        found: list[Subscriber] = []
+        for info in self.all():
+            if not info.active or info.package is None:
+                continue
+            declared = {entry.id: entry for entry in info.hooks}
+            for hook in info.package.hooks:
+                entry = declared.get(hook.id)
+                if entry is None or entry.event != event_type or self.hook_disabled(hook.id):
+                    continue
+                if entry.data_types and data_type not in entry.data_types:
+                    continue
+                found.append(Subscriber(info.id, hook, entry))
+        return found
+
+    def disable_hook(self, hook_id: str) -> None:
+        """进程内立即停用；写进设置文件由调用方做。"""
+        self._off.add(hook_id)
+
+    def enable_hook(self, hook_id: str) -> None:
+        self._off.discard(hook_id)
+        self.health.reset(hook_id)
 
     def get(self, plugin_id: str) -> PluginInfo | None:
         with self._guard:
