@@ -98,7 +98,7 @@ def test_unknown_event_is_rejected_at_load(tmp_path: Path) -> None:
     assert registry.hooks() == []
 
 
-@pytest.mark.parametrize("permission", ["items:write", "tags:", "tags:Genre", "sql"])
+@pytest.mark.parametrize("permission", ["items:write", "tags", "tags:", "tags:Genre", "sql"])
 def test_unknown_write_permission_is_rejected_at_load(tmp_path: Path, permission: str) -> None:
     registry = _load(
         tmp_path,
@@ -160,6 +160,14 @@ def test_success_resets_consecutive_failures(tmp_path: Path) -> None:
 
 def _view(**tags: tuple[str, ...]) -> ItemView:
     return ItemView(id=1, title="黑客帝国", year=1999, tags=tags)
+
+
+@pytest.mark.parametrize("writes", [("tags",), ("tags:keyword", "tags:")])
+def test_fake_host_rejects_permission_the_real_host_would_not_load(
+    writes: tuple[str, ...],
+) -> None:
+    with pytest.raises(ValueError, match="tags:<标签类别>"):
+        FakeHookHost(writes=writes)
 
 
 def test_fake_host_requires_declared_write_permission() -> None:

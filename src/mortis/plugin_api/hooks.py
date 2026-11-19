@@ -74,6 +74,15 @@ DEFAULT_LIMITS = HookLimits()
 _TAG_KIND = re.compile(r"[a-z][a-z0-9_]*")
 
 
+WRITE_PERMISSION = re.compile(r"tags:[a-z][a-z0-9_]*")
+"""清单 `writes` 里一项合法的写法。只写 `tags` 不行：插件会因为权限写法不对而加载失败。"""
+
+
+def unknown_permissions(writes: Collection[str]) -> list[str]:
+    """`writes` 里写法不对的项。"""
+    return [item for item in writes if not WRITE_PERMISSION.fullmatch(item)]
+
+
 def require_tag_permission(writes: Collection[str], tag_kind: str) -> None:
     """写 `tag_kind` 类标签要在清单里声明 `tags:<tag_kind>`。"""
     if not _TAG_KIND.fullmatch(tag_kind) or f"tags:{tag_kind}" not in writes:

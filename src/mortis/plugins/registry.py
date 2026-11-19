@@ -8,7 +8,6 @@
 
 import ast
 import logging
-import re
 import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -29,6 +28,7 @@ from mortis.plugin_api import (
     SourcePlugin,
 )
 from mortis.plugin_api.events import event_model
+from mortis.plugin_api.hooks import WRITE_PERMISSION
 from mortis.plugins.hook_state import HookHealth, HookStatus
 from mortis.plugins.loader import (
     Manifest,
@@ -105,8 +105,6 @@ class Subscriber:
 
 
 FILE_KINDS = frozenset({"video", "game"})
-WRITE_PERMISSION = re.compile(r"tags:[a-z][a-z0-9_]*")
-"""钩子能声明的写权限。现在只有标签：`tags:<标签类别>`。"""
 
 
 def _ordered(found: Iterable[str]) -> tuple[Capability, ...]:

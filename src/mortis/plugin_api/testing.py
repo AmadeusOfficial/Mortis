@@ -23,6 +23,7 @@ from mortis.plugin_api.hooks import (
     ItemView,
     TagResult,
     require_tag_permission,
+    unknown_permissions,
 )
 
 __all__ = ["FakeHookHost", "FakeHost", "FakePlayerHost", "FakeRequest"]
@@ -150,6 +151,12 @@ class FakeHookHost:
     budget: HookBudget = field(init=False)
 
     def __post_init__(self) -> None:
+        bad = unknown_permissions(self.writes)
+        if bad:
+            raise ValueError(
+                f"writes 里的「{bad[0]}」写法不对：真宿主会因此拒绝加载这个插件，"
+                "钩子一次也不会运行。要写成 tags:<标签类别>，比如 tags:keyword"
+            )
         self.budget = HookBudget(self.limits)
 
     def log(self, message: str) -> None:
