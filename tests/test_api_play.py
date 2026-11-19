@@ -370,7 +370,7 @@ def test_plugins_list_shows_player_status(
 ) -> None:
     plugins = {plugin["id"]: plugin for plugin in client.get("/api/plugins").json()}
     fake = plugins["fake_player"]
-    assert fake["kind"] == "player"
+    assert fake["capabilities"] == ["player"] and fake["members"] == []
     assert fake["available"] is True and fake["notice"] is None
     assert fake["detected_path"] == str(fake_player)
     assert fake["settings"] == {"executable": str(fake_player)}

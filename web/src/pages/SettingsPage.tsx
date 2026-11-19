@@ -11,7 +11,14 @@ import { useMediaQuery } from "@mantine/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { type DataType, checkTmdb, fetchPlugins, fetchSecretsStatus, fetchSettings } from "../api";
+import {
+  type DataType,
+  checkTmdb,
+  fetchPlugins,
+  fetchSecretsStatus,
+  fetchSettings,
+  providesAlone,
+} from "../api";
 import type { LoginResult } from "../components/PluginsSection";
 import { PluginsSection, SourcePluginSettings } from "../components/PluginsSection";
 import {
@@ -195,7 +202,7 @@ export function SettingsPage() {
           available: builtinSources.data?.find((source) => source.id === entry.id)?.available,
         })),
         ...(plugins.data ?? [])
-          .filter((plugin) => plugin.kind === "source")
+          .filter((plugin) => providesAlone(plugin, "source"))
           .map((plugin) => ({
             key: `source.${plugin.id}`,
             label: plugin.name,

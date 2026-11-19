@@ -22,12 +22,14 @@ import {
   type DataType,
   type JsonSchema,
   type JsonSchemaProperty,
+  type PluginCapability,
   type PluginInfo,
   fetchDataTypes,
   fetchPluginAccount,
   fetchPlugins,
   logoutPlugin,
   pluginLoginUrl,
+  providesAlone,
   reloadPlugins,
   updatePlugin,
 } from "../api";
@@ -37,11 +39,26 @@ import { PathPicker } from "./PathPicker";
 import { SettingCard, SettingRow } from "./settings/SettingLayout";
 import { Pill } from "./ui";
 
-const KIND_LABELS: Record<PluginInfo["kind"], string> = {
+const CAPABILITY_LABELS: Record<PluginCapability, string> = {
   data_type: "数据类型",
   source: "来源",
   player: "播放",
+  hook: "事件钩子",
 };
+
+// 去哪里改这一条的设置：来源在「来源」，播放在「播放」或它所属数据类型的页面。
+// 带成员的包只是容器，设置在它的成员上。
+function settingsPath(plugin: PluginInfo, parentPlugin: PluginInfo | undefined): string | null {
+  if (providesAlone(plugin, "source")) {
+    return `/settings?section=source.${plugin.id}`;
+  }
+  if (providesAlone(plugin, "player")) {
+    return parentPlugin?.capabilities.includes("data_type")
+      ? `/settings?section=type.${parentPlugin.data_type ?? parentPlugin.id}`
+      : "/settings?section=playback";
+  }
+  return null;
+}
 
 const ORIGIN_LABELS: Record<PluginInfo["origin"], string> = {
   builtin: "自带",
@@ -230,6 +247,7 @@ function PluginRow({
   // 前缀，字符串比较去不了重，所以只要父有 error 就当作同一个问题，不在子行重复报。
   const showError =
     plugin.error !== null && (parentPlugin === undefined || parentPlugin.error === null);
+  const settingsTarget = settingsPath(plugin, parentPlugin);
   return (
     <>
       <Group
@@ -249,15 +267,22 @@ function PluginRow({
                 <span className="mo-mono">{plugin.version}</span>
               </Pill>
             )}
-            <Pill tone={plugin.kind === "source" ? "accent" : "neutral"}>
-              {KIND_LABELS[plugin.kind]}
-            </Pill>
+            {plugin.capabilities.map((capability) => (
+              <Pill key={capability} tone={capability === "source" ? "accent" : "neutral"}>
+                {CAPABILITY_LABELS[capability]}
+              </Pill>
+            ))}
             <Pill tone="neutral">{ORIGIN_LABELS[plugin.origin]}</Pill>
           </Group>
           {/* 顶层来源才标数据类型；缩进在分组里的子来源已经一目了然，不重复。 */}
-          {plugin.kind === "source" && parentPlugin === undefined && (
+          {providesAlone(plugin, "source") && parentPlugin === undefined && (
             <Text size="xs" c="var(--mo-muted)">
               服务的数据类型：{typeName(plugin.data_type)}
+            </Text>
+          )}
+          {plugin.hooks.length > 0 && (
+            <Text size="xs" c="var(--mo-muted)">
+              订阅事件：{plugin.hooks.map((hook) => hook.event).join("、")}
             </Text>
           )}
           {parentDisabled && (
@@ -267,19 +292,8 @@ function PluginRow({
           )}
         </Stack>
         <Group gap="md" wrap="nowrap" style={{ flexShrink: 0 }}>
-          {(plugin.kind === "source" || plugin.kind === "player") && (
-            <Anchor
-              component={Link}
-              to={
-                plugin.kind !== "player"
-                  ? `/settings?section=source.${plugin.id}`
-                  : parentPlugin !== undefined
-                    ? `/settings?section=type.${parentPlugin.data_type ?? parentPlugin.id}`
-                    : "/settings?section=playback"
-              }
-              size="sm"
-              fw={600}
-            >
+          {settingsTarget !== null && (
+            <Anchor component={Link} to={settingsTarget} size="sm" fw={600}>
               去设置
             </Anchor>
           )}

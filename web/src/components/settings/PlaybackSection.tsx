@@ -2,7 +2,7 @@ import { Alert, Anchor, Select, Stack, Text } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId } from "react";
 import { Link } from "react-router";
-import type { PluginInfo } from "../../api";
+import { type PluginInfo, providesAlone } from "../../api";
 import styles from "../../pages/SettingsPage.module.css";
 import { PluginSettingsForm, usePlugins } from "../PluginsSection";
 import { Pill } from "../ui";
@@ -27,7 +27,7 @@ function isReady(plugin: PluginInfo): boolean {
 
 // 这一页只管视频播放器；启动游戏的播放插件（如 Galgame 启动）放在它所属数据类型的设置页。
 export function playsVideo(plugin: PluginInfo): boolean {
-  return plugin.kind === "player" && (plugin.file_kinds ?? ["video"]).includes("video");
+  return providesAlone(plugin, "player") && (plugin.file_kinds ?? ["video"]).includes("video");
 }
 
 // 播放：选默认的播放插件，各播放插件的路径设置和可用状态。只调用本机播放器，不在网页里播。
@@ -37,7 +37,7 @@ export function PlaybackSection() {
   const { saved, draft, setDraft, save, settings } = useSection("playback", "播放设置");
   const selectId = useId();
   const hintId = useId();
-  const players = (plugins.data ?? []).filter((plugin) => plugin.kind === "player");
+  const players = (plugins.data ?? []).filter((plugin) => providesAlone(plugin, "player"));
   const videoPlayers = players.filter(playsVideo);
 
   if (settings.isError || plugins.isError) {

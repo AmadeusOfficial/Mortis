@@ -274,11 +274,24 @@ export interface JsonSchema {
   properties?: Record<string, JsonSchemaProperty>;
 }
 
+export type PluginCapability = "data_type" | "source" | "player" | "hook";
+
+export interface PluginHook {
+  id: string;
+  event: string;
+  data_types: string[];
+  writes: string[];
+}
+
 export interface PluginInfo {
   id: string;
   name: string;
   version: string;
-  kind: "data_type" | "source" | "player";
+  // 这一条提供什么，可以是任意组合；没加载的简写插件是粗读的结果。
+  capabilities: PluginCapability[];
+  // 这个包带的来源和播放条目的 id；没有成员的才是自己带设置和开关的条目。
+  members: string[];
+  hooks: PluginHook[];
   origin: "builtin" | "user";
   enabled: boolean;
   error: string | null;
@@ -304,6 +317,11 @@ export interface PluginInfo {
   detected_path: string | null;
   // 只有播放插件有：能打开哪种本地文件，如 video、game。
   file_kinds: string[] | null;
+}
+
+// 自己带设置和开关、并且提供某种能力的条目；带成员的包只是容器，不算。
+export function providesAlone(plugin: PluginInfo, capability: PluginCapability): boolean {
+  return plugin.members.length === 0 && plugin.capabilities.includes(capability);
 }
 
 export interface PluginAccount {

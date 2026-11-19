@@ -237,7 +237,7 @@ def test_api_lists_bundled_player_with_parent(tmp_path: Path) -> None:
     with TestClient(app, base_url=LOCAL) as client:
         plugins = {plugin["id"]: plugin for plugin in client.get("/api/plugins").json()}
         launcher = plugins["doujin_launcher"]
-        assert launcher["kind"] == "player" and launcher["parent"] == "doujin"
+        assert launcher["capabilities"] == ["player"] and launcher["parent"] == "doujin"
         assert launcher["file_kinds"] == ["game"]
         assert plugins["system_player"]["file_kinds"] == ["video"]
 

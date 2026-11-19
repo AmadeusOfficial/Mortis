@@ -12,6 +12,7 @@ import {
   fetchPlugins,
   fetchSettings,
   fetchSources,
+  providesAlone,
   saveTypeSettings,
   typeSection,
 } from "../../api";
@@ -279,7 +280,7 @@ function TypePlayers({ pluginId }: { pluginId: string }) {
   const queryClient = useQueryClient();
   const plugins = useQuery({ queryKey: ["plugins"], queryFn: fetchPlugins });
   const players = (plugins.data ?? []).filter(
-    (plugin) => plugin.kind === "player" && plugin.parent === pluginId,
+    (plugin) => providesAlone(plugin, "player") && plugin.parent === pluginId,
   );
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["plugins"] });
   return players.map((plugin) => (
@@ -346,7 +347,7 @@ function TypeSources({ dataTypeId }: { dataTypeId: string }) {
           )}
           {plugins.isSuccess &&
             plugins.data.filter(
-              (plugin) => plugin.kind === "source" && plugin.data_type === dataTypeId,
+              (plugin) => providesAlone(plugin, "source") && plugin.data_type === dataTypeId,
             ).length === 0 && (
               <div className={styles.cardBody}>
                 <Text size="sm" c="var(--mo-dim)">
@@ -355,7 +356,7 @@ function TypeSources({ dataTypeId }: { dataTypeId: string }) {
               </div>
             )}
           {plugins.data
-            ?.filter((plugin) => plugin.kind === "source" && plugin.data_type === dataTypeId)
+            ?.filter((plugin) => providesAlone(plugin, "source") && plugin.data_type === dataTypeId)
             .map((plugin) => {
               const reason = !plugin.enabled
                 ? "已停用"

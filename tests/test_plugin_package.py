@@ -4,9 +4,12 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from mortis.api.app import create_app
 from mortis.plugin_api import HookPlugin, Plugin, SourcePlugin
 from mortis.plugins.registry import PluginRegistry
+from mortis.settings import Settings
 
 HEADER = """
 from mortis.plugin_api import Hit, HookPlugin, PlayerPlugin, Plugin, SourcePlugin
@@ -248,3 +251,27 @@ def test_hook_object_must_be_hook_plugin(tmp_path: Path) -> None:
 def test_plugin_api_exports_package_types() -> None:
     assert Plugin().sources == () and Plugin().hooks == ()
     assert issubclass(HookPlugin, object)
+
+
+def test_api_lists_combined_package_by_capabilities(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    _write(builtin, "combo", TOML, FULL)
+    app = create_app(Settings(data_dir=tmp_path / "data", plugins_dir=builtin), start_worker=False)
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        listed = {item["id"]: item for item in client.get("/api/plugins").json()}
+        assert "kind" not in listed["me.combo"]
+        assert listed["me.combo"]["capabilities"] == ["source", "player", "hook"]
+        assert sorted(listed["me.combo"]["members"]) == ["me.play", "me.src"]
+        assert listed["me.combo"]["hooks"] == [
+            {"id": "me.hook", "event": "scrape.finished", "data_types": [], "writes": []}
+        ]
+        assert listed["me.src"]["capabilities"] == ["source"]
+        assert listed["me.src"]["data_type"] == "movie" and listed["me.src"]["members"] == []
+        assert listed["me.play"]["capabilities"] == ["player"]
+        assert listed["me.play"]["available"] is True
+        # 组合包里的来源和播放各自能开关。
+        off = client.put("/api/plugins/me.play", json={"enabled": False}).json()
+        assert off["enabled"] is False
+        after = {item["id"]: item for item in client.get("/api/plugins").json()}
+        assert after["me.src"]["enabled"] is True and after["me.play"]["enabled"] is False
+        assert after["me.play"]["capabilities"] == ["player"]

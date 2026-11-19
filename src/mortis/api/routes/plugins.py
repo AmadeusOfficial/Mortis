@@ -29,13 +29,23 @@ PLAYER_HOST_KEYS = frozenset({EXECUTABLES})
 """播放插件设置里由宿主写的键，设置页不显示，保存设置时保留原值。"""
 
 
+class HookOut(BaseModel):
+    id: str
+    event: str
+    data_types: list[str]
+    writes: list[str]
+
+
 class PluginOut(BaseModel):
     id: str
     name: str
     version: str
-    kind: str
-    """过渡字段，前端改按 capabilities 之后去掉。"""
+    # 这一条提供什么：data_type、source、player、hook 的任意组合。
     capabilities: list[str] = []
+    # 这个包带的来源和播放条目的 id；没有成员的才是自己带设置和开关的叶子。
+    members: list[str] = []
+    # 清单里声明的事件钩子。
+    hooks: list[HookOut] = []
     origin: str
     enabled: bool
     error: str | None
@@ -76,20 +86,18 @@ def _secret_keys(plugin: SourcePlugin) -> list[str]:
     return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
 
 
-def _legacy_kind(info: PluginInfo) -> str:
-    for kind in ("data_type", "player", "source"):
-        if kind in info.capabilities:
-            return kind
-    return "source"
-
-
 def _out(services: Services, info: PluginInfo) -> PluginOut:
     out = PluginOut(
         id=info.id,
         name=info.name,
         version=info.version,
-        kind=_legacy_kind(info),
         capabilities=list(info.capabilities),
+        members=[item.id for item in services.plugins.all() if item.parent == info.id],
+        hooks=[
+            HookOut(id=h.id, event=h.event, data_types=list(h.data_types), writes=list(h.writes))
+            for h in info.hooks
+        ],
+        data_type=info.data_type,
         origin=info.origin,
         enabled=info.enabled,
         error=info.error,
