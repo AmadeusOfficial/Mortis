@@ -188,8 +188,21 @@ export function SeasonDetailView({
     );
   };
 
+  const backdropUrl =
+    detail.fanart_url ?? detail.poster_url ?? detail.show?.poster_url ?? null;
+
   return (
     <div className={classes.root}>
+      {backdropUrl !== null && (
+        <div className={classes.backdropWrap} aria-hidden="true">
+          <div
+            className={classes.backdropImg}
+            style={{ backgroundImage: `url("${backdropUrl}")` }}
+          />
+          <div className={classes.backdropScrim} />
+        </div>
+      )}
+
       {/* 顶部面包屑 + 切季栏 */}
       <div className={classes.topBar}>
         <nav className={classes.breadcrumb} aria-label="面包屑">
@@ -250,14 +263,8 @@ export function SeasonDetailView({
         )}
       </div>
 
-      {/* Linear 风格季 Hero 头图 */}
+      {/* 通透无框季 Hero 区 */}
       <section className={classes.hero}>
-        {detail.fanart_url !== null && (
-          <div
-            className={classes.heroBg}
-            style={{ backgroundImage: `url("${detail.fanart_url}")` }}
-          />
-        )}
         <div className={classes.heroInner}>
           <div className={classes.poster}>
             {detail.poster_url !== null ? (

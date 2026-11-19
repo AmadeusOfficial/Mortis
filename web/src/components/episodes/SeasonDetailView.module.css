@@ -1,5 +1,49 @@
 .root {
+  position: relative;
   max-width: 1480px;
+  isolation: isolate;
+}
+
+/* 全页背景图透视（参考 Emby） */
+.backdropWrap {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backdropImg {
+  position: absolute;
+  inset: -24px;
+  background-size: cover;
+  background-position: center 22%;
+  opacity: 0.34;
+  transform: scale(1.03);
+}
+
+.backdropScrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 85% 75% at 72% 24%,
+      transparent 0%,
+      color-mix(in srgb, var(--mo-bg) 55%, transparent) 62%,
+      var(--mo-bg) 100%
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--mo-bg) 92%, transparent) 0%,
+      color-mix(in srgb, var(--mo-bg) 62%, transparent) 42%,
+      color-mix(in srgb, var(--mo-bg) 32%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--mo-bg) 35%, transparent) 0%,
+      color-mix(in srgb, var(--mo-bg) 72%, transparent) 65%,
+      var(--mo-bg) 100%
+    );
 }
 
 .topBar {
@@ -42,8 +86,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--mo-surface);
-  border: 1px solid var(--mo-line);
+  background: rgba(14, 18, 26, 0.52);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 3px;
 }
@@ -94,65 +139,16 @@
   background-position: right 8px center;
 }
 
-/* Linear 风格季 Hero 头图 */
+/* 通透无框季 Hero 区 */
 .hero {
   position: relative;
-  border-radius: 14px;
-  border: 1px solid var(--mo-line);
-  background: var(--mo-surface);
-  overflow: hidden;
-  isolation: isolate;
   margin-bottom: 24px;
-}
-
-.heroBg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center 25%;
-  z-index: -2;
-}
-
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(
-      90deg,
-      var(--mo-bg) 0%,
-      color-mix(in srgb, var(--mo-bg) 82%, transparent) 42%,
-      color-mix(in srgb, var(--mo-bg) 35%, transparent) 78%,
-      color-mix(in srgb, var(--mo-bg) 55%, transparent) 100%
-    ),
-    linear-gradient(
-      0deg,
-      color-mix(in srgb, var(--mo-bg) 88%, transparent) 0%,
-      transparent 55%
-    );
-}
-
-.hero::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.14) 30%,
-    rgba(96, 165, 250, 0.35) 50%,
-    rgba(255, 255, 255, 0.14) 70%,
-    transparent
-  );
-  pointer-events: none;
 }
 
 .heroInner {
   display: flex;
-  gap: 24px;
-  padding: 28px 28px 24px;
+  gap: 28px;
+  padding: 12px 0 18px;
   align-items: flex-end;
 }
 
@@ -424,38 +420,35 @@
   font-size: 13px;
 }
 
-/* 纵向分集列表 */
+/* 无框通透纵向分集列表 */
 .epList {
-  border: 1px solid var(--mo-line);
-  border-radius: 12px;
-  background: var(--mo-surface);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .epRow {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--mo-line);
+  grid-template-columns: 184px minmax(0, 1fr) auto;
+  gap: 18px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 10px;
   align-items: center;
-  transition: background-color 120ms ease;
+  transition: background-color 140ms ease;
 }
 
 @media (max-width: 48em) {
   .epRow {
     grid-template-columns: 124px minmax(0, 1fr) auto;
     gap: 12px;
-    padding: 12px;
+    padding: 10px 8px;
+    margin: 0 -8px;
   }
 }
 
-.epRow:last-child {
-  border-bottom: 0;
-}
-
 .epRow:hover {
-  background: var(--mo-surface-2);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .epMissing {
@@ -626,6 +619,12 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.sideColumn :global(aside) {
+  background: rgba(19, 25, 36, 0.56);
+  backdrop-filter: blur(14px);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .imageBox {
