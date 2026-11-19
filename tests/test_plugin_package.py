@@ -263,18 +263,18 @@ def test_api_lists_combined_package_by_capabilities(tmp_path: Path) -> None:
         assert listed["me.combo"]["capabilities"] == ["source", "player", "hook"]
         assert sorted(listed["me.combo"]["members"]) == ["me.play", "me.src"]
         assert listed["me.combo"]["hooks"] == [
-        {
-            "id": "me.hook",
-            "event": "scrape.finished",
-            "data_types": [],
-            "writes": [],
-            "disabled": False,
-            "reason": None,
-            "failures": 0,
-            "last_error": None,
-            "runs": 0,
-        }
-    ]
+            {
+                "id": "me.hook",
+                "event": "scrape.finished",
+                "data_types": [],
+                "writes": [],
+                "disabled": False,
+                "reason": None,
+                "failures": 0,
+                "last_error": None,
+                "runs": 0,
+            }
+        ]
         assert listed["me.src"]["capabilities"] == ["source"]
         assert listed["me.src"]["data_type"] == "movie" and listed["me.src"]["members"] == []
         assert listed["me.play"]["capabilities"] == ["player"]
