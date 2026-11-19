@@ -349,6 +349,39 @@ def test_multi_episode_file_covers_every_episode(app: FastAPI, show_id: int, roo
         assert season["file_count"] == 5
 
 
+def test_long_season_keeps_undated_episodes_that_have_files(
+    app: FastAPI, show_id: int, root: Path, fake: FakeTmdb
+) -> None:
+    """长寿番后段在 TMDB 上没有播出日期：有文件的照样建集，没文件的不算已播出。"""
+    raw = copy.deepcopy(load_fixture("tv_80968_season_1.json"))
+    template = raw["episodes"][0]
+    raw["episodes"] = [
+        {
+            **template,
+            "id": 9_000_000 + n,
+            "episode_number": n,
+            "name": f"第{n}话",
+            "air_date": "2018-01-01" if n <= 1473 else None,
+            "still_path": None,
+        }
+        for n in range(1, 2491)
+    ]
+    fake.add("/3/tv/80968/season/1", raw)
+    folder = root / "毒枭：墨西哥" / "S01"
+    for n in range(4, 2485):
+        (folder / f"Narcos.Mexico.S01E{n:02d}.mp4").write_bytes(b"x")
+    with app.state.session_factory() as session:
+        library = session.scalars(select(Item.library_id).where(Item.id == show_id)).one()
+    assert _run(app, "organize", {"library_id": library}).status == "succeeded"
+
+    _scrape(app, show_id)
+    assert sorted(_tree(app, show_id)[1]) == list(range(1, 2485))
+    owners = _owners(app)
+    assert owners["Narcos.Mexico.S01E1000.mp4"] == ("episode", 1000)
+    assert owners["Narcos.Mexico.S01E1474.mp4"] == ("episode", 1474)
+    assert owners["Narcos.Mexico.S01E2484.mp4"] == ("episode", 2484)
+
+
 def test_season_gone_from_tmdb_is_dropped(app: FastAPI, show_id: int, fake: FakeTmdb) -> None:
     _scrape(app, show_id)
     assert 3 in _tree(app, show_id)
