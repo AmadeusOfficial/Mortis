@@ -243,7 +243,9 @@ def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -
             "第 1 季",
             show_id,
         )
-        assert season["collection"] is None and season["seasons"] == []
+        assert season["collection"] is None and [
+            s["number"] for s in season["seasons"]
+        ] == [1, 2, 3]
         episode = client.get(f"/api/items/{first['id']}").json()
         assert (episode["title"], episode["position"]) == ("卡美洛", "第 1 季 第 1 集")
         assert episode["show"]["title"] == "毒枭：墨西哥"
