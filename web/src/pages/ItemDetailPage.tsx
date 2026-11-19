@@ -47,7 +47,7 @@ import { useAgent } from "../components/agent/AgentContext";
 import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
-import { SeasonRails } from "../components/episodes/SeasonRail";
+import { SeasonGrid } from "../components/episodes/SeasonGrid";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
 import { Pill, ratingText, sourceLabel } from "../components/ui";
@@ -830,28 +830,18 @@ export function ItemDetailPage() {
           </SimpleGrid>
         </div>
       )}
-      {detail.seasons.length > 0 && (
+      {isWork && detail.seasons.length > 0 && (
         <div className={classes.section}>
-          {sectionHead("季和集", <small>{detail.seasons.length} 季</small>)}
-          <SeasonRails
+          {sectionHead("季", <small>{detail.seasons.length} 季</small>)}
+          <SeasonGrid
             seasons={detail.seasons}
-            renderEpisodeAction={(episode) =>
-              episode.playable ? (
-                <ActionIcon
-                  size={44}
-                  radius="xl"
-                  aria-label={`播放第 ${episode.number ?? "?"} 集 ${episode.title}`}
-                  loading={player.playingId === episode.id}
-                  onClick={() =>
-                    player.play(
-                      episode.id,
-                      `第 ${episode.number ?? "?"} 集 ${episode.title}`,
-                    )
-                  }
-                >
-                  <IconPlay size={20} />
-                </ActionIcon>
-              ) : null
+            showMissing={detail.show_missing_effective ?? true}
+            playingId={player.playingId}
+            onPlayEpisode={(episode) =>
+              player.play(
+                episode.id,
+                `第 ${episode.number ?? "?"} 集 ${episode.title}`,
+              )
             }
           />
         </div>

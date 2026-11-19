@@ -573,6 +573,8 @@ export interface EpisodeInfo {
   number: number | null;
   title: string;
   air_date: string | null;
+  overview?: string | null;
+  runtime?: number | null;
   has_file: boolean;
   // 视频绑在这一集上，可以直接播放；连播两集共用文件时只有绑定的那集是 true。
   playable: boolean;
