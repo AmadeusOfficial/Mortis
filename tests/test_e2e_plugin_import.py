@@ -133,6 +133,12 @@ def idle(base_url: str) -> bool:
     return all(row["status"] not in ("queued", "running") for row in rows)
 
 
+def open_details_tab(page: Page, base_url: str, item_id: int) -> None:
+    """详情页的标签在「资料」分页里，编辑按钮在字段行上，悬停时显示。"""
+    page.goto(f"{base_url}/items/{item_id}")
+    page.get_by_role("tab", name=re.compile("^资料")).click()
+
+
 def install_through_page(page: Page, zip_path: Path) -> None:
     page.set_input_files("input[type=file]", str(zip_path))
     dialog = page.get_by_role("dialog", name="导入插件")
@@ -195,7 +201,7 @@ def test_import_hook_tags_override_and_uninstall(
     wait_for(
         lambda: nfo.is_file() and "<tag>长片</tag>" in nfo.read_text(encoding="utf-8"), "NFO 有标签"
     )
-    page.goto(f"{base_url}/items/{item_id}")
+    open_details_tab(page, base_url, item_id)
     expect(page.get_by_text("长片", exact=True).first).to_be_visible(timeout=SLOW)
 
     api(base_url, "POST", f"/items/{item_id}/scrape", json={"force": True})
@@ -203,8 +209,10 @@ def test_import_hook_tags_override_and_uninstall(
     assert "长片" in keywords(base_url, item_id)
 
     # 用户在详情页手动删掉「长片」：再刮削不会被加回。
-    page.reload()
-    page.get_by_role("button", name="编辑标签").click()
+    open_details_tab(page, base_url, item_id)
+    edit_tags = page.get_by_role("button", name="编辑标签")
+    edit_tags.hover()
+    edit_tags.click()
     edit = page.get_by_role("dialog", name=re.compile("修改"))
     edit.locator(".mantine-Pill-root", has_text="长片").locator(".mantine-Pill-remove").click()
     edit.get_by_role("button", name="保存").click()
