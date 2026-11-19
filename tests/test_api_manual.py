@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
-from mortis.db.models import MediaFile, Task, utc_now
+from mortis.db.models import Item, MediaFile, Task, utc_now
 from mortis.settings import Settings
 from tests.fakes import FakeTmdb
 
@@ -204,3 +204,175 @@ def test_manual_galgame_binds_only_the_folder(
     scrape = client.post(f"/api/items/{item_id}/scrape")
     assert scrape.status_code == 422
     assert scrape.json()["detail"] == "手动条目没有来源编号，要刮削请先重新匹配"
+
+
+def _episodes(detail: dict[str, Any]) -> list[tuple[int, int, str, bool]]:
+    return [
+        (season["number"], episode["number"], episode["title"], episode["has_file"])
+        for season in detail["seasons"]
+        for episode in season["episodes"]
+    ]
+
+
+def _manual(client: TestClient, file_id: int, title: str) -> int:
+    response = client.post(f"/api/media-files/{file_id}/manual", json={"title": title})
+    assert response.status_code == 200, response.text
+    return response.json()["item_id"]
+
+
+def _owner(app: FastAPI, file_id: int) -> tuple[str, int | None, str]:
+    """文件挂在哪：(条目种类, 季号或集号, 标题)。"""
+    with app.state.session_factory() as session:
+        row = session.get(MediaFile, file_id)
+        item = session.get(Item, row.item_id)
+        return item.kind, item.index_number, item.title
+
+
+def test_manual_show_builds_seasons_and_episodes_from_numbers(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "某剧"
+    (show / "Season 2").mkdir(parents=True)
+    (root / "另一部").mkdir()
+    library = _library(client, root, "tv")
+    ids = _add_files(
+        app,
+        library,
+        {
+            "e1": (show / "Show.S01E01.mkv", "video"),
+            "e2": (show / "Show.S01E02.mkv", "video"),
+            "sub": (show / "Show.S01E01.zh.srt", "subtitle"),
+            "s2": (show / "Season 2" / "Show.S02E01.mkv", "video"),
+            "other": (root / "另一部" / "a.mkv", "video"),
+        },
+    )
+    response = client.post(f"/api/media-files/{ids['e2']}/manual", json={"title": "某剧"})
+    assert response.status_code == 200, response.text
+    item_id = response.json()["item_id"]
+
+    assert _owner(app, ids["e1"]) == ("episode", 1, "Show.S01E01")
+    assert _owner(app, ids["sub"]) == ("episode", 1, "Show.S01E01")
+    assert _owner(app, ids["e2"]) == ("episode", 2, "Show.S01E02")
+    assert _owner(app, ids["s2"]) == ("episode", 1, "Show.S02E01")
+    assert _names(client.get("/api/media-files/unmatched").json()) == ["另一部"]
+
+    detail = client.get(f"/api/items/{item_id}").json()
+    assert detail["is_manual"] is True
+    assert [(s["number"], s["title"]) for s in detail["seasons"]] == [
+        (1, "第 1 季"),
+        (2, "第 2 季"),
+    ]
+    assert _episodes(detail) == [
+        (1, 1, "Show.S01E01", True),
+        (1, 2, "Show.S01E02", True),
+        (2, 1, "Show.S02E01", True),
+    ]
+    season = client.get(f"/api/items/{detail['seasons'][0]['id']}").json()
+    assert season["is_manual"] is True
+    assert season["show"]["id"] == item_id
+    assert [s["number"] for s in season["seasons"]] == [1, 2]
+    episode_id = detail["seasons"][0]["episodes"][0]["id"]
+    episode = client.get(f"/api/items/{episode_id}").json()
+    assert episode["position"] == "第 1 季 第 1 集"
+    title = _field(episode, "title")
+    assert (title["source"], title["locked"]) == (None, False)
+
+
+def test_manual_show_without_numbers_counts_by_path(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "B站合集"
+    show.mkdir(parents=True)
+    library = _library(client, root, "tv")
+    ids = _add_files(
+        app,
+        library,
+        {
+            "c": (show / "P3 结尾.mp4", "video"),
+            "a": (show / "P1 开场.mp4", "video"),
+            "b": (show / "P2 正片.mp4", "video"),
+            "sub": (show / "P2 正片.srt", "subtitle"),
+        },
+    )
+    item_id = _manual(client, ids["c"], "B站合集")
+
+    assert _episodes(client.get(f"/api/items/{item_id}").json()) == [
+        (1, 1, "P1 开场", True),
+        (1, 2, "P2 正片", True),
+        (1, 3, "P3 结尾", True),
+    ]
+    assert _owner(app, ids["sub"]) == ("episode", 2, "P2 正片")
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("A.E01.mkv", "B.E01.mkv", "C.E02.mkv"),
+        ("A.S01E01.mkv", "B.第1集.mkv", "C.S01E02.mkv"),
+        ("A.S01E01.mkv", "B 没有集号.mkv", "C.S01E02.mkv"),
+    ],
+)
+def test_manual_show_falls_back_when_numbers_clash_or_missing(
+    client: TestClient, app: FastAPI, tmp_path: Path, names: tuple[str, str, str]
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "合集"
+    show.mkdir(parents=True)
+    library = _library(client, root, "tv")
+    ids = _add_files(app, library, {name: (show / name, "video") for name in names})
+    item_id = _manual(client, ids[names[0]], "合集")
+
+    detail = client.get(f"/api/items/{item_id}").json()
+    assert _episodes(detail) == [
+        (1, number, Path(name).stem, True) for number, name in enumerate(names, start=1)
+    ]
+
+
+def test_manual_show_in_library_root_takes_only_that_file(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    library = _library(client, root, "tv")
+    ids = _add_files(
+        app,
+        library,
+        {
+            "one": (root / "Loose.S01E03.mkv", "video"),
+            "two": (root / "Other.S01E01.mkv", "video"),
+        },
+    )
+    item_id = _manual(client, ids["one"], "散装")
+    assert _episodes(client.get(f"/api/items/{item_id}").json()) == [(1, 3, "Loose.S01E03", True)]
+    with app.state.session_factory() as session:
+        assert session.get(MediaFile, ids["two"]).item_id is None
+
+
+def test_manual_anime_lands_in_anime_library(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "动漫"
+    show = root / "[字幕组] 某番"
+    show.mkdir(parents=True)
+    library = _library(client, root, "anime")
+    ids = _add_files(
+        app,
+        library,
+        {
+            "e1": (show / "[字幕组] 某番 [01].mkv", "video"),
+            "e2": (show / "[字幕组] 某番 [02].mkv", "video"),
+        },
+    )
+    response = client.post(f"/api/media-files/{ids['e1']}/manual", json={"title": "某番"})
+    assert response.status_code == 200, response.text
+    detail = client.get(f"/api/items/{response.json()['item_id']}").json()
+    assert (detail["data_type_id"], detail["library_id"], detail["is_manual"]) == (
+        "anime",
+        library,
+        True,
+    )
+    assert _episodes(detail) == [
+        (1, 1, "[字幕组] 某番 [01]", True),
+        (1, 2, "[字幕组] 某番 [02]", True),
+    ]

@@ -12,10 +12,11 @@ from sqlalchemy.orm import Session
 
 from mortis.config.models import TvScrapeConfig
 from mortis.config.types import type_config
-from mortis.db.models import Item, MediaFile, utc_now
+from mortis.db.models import Item, MediaFile
 from mortis.items.missing import show_missing_episodes
+from mortis.items.seasons import bind_episodes, child
 from mortis.organize.episodes import parse_episode
-from mortis.organize.names import parse_name, subtitle_belongs_to
+from mortis.organize.names import parse_name
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
     SOURCE,
@@ -161,29 +162,6 @@ def _resolve(local: Local, show_raw: dict[str, Any]) -> dict[str, tuple[int, tup
     return resolved
 
 
-def _child(session: Session, parent: Item, kind: str, number: int) -> Item:
-    row = session.scalar(
-        select(Item).where(
-            Item.parent_id == parent.id, Item.kind == kind, Item.index_number == number
-        )
-    )
-    if row is None:
-        now = utc_now()
-        row = Item(
-            library_id=parent.library_id,
-            data_type_id=parent.data_type_id,
-            parent_id=parent.id,
-            kind=kind,
-            index_number=number,
-            title=f"第 {number} 季" if kind == "season" else f"第 {number} 集",
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(row)
-        session.flush()
-    return row
-
-
 def _write(
     session: Session,
     item: Item,
@@ -200,36 +178,6 @@ def _write(
         fields, candidates, order, image_skip(fields, locked, toggles, config.images)
     )
     write_plan(session, item, fields, plan, files)
-
-
-def _bind(session: Session, files: list[MediaFile], targets: dict[str, int], show_id: int) -> int:
-    """视频按季集号改挂到集，字幕跟同名视频走；对不上的留在剧上。返回挂上的视频数。"""
-    bound = 0
-    videos = {row.path: row for row in files if row.file_kind == "video"}
-    for path, row in videos.items():
-        target = targets.get(path, show_id)
-        bound += target != show_id
-        if row.item_id != target:
-            row.item_id = target
-            row.updated_at = utc_now()
-    stems = {os.path.splitext(path)[0]: row.item_id for path, row in videos.items()}
-    for row in files:
-        if row.file_kind != "subtitle":
-            continue
-        folder, name = os.path.split(row.path)
-        owner = next(
-            (
-                item_id
-                for stem, item_id in stems.items()
-                if os.path.dirname(stem) == folder
-                and subtitle_belongs_to(name, os.path.basename(stem))
-            ),
-            show_id,
-        )
-        if row.item_id != owner:
-            row.item_id = owner
-            row.updated_at = utc_now()
-    return bound
 
 
 def season_extras(
@@ -382,7 +330,7 @@ def scrape_show(
         kept_seasons: set[int] = set()
         episode_count = 0
         for season in seasons:
-            season_row = _child(session, show, "season", season.number)
+            season_row = child(session, show, "season", season.number)
             kept_seasons.add(season_row.id)
             if season.fetched:
                 save_snapshot(session, season_row.id, season.raw)
@@ -398,7 +346,7 @@ def scrape_show(
             )
             kept: set[int] = set()
             for number, values in season.episodes.items():
-                episode_row = _child(session, season_row, "episode", number)
+                episode_row = child(session, season_row, "episode", number)
                 kept.add(episode_row.id)
                 _write(
                     session,
@@ -415,10 +363,10 @@ def scrape_show(
                     save_external_ids(session, episode_row.id, {"tmdb": season.ids[number]})
             for path, (number, episodes) in local.items():
                 if number == season.number and episodes[0] in season.episodes:
-                    targets[path] = _child(session, season_row, "episode", episodes[0]).id
+                    targets[path] = child(session, season_row, "episode", episodes[0]).id
             _drop_stale(session, season_row.id, "episode", kept)
         files_on_show = _subtree_files(session, show.id)
-        bound = _bind(session, files_on_show, targets, show.id)
+        bound = bind_episodes(session, files_on_show, targets, show.id)
         session.flush()
         for season_id in session.scalars(
             select(Item.id).where(

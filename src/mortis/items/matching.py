@@ -23,6 +23,8 @@ from mortis.items.identity import (
     find_or_create_movie,
     find_or_create_work,
 )
+from mortis.items.seasons import bind_episodes, child
+from mortis.organize.episodes import parse_episode
 from mortis.organize.names import (
     ParsedName,
     clean_game_name,
@@ -227,6 +229,46 @@ def _siblings(session: Session, library: Library, media_file: MediaFile) -> list
     return same + subtitles
 
 
+def _show_files(session: Session, library: Library, media_file: MediaFile) -> list[MediaFile]:
+    """剧目录下所有未绑定的文件；直接放在库根目录的只取这一个。"""
+    folder = show_folder(library, media_file.path)
+    if folder is None:
+        return [media_file]
+    return [
+        row
+        for row in session.scalars(
+            select(MediaFile).where(MediaFile.library_id == library.id, MediaFile.item_id.is_(None))
+        )
+        if _in_folder(row.path, folder)
+    ]
+
+
+def _episode_numbers(paths: list[str]) -> dict[str, tuple[int, int]]:
+    """视频路径 → (季号, 集号)。都解析得出且不重复就照文件名，没写季号的当第 1 季；
+    否则全部按路径排序编为第 1 季第 1..N 集。一个文件多集时挂到第一集。"""
+    parsed: dict[str, tuple[int, int]] = {}
+    for path in paths:
+        number = parse_episode(_stem(path), os.path.basename(os.path.dirname(path)))
+        if number is None:
+            break
+        parsed[path] = (1 if number.season is None else number.season, number.episodes[0])
+    if len(parsed) == len(paths) and len(set(parsed.values())) == len(parsed):
+        return parsed
+    return {path: (1, index) for index, path in enumerate(sorted(paths), start=1)}
+
+
+def _build_episodes(session: Session, show: Item, files: list[MediaFile]) -> None:
+    """按文件建季和集，集标题取文件名；视频挂到集，字幕跟同名视频走。"""
+    videos = [row.path for row in files if row.file_kind == "video"]
+    targets: dict[str, int] = {}
+    for path, (season_number, episode_number) in _episode_numbers(videos).items():
+        season = child(session, show, "season", season_number)
+        episode = child(session, season, "episode", episode_number)
+        episode.title = _stem(path)
+        targets[path] = episode.id
+    bind_episodes(session, files, targets, show.id)
+
+
 def bind_manual(
     session: Session, media_file: MediaFile, values: dict[str, Any], locks: KeyedLocks
 ) -> Item:
@@ -247,16 +289,22 @@ def bind_manual(
     if not title:
         raise ItemError("片名不能为空")
     game = media_file.file_kind == "game"
-    if not game and is_series(session, library):
-        raise ItemError("剧集库手动建条目尚未支持")
+    series = not game and is_series(session, library)
     prepared = prepare_values(session, library.data_type_id, "work", filled, skip_unknown=True)
     with locks.hold("catalog-write"):
-        rows = [media_file] if game else _siblings(session, library, media_file)
+        if game:
+            rows = [media_file]
+        elif series:
+            rows = _show_files(session, library, media_file)
+        else:
+            rows = _siblings(session, library, media_file)
         item = create_manual_work(session, library, title)
         apply_edit(session, item, prepared)
         for row in rows:
             row.item_id = item.id
             row.updated_at = utc_now()
+        if series:
+            _build_episodes(session, item, rows)
         session.commit()
     return item
 
@@ -272,20 +320,7 @@ def bind_file(session: Session, media_file: MediaFile, ref: MovieRef, locks: Key
     with locks.hold("catalog-write"):
         item, _ = find_or_create_movie(session, library, ref)
         if is_series(session, library):
-            folder = show_folder(library, media_file.path)
-            rows = (
-                [
-                    row
-                    for row in session.scalars(
-                        select(MediaFile).where(
-                            MediaFile.library_id == library.id, MediaFile.item_id.is_(None)
-                        )
-                    )
-                    if _in_folder(row.path, folder)
-                ]
-                if folder
-                else [media_file]
-            )
+            rows = _show_files(session, library, media_file)
         else:
             rows = _siblings(session, library, media_file)
         for row in rows:
