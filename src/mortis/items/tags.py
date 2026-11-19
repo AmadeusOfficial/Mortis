@@ -320,12 +320,15 @@ def _remove(
     return draft.result()
 
 
-def _rewrite(session: Session, runner: TaskRunner | None, item: Item) -> None:
+def _rewrite(session: Session, runner: TaskRunner | None, item: Item, quiet: bool) -> None:
     if runner is None:
         return
     from mortis.output.service import rewrite_if_arranged
 
-    rewrite_if_arranged(session, runner, item)
+    if quiet:
+        rewrite_if_arranged(session, runner, item, silent=True)
+    else:
+        rewrite_if_arranged(session, runner, item)
 
 
 def _hold(locks: KeyedLocks, item_id: int) -> ExitStack:
@@ -341,6 +344,7 @@ def _locked_write(
     runner: TaskRunner | None,
     item_id: int,
     write: Callable[[Item], TagWriteResult],
+    quiet: bool = False,
 ) -> TagWriteResult:
     with _hold(locks, item_id):
         item = session.get(Item, item_id)
@@ -353,7 +357,7 @@ def _locked_write(
             session.rollback()
             raise
     if result.changed:
-        _rewrite(session, runner, item)
+        _rewrite(session, runner, item, quiet)
     return result
 
 
@@ -365,11 +369,20 @@ def add_tags(
     names: Iterable[str],
     origin: str,
     runner: TaskRunner | None = None,
+    quiet: bool = False,
 ) -> TagWriteResult:
-    """插件按来源加标签。锁定字段、用户删除过的标签不会写入，结果里分别列出。"""
+    """插件按来源加标签。锁定字段、用户删除过的标签不会写入，结果里分别列出。
+
+    quiet 为真时，写后重写 NFO 的整理任务不再发布 arrange.finished（钩子里写标签用，防止循环）。
+    """
     _check_origin(origin)
     return _locked_write(
-        session, locks, runner, item_id, lambda item: _add(session, item, tag_kind, names, origin)
+        session,
+        locks,
+        runner,
+        item_id,
+        lambda item: _add(session, item, tag_kind, names, origin),
+        quiet,
     )
 
 
@@ -381,8 +394,9 @@ def remove_tags(
     names: Iterable[str],
     origin: str,
     runner: TaskRunner | None = None,
+    quiet: bool = False,
 ) -> TagWriteResult:
-    """插件按来源撤标签，只能撤自己名下的。"""
+    """插件按来源撤标签，只能撤自己名下的。quiet 同 add_tags。"""
     _check_origin(origin)
     return _locked_write(
         session,
@@ -390,6 +404,7 @@ def remove_tags(
         runner,
         item_id,
         lambda item: _remove(session, item, tag_kind, names, origin),
+        quiet,
     )
 
 

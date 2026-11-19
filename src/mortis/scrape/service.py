@@ -11,11 +11,19 @@ from mortis.db.models import (
     Item,
     ItemExternalId,
     Library,
+    Task,
     utc_now,
 )
+from mortis.hooks.dispatch import enqueue_events, hook_followups
 from mortis.items.identity import find_by_tmdb
 from mortis.organize.service import unscraped_work_ids
 from mortis.output.service import after_scrape, arrange_config, has_video
+from mortis.plugin_api.events import (
+    Event,
+    ScrapeFailed,
+    ScrapeFinished,
+    ScrapeStarted,
+)
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
     download_images,
@@ -41,7 +49,7 @@ from mortis.sources.tmdb.movie import (
     fetch_collection,
     movie_external_ids,
 )
-from mortis.tasks.base import Followup, TaskContext, TaskError, TaskResult
+from mortis.tasks.base import Followup, TaskCancelled, TaskContext, TaskError, TaskResult
 
 # 图片字段 → 设置里控制它的开关。不在表里的图片种类 TMDB 不提供，先跳过。
 WORK_IMAGES = {
@@ -208,9 +216,47 @@ def scrape_movie(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, An
     }
 
 
+def _scrape_events(ctx: TaskContext, item_id: int, force: bool, error: str | None) -> list[Event]:
+    """一次刮削的事件：started 加 finished 或 failed。条目已被删掉就没有可报的了。"""
+    with ctx.session_factory() as session:
+        item = session.get(Item, item_id)
+        if item is None:
+            return []
+        common: dict[str, Any] = {
+            "data_type": item.data_type_id,
+            "item_id": item_id,
+            "library_id": item.library_id,
+            "task_id": ctx.task_id,
+            "force": force,
+        }
+    ended: Event = (
+        ScrapeFinished(**common) if error is None else ScrapeFailed(**common, error=error)
+    )
+    return [ScrapeStarted(**common), ended]
+
+
 def handle_scrape(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
+    """三条刮削流水线的统一入口，也是刮削事件唯一的发布处：分派返回、库已提交之后才发。"""
     item_id = int(payload["item_id"])
     force = bool(payload.get("force"))
+    try:
+        outcome = _dispatch_scrape(payload, ctx, item_id, force)
+    except TaskCancelled:
+        raise
+    except Exception as error:
+        message = str(error) if isinstance(error, TaskError) else f"{type(error).__name__}: {error}"
+        events = _scrape_events(ctx, item_id, force, message or "刮削失败")
+        with ctx.session_factory() as session:
+            enqueue_events(session, ctx.services, *events, parent=session.get(Task, ctx.task_id))
+        ctx.runner.wake()
+        raise
+    outcome.followups.extend(hook_followups(ctx, *_scrape_events(ctx, item_id, force, None)))
+    return outcome
+
+
+def _dispatch_scrape(
+    payload: dict[str, Any], ctx: TaskContext, item_id: int, force: bool
+) -> TaskResult:
     with ctx.session_factory() as session:
         row = session.execute(
             select(DataType.structure, DataType.plugin_id, Item.data_type_id)

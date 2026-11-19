@@ -1,3 +1,4 @@
+from mortis.hooks.runtime import HOOK_TASK, handle_hook
 from mortis.organize.service import handle_organize
 from mortis.output.service import handle_arrange, handle_arrange_library
 from mortis.scrape.service import handle_refresh_running_shows, handle_scrape, handle_scrape_library
@@ -15,4 +16,5 @@ def builtin_handlers() -> dict[str, Handler]:
         "arrange_library": handle_arrange_library,
         imdb.REFRESH_TASK: imdb.handle_refresh,
         REFRESH_RUNNING: handle_refresh_running_shows,
+        HOOK_TASK: handle_hook,
     }

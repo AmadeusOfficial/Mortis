@@ -52,6 +52,10 @@ class TaskContext:
         self._log_path = log_path
         self._runner = runner
 
+    @property
+    def runner(self) -> TaskRunner:
+        return self._runner
+
     def log(self, message: str) -> None:
         append_log(self._log_path, message)
 

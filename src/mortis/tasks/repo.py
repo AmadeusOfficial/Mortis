@@ -1,7 +1,7 @@
 # 队列的抢占和完成写法改编自 Amane（https://github.com/sqzw-x/amane，GPL-3.0）。
 
 import json
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -82,14 +82,26 @@ def find_queued(session: Session, task_type: str, key: str, value: Any) -> Task 
     return None
 
 
-def claim_next(session: Session) -> Task | None:
-    """乐观抢占：多个线程同时抢同一行时只有一个能把 queued 改成 running。"""
+def claim_next(
+    session: Session,
+    *,
+    exclude_types: Collection[str] = (),
+    exclude_plugins: Collection[str] = (),
+) -> Task | None:
+    """乐观抢占：多个线程同时抢同一行时只有一个能把 queued 改成 running。
+
+    exclude_types 里的任务类型这次不领；exclude_plugins 里的插件（payload.plugin_id）
+    的任务这次不领，runner 用它们限制钩子的并发。
+    """
+    conditions = [Task.status == QUEUED]
+    if exclude_types:
+        conditions.append(Task.task_type.not_in(list(exclude_types)))
+    if exclude_plugins:
+        plugin = func.json_extract(Task.payload, "$.plugin_id")
+        conditions.append(or_(plugin.is_(None), plugin.not_in(list(exclude_plugins))))
     for _ in range(5):
         task_id = session.scalar(
-            select(Task.id)
-            .where(Task.status == QUEUED)
-            .order_by(Task.priority.desc(), Task.id)
-            .limit(1)
+            select(Task.id).where(*conditions).order_by(Task.priority.desc(), Task.id).limit(1)
         )
         if task_id is None:
             return None

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, ItemExternalId, ItemSourceRecord, Library
+from mortis.hooks.dispatch import hook_followups
 from mortis.items.identity import (
     ExternalRef,
     MovieRef,
@@ -16,6 +17,7 @@ from mortis.organize.files import sync_media_files
 from mortis.organize.names import ParsedName
 from mortis.organize.scan import scan_folders, scan_paths, scan_shows
 from mortis.plugin_api import SourceError, SourcePlugin
+from mortis.plugin_api.events import Event, ItemCreated, ScanFinished
 from mortis.plugins.host import open_host
 from mortis.plugins.matching import SourceMatch, best_hit
 from mortis.scrape.apply import field_orders
@@ -72,6 +74,7 @@ def organize_library(
     ctx.log(f"找到 {len(scanned.movies)} 部，新增文件 {report.added} 个，移除 {report.removed} 个")
 
     pending = [group for group in report.groups if group.item_id is None]
+    events: list[Event] = []
     matched = unmatched = errors = 0
     identified = bool(services.config_store.load_secrets().tmdb_api_key.strip())
     if not identified:
@@ -124,7 +127,7 @@ def organize_library(
                     )
                     continue
                 with services.locks.hold("catalog-write"):
-                    item, _created = find_or_create_movie(
+                    item, created = find_or_create_movie(
                         session,
                         library,
                         MovieRef(
@@ -137,6 +140,14 @@ def organize_library(
                     for row in group.files:
                         row.item_id = item.id
                     session.commit()
+                    if created:
+                        events.append(
+                            ItemCreated(
+                                data_type=library.data_type_id,
+                                item_id=item.id,
+                                library_id=library.id,
+                            )
+                        )
                 matched += 1
                 year = f"（{match.hit.year}）" if match.hit.year else ""
                 ctx.log(
@@ -169,7 +180,20 @@ def organize_library(
         "identified": identified,
         "scrape_queued": len(followups),
     }
-    return TaskResult(result=result, followups=followups)
+    events.append(_scan_finished(library, result))
+    return TaskResult(result=result, followups=[*followups, *hook_followups(ctx, *events)])
+
+
+def _scan_finished(library: Library, result: dict[str, Any]) -> ScanFinished:
+    return ScanFinished(
+        data_type=library.data_type_id,
+        library_id=library.id,
+        found=result["found"],
+        added=result["added"],
+        removed=result["removed"],
+        matched=result["matched"],
+        unmatched=result["unmatched"],
+    )
 
 
 def _identify(
@@ -222,6 +246,7 @@ def organize_plugin_library(
     order = field_orders(session, data_type.id, [plugin.id for plugin in plugins])[""]
     sources = sorted(plugins, key=lambda plugin: order.index(plugin.id))
     pending = [group for group in report.groups if group.item_id is None]
+    events: list[Event] = []
     matched = unmatched = 0
     if not sources:
         ctx.log(f"{data_type.name} 没有启用的来源插件，只扫描不识别")
@@ -241,7 +266,7 @@ def organize_plugin_library(
             continue
         hit = match.hit
         with services.locks.hold("catalog-write"):
-            item, _created = find_or_create_work(
+            item, created = find_or_create_work(
                 session,
                 library,
                 ExternalRef(
@@ -254,6 +279,10 @@ def organize_plugin_library(
             for row in group.files:
                 row.item_id = item.id
             session.commit()
+            if created:
+                events.append(
+                    ItemCreated(data_type=data_type.id, item_id=item.id, library_id=library.id)
+                )
         matched += 1
         ctx.log(
             f"已识别：{group.movie.name} → {hit.title}（{match.source.name} {hit.external_id}），"
@@ -266,19 +295,18 @@ def organize_plugin_library(
         ids = unscraped_work_ids(session, library.id)
         followups = [Followup("scrape", {"item_id": item_id, "force": False}) for item_id in ids]
         ctx.log(f"排了 {len(followups)} 个刮削任务")
-    return TaskResult(
-        result={
-            "found": len(scanned.movies),
-            "added": report.added,
-            "removed": report.removed,
-            "matched": matched,
-            "unmatched": unmatched,
-            "errors": 0,
-            "identified": bool(sources),
-            "scrape_queued": len(followups),
-        },
-        followups=followups,
-    )
+    result: dict[str, Any] = {
+        "found": len(scanned.movies),
+        "added": report.added,
+        "removed": report.removed,
+        "matched": matched,
+        "unmatched": unmatched,
+        "errors": 0,
+        "identified": bool(sources),
+        "scrape_queued": len(followups),
+    }
+    events.append(_scan_finished(library, result))
+    return TaskResult(result=result, followups=[*followups, *hook_followups(ctx, *events)])
 
 
 def handle_organize(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:

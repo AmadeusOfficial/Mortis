@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from mortis.config.models import AppConfig, MovieScrapeConfig, TvScrapeConfig
 from mortis.config.types import type_config
 from mortis.db.models import Item, ItemSourceRecord, Library, MediaFile
+from mortis.hooks.dispatch import hook_followups
 from mortis.items.identity import work_of
 from mortis.output.tv import write_show_files
 from mortis.output.writer import WRITTEN_KINDS, WriteReport, write_item_files
+from mortis.plugin_api.events import ArrangeFinished
 from mortis.rename.apply import RenameError, apply_rename
 from mortis.rename.plan import RenamePlan, plan_rename
 from mortis.rename.tv_plan import plan_show_rename
@@ -120,6 +122,7 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
         item = _work(session, item_id)
         config = config_for(ctx.services, item)
         title = item.title
+        library_id, data_type_id = item.library_id, item.data_type_id
         rename, write = arrange_steps(session, item_id, config, payload)
         if rename:
             plan = plan_for(session, item, config)
@@ -151,6 +154,19 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
     if problems:
         done = "，NFO 和图片已写出" if write else ""
         raise TaskError(f"「{title}」没有重命名：" + "；".join(problems) + done)
+    followups: list[Followup] = []
+    if not payload.get("silent"):
+        followups = hook_followups(
+            ctx,
+            ArrangeFinished(
+                data_type=data_type_id,
+                item_id=item_id,
+                library_id=library_id,
+                task_id=ctx.task_id,
+                renamed=renamed,
+                written=written,
+            ),
+        )
     return TaskResult(
         result={
             "item_id": item_id,
@@ -158,7 +174,8 @@ def handle_arrange(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
             "renamed": renamed,
             "folder": folder,
             "written": written,
-        }
+        },
+        followups=followups,
     )
 
 
@@ -172,13 +189,21 @@ def enqueue_arrange(session: Session, runner: TaskRunner, item_id: int, **option
     return task.id
 
 
-def rewrite_if_arranged(session: Session, runner: TaskRunner, item: Item) -> None:
-    """库是唯一的依据：整理过的条目手动改了字段，就重写它的 NFO，不改名。"""
+def rewrite_if_arranged(
+    session: Session, runner: TaskRunner, item: Item, *, silent: bool = False
+) -> None:
+    """库是唯一的依据：整理过的条目手动改了字段，就重写它的 NFO，不改名。
+
+    silent 的整理任务不发布 arrange.finished，失败也不触发 task.failed（钩子写标签用）。
+    """
     if item.kind == "collection":
         return
     work_id = work_of(session, item.id)
     if has_written(session, work_id):
-        enqueue_arrange(session, runner, work_id, rename=False, write=True)
+        options: dict[str, object] = {"rename": False, "write": True}
+        if silent:
+            options["silent"] = True
+        enqueue_arrange(session, runner, work_id, **options)
 
 
 def arrangeable_items(session: Session, library_id: int) -> list[int]:

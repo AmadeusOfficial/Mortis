@@ -11,8 +11,9 @@ from mortis.api.deps import ServicesDep, SessionDep
 from mortis.api.routes.items import get_item
 from mortis.db.models import Item, MediaFile
 from mortis.errors import UserError
+from mortis.hooks.dispatch import enqueue_events
 from mortis.items.matching import is_series
-from mortis.plugin_api import PlayerError, PlayerPlugin
+from mortis.plugin_api import PlayerError, PlayerPlugin, PlayStarted
 from mortis.plugins.player import (
     PluginPlayerHost,
     choose_game_player,
@@ -133,7 +134,31 @@ def play(
     """只有一个视频或程序时直接打开；多个时返回候选，不替调用方选。
 
     listed_only 时游戏只启动启动插件列出的程序，不接受文件夹里任意的 .exe（智能体用）。
+    真的打开了才发布 play.started；钩子的事不会影响播放。
     """
+    result = _play_item(session, services, item, request, listed_only=listed_only)
+    if isinstance(result, PlayResult):
+        enqueue_events(
+            session,
+            services,
+            PlayStarted(
+                data_type=item.data_type_id,
+                item_id=item.id,
+                file_id=result.file_id,
+                player=result.player,
+            ),
+        )
+    return result
+
+
+def _play_item(
+    session: Session,
+    services: Services,
+    item: Item,
+    request: PlayRequest,
+    *,
+    listed_only: bool,
+) -> PlayResult | PlayChoices:
     games = game_folders(session, item)
     if games:
         return _launch_game(services, item, games, request, listed_only=listed_only)
