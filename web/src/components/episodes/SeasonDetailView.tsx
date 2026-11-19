@@ -1,9 +1,10 @@
-import { Button } from "@mantine/core";
+import { Button, Menu, ScrollArea } from "@mantine/core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { EpisodeInfo, ItemDetail } from "../../api";
 import {
   IconBack,
+  IconChevronDown,
   IconChevronRight,
   IconImage,
   IconMore,
@@ -131,20 +132,36 @@ export function SeasonDetailView({
     if (totalPages <= 1) {
       return null;
     }
+    const currentRange = pageRanges.find((r) => r.page === safePage);
     return (
       <div className={classes.pager}>
-        <select
-          className={`${classes.rangeSelect} mo-mono`}
-          aria-label="选择分集页"
-          value={String(safePage)}
-          onChange={(e) => goToPage(Number(e.target.value), scrollTop)}
-        >
-          {pageRanges.map((r) => (
-            <option key={r.page} value={String(r.page)}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <button
+              type="button"
+              className={`${classes.dropdownTrigger} mo-mono`}
+              aria-label="选择分集页"
+            >
+              <span>{currentRange?.label ?? `第 ${safePage} 页`}</span>
+              <IconChevronDown size={13} />
+            </button>
+          </Menu.Target>
+          <Menu.Dropdown className={classes.menuDropdown}>
+            <ScrollArea.Autosize mah={280} type="hover">
+              {pageRanges.map((r) => (
+                <Menu.Item
+                  key={r.page}
+                  className={`${classes.menuItem} ${
+                    r.page === safePage ? classes.menuItemActive : ""
+                  } mo-mono`}
+                  onClick={() => goToPage(r.page, scrollTop)}
+                >
+                  {r.label}
+                </Menu.Item>
+              ))}
+            </ScrollArea.Autosize>
+          </Menu.Dropdown>
+        </Menu>
 
         <div className={classes.pageGroup}>
           <button
@@ -233,20 +250,38 @@ export function SeasonDetailView({
             >
               <IconBack size={14} /> 上一季
             </button>
-            <select
-              className={classes.seasonSelect}
-              aria-label="切换季"
-              value={String(detail.id)}
-              onChange={(e) => {
-                void navigate(`/items/${e.target.value}`);
-              }}
-            >
-              {sortedSeasons.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {formatSeasonHeading(s)} · {s.episode_count} 集
-                </option>
-              ))}
-            </select>
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <button
+                  type="button"
+                  className={classes.seasonTrigger}
+                  aria-label="切换季"
+                >
+                  <span>
+                    {seasonHeading}
+                    {currentSeason !== undefined
+                      ? ` · ${currentSeason.episode_count} 集`
+                      : ""}
+                  </span>
+                  <IconChevronDown size={13} />
+                </button>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.menuDropdown}>
+                <ScrollArea.Autosize mah={280} type="hover">
+                  {sortedSeasons.map((s) => (
+                    <Menu.Item
+                      key={s.id}
+                      className={`${classes.menuItem} ${
+                        s.id === detail.id ? classes.menuItemActive : ""
+                      }`}
+                      onClick={() => void navigate(`/items/${s.id}`)}
+                    >
+                      {formatSeasonHeading(s)} · {s.episode_count} 集
+                    </Menu.Item>
+                  ))}
+                </ScrollArea.Autosize>
+              </Menu.Dropdown>
+            </Menu>
             <button
               type="button"
               className={classes.switchBtn}
