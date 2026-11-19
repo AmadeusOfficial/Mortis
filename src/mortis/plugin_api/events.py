@@ -71,7 +71,8 @@ class ScanFinished(Event):
 
 
 class ScrapeStarted(Event):
-    """一个条目的刮削已经开始。和 finished、failed 在刮削结束后一起发布。"""
+    """一个条目的刮削任务跑过了。和 finished 或 failed 在刮削结束、库提交之后一起发布，
+    不是刮削开始的那一刻；同一次刮削先排 started，再排 finished 或 failed。"""
 
     type: Literal[EventType.SCRAPE_STARTED] = EventType.SCRAPE_STARTED
     item_id: int = 0

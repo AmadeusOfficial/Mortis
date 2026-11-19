@@ -47,17 +47,26 @@ class HookLimitError(HookError):
 
 @dataclass(frozen=True)
 class HookLimits:
-    """宿主对钩子每次事件的限额。"""
+    """宿主对钩子每次事件的限额。一个钩子处理一个事件算一次，额度不跨事件累计。"""
 
     http_calls: int = 5
+    """联网（get_json、post_json）最多几次，跳转的每一跳不另算。"""
     item_reads: int = 50
+    """`get_item` 最多几次。"""
     tag_calls: int = 20
+    """`add_tags` 和 `remove_tags` 合计最多几次。"""
     tags_per_call: int = 50
+    """一次调用最多几个标签。"""
     tags_total: int = 200
+    """一次事件里处理的标签总数。"""
     tag_length: int = 64
+    """标签名最长几个字。"""
     response_bytes: int = 1_000_000
+    """一次响应最多多少字节，超出直接中断。"""
     connect_timeout: float = 5.0
+    """连接超时，秒。"""
     read_timeout: float = 10.0
+    """读取超时，秒。"""
 
 
 DEFAULT_LIMITS = HookLimits()

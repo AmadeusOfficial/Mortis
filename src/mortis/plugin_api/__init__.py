@@ -1,5 +1,24 @@
 """宿主公布给插件的接口。插件只能 import 标准库、pydantic 和这个模块。
 
+这里是接口的完整说明；约定、清单和打包的规则写在 docs/ 下的《插件开发指南》《插件规范》
+《事件参考》《打包与导入》里。
+
+字段目录（`DataTypeSpec` 和 `FieldSpec`）由数据类型插件提交，宿主校验：
+
+- `DataTypeSpec.structure` 只能是 `item`（单条目）、`item_group`（单条目加分组）、
+  `series`（作品、季、集）三选一，它决定有哪几层：`item` 只有 `work`，`item_group` 是
+  `collection` 加 `work`，`series` 是 `work`、`season`、`episode`。
+- `FieldSpec.value_type` 只能是 text、longtext、number、date、rating、people、tags、images、url。
+- `FieldSpec.stored_in` 决定值存在哪里，并要求填对应的那一项：`items_column` 填 `column_name`
+  （只有 title、original_title、sort_title、overview、release_date、poster_path 这几个共有列）、
+  `tags` 填 `tag_kind`、`people` 填 `person_role`、`images` 填 `image_kind`；`ratings` 和
+  `fields`（文档里的自由字段，只放 text、longtext、number、date、url）什么都不填。
+- `applies_to` 是字段所在的层；每一层都要有存进 items 的 title 列的 `title` 字段。
+- `is_lockable` 能否锁定（默认能）；`is_filterable` 能否筛选（放在 `fields` 的不行）；
+  `is_sortable` 能否排序（只有共有列和评分）；`detail_section` 是详情页的分区名。
+- `subtitle_field` 是海报墙副标题用的字段，必须是作品层的共有列或标签字段。
+- 字段键和类型 id 只能用小写字母、数字和下划线，字母开头；不能和内置类型同 id。
+
 来源插件的 `candidates` 返回 {字段键: 值}，值的格式按字段的值类型：
 
 - text、longtext、url：字符串；date：`YYYY-MM-DD`；number：数字。
@@ -18,7 +37,9 @@
 - `PLUGIN = DataTypePlugin(...)`：数据类型，可带它专用的来源和播放。
 - `PLUGIN = Plugin(sources=(...), players=(...), hooks=(...), data_type=...)`：任意组合。
 
-plugin.toml 的 `[[sources]]`、`[[players]]`、`[[hooks]]` 要和代码里的对象按 id 一一对上。
+plugin.toml 的 `[[sources]]`、`[[players]]`、`[[hooks]]` 要和代码里的对象按 id 一一对上
+（单个对象的简写除外：对象的 id 就是包 id，不再列子项）。事件钩子见 `HookPlugin`、`HookHost`
+和 `mortis.plugin_api.events`，写测试用 `mortis.plugin_api.testing` 里的假宿主。
 
 设置表单（`Settings`、`Secrets` 的 JSON Schema）只支持下面这个子集，其余写法按文本框处理：
 
@@ -319,8 +340,10 @@ class HookPlugin(ABC):
     plugin.toml 的 `[[hooks]]` 里（一个钩子对象订阅一个事件）；代码里的对象只用 id 和清单对上。
     `on_event(host, event)` 的两个槽位固定不变，新增的上下文挂在 host 或 event 的属性上。
 
-    钩子在后台任务里运行：同一个插件同时只跑一个，连续失败几次会被自动停用；
-    超时只记录，宿主不会强行结束它。钩子里不再产生事件，钩子失败也不触发 `task.failed`。
+    钩子在后台任务里运行：同一个插件同时只跑一个，全局同时最多跑两个钩子任务，排队上限 200；
+    连续失败 3 次会被自动停用；一次事件处理超过 60 秒只记一次失败，宿主不会强行结束它。
+    钩子里不再产生事件，钩子失败也不触发 `task.failed`。事件会重复投递（比如重新刮削），
+    处理函数要写成幂等的。
     """
 
     id: ClassVar[str]
