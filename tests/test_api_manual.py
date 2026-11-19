@@ -10,6 +10,7 @@ from sqlalchemy import select
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
 from mortis.db.models import Item, MediaFile, Task, utc_now
+from mortis.output.service import arrangeable_items
 from mortis.settings import Settings
 from tests.fakes import FakeTmdb
 
@@ -391,3 +392,133 @@ def test_manual_anime_lands_in_anime_library(
         (1, 1, "[字幕组] 某番 [01]", True),
         (1, 2, "[字幕组] 某番 [02]", True),
     ]
+
+
+_ID_TAGS = ("<uniqueid", "<tmdbid", "<imdbid", "<tvdbid", "<id>", "<id/>", "<episodeguide")
+
+
+def _no_ids(nfo: Path) -> str:
+    text = nfo.read_text(encoding="utf-8")
+    for tag in _ID_TAGS:
+        assert tag not in text, (nfo.name, tag)
+    return text
+
+
+def _rename_movies(app: FastAPI) -> None:
+    config = app.state.config_store.load_config().types.movie
+    config.output.organize_rename = True
+    app.state.config_store.save_section("types.movie", config)
+
+
+def test_manual_movie_arranges_with_name_and_nfo(
+    client: TestClient, app: FastAPI, files: dict[str, int], tmp_path: Path
+) -> None:
+    _rename_movies(app)
+    body = {"title": "手动片", "release_date": "2024-05-01", "overview": "自己写的简介"}
+    item_id = client.post(f"/api/media-files/{files['cd1']}/manual", json=body).json()["item_id"]
+    preview = client.get(f"/api/items/{item_id}/arrange-preview")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["problems"] == []
+    assert client.post(f"/api/items/{item_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+
+    folder = tmp_path / "电影" / "手动片 (2024)"
+    assert {p.name for p in folder.iterdir()} >= {
+        "手动片.cd1.mp4",
+        "手动片.cd2.mp4",
+        "手动片.srt",
+        "movie.nfo",
+    }
+    assert not (tmp_path / "电影" / "B站下载 2024").exists()
+    text = _no_ids(folder / "movie.nfo")
+    assert "<title>手动片</title>" in text
+    assert "<plot>自己写的简介</plot>" in text
+    assert "<year>2024</year>" in text
+
+    client.patch(f"/api/items/{item_id}/fields", json={"values": {"overview": "改过的简介"}})
+    app.state.task_runner.run_until_idle()
+    assert "<plot>改过的简介</plot>" in (folder / "movie.nfo").read_text(encoding="utf-8")
+    assert (folder / "手动片.cd1.mp4").is_file()
+
+
+def test_library_arrange_counts_manual_not_unscraped(
+    client: TestClient, app: FastAPI, files: dict[str, int], tmp_path: Path
+) -> None:
+    _rename_movies(app)
+    manual = client.post(
+        f"/api/media-files/{files['cd1']}/manual",
+        json={"title": "手动片", "release_date": "2024-05-01"},
+    ).json()["item_id"]
+    bound = client.post(
+        f"/api/media-files/{files['loose']}/bind", json={"tmdb_id": 949, "title": "盗火线"}
+    ).json()["item_id"]
+    refused = client.get(f"/api/items/{bound}/arrange-preview")
+    assert refused.status_code == 422
+    assert "还没刮削" in refused.json()["detail"]
+
+    listed = client.get(f"/api/libraries/{files['library']}/arrange-preview").json()
+    assert listed["count"] == 1
+    assert [row["item_id"] for row in listed["previews"]] == [manual]
+    with app.state.session_factory() as session:
+        assert arrangeable_items(session, files["library"]) == [manual]
+
+
+def test_manual_galgame_is_not_arranged(client: TestClient, app: FastAPI, tmp_path: Path) -> None:
+    root = tmp_path / "游戏"
+    library = _library(client, root, "galgame")
+    ids = _add_files(app, library, {"game": (root / "同人小游戏", "game")})
+    item_id = _manual(client, ids["game"], "同人小游戏")
+    preview = client.get(f"/api/items/{item_id}/arrange-preview")
+    assert preview.status_code == 422
+    assert preview.json()["detail"] == "这个条目没有视频文件"
+    assert client.get(f"/api/libraries/{library}/arrange-preview").json()["count"] == 0
+    assert sorted(p.name for p in root.rglob("*")) == ["同人小游戏"]
+
+
+def test_manual_show_arranges_and_writes_nfo(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "某剧"
+    show.mkdir(parents=True)
+    library = _library(client, root, "tv")
+    ids = _add_files(
+        app,
+        library,
+        {
+            "e1": (show / "第一集.S01E01.mkv", "video"),
+            "e2": (show / "第二集.S01E02.mkv", "video"),
+            "sub": (show / "第一集.S01E01.zh.srt", "subtitle"),
+        },
+    )
+    body = {"title": "某剧", "release_date": "2020-01-01", "overview": "剧的简介"}
+    item_id = client.post(f"/api/media-files/{ids['e1']}/manual", json=body).json()["item_id"]
+    preview = client.get(f"/api/items/{item_id}/arrange-preview")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["problems"] == []
+    listed = client.get(f"/api/libraries/{library}/arrange-preview").json()
+    assert listed["count"] == 1
+    assert client.post(f"/api/items/{item_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+
+    folder = root / "某剧 (2020)"
+    names = {p.relative_to(folder).as_posix() for p in folder.rglob("*")}
+    assert {
+        "tvshow.nfo",
+        "Season 1/season.nfo",
+        "Season 1/某剧.S01E01.第一集.S01E01.mkv",
+        "Season 1/某剧.S01E01.第一集.S01E01.zh.srt",
+        "Season 1/某剧.S01E01.第一集.S01E01.nfo",
+        "Season 1/某剧.S01E02.第二集.S01E02.mkv",
+        "Season 1/某剧.S01E02.第二集.S01E02.nfo",
+    } <= names
+    assert not show.exists()
+    tvshow = _no_ids(folder / "tvshow.nfo")
+    assert "<title>某剧</title>" in tvshow and "<plot>剧的简介</plot>" in tvshow
+    assert "<seasonnumber>1</seasonnumber>" in _no_ids(folder / "Season 1" / "season.nfo")
+    episode = _no_ids(folder / "Season 1" / "某剧.S01E01.第一集.S01E01.nfo")
+    assert "<title>第一集.S01E01</title>" in episode
+
+    client.patch(f"/api/items/{item_id}/fields", json={"values": {"overview": "改过"}})
+    app.state.task_runner.run_until_idle()
+    assert "<plot>改过</plot>" in (folder / "tvshow.nfo").read_text(encoding="utf-8")

@@ -238,10 +238,11 @@ def build_show_nfo(session: Session, layout: ShowLayout, config: TvScrapeConfig)
     _text(root, "mpaa", certification)
     _text(root, "certification", certification)
     guide = {key: ids[key] for key in ("tmdb", "imdb", "tvdb") if key in ids}
-    _text(root, "episodeguide", json.dumps(guide, separators=(",", ":")) if guide else None)
-    _text(root, "id", ids.get("tvdb"))
-    _text(root, "imdbid", ids.get("imdb"))
-    _text(root, "tmdbid", ids.get("tmdb"))
+    if ids:
+        _text(root, "episodeguide", json.dumps(guide, separators=(",", ":")) if guide else None)
+        _text(root, "id", ids.get("tvdb"))
+        _text(root, "imdbid", ids.get("imdb"))
+        _text(root, "tmdbid", ids.get("tmdb"))
     for provider in ("tmdb", "imdb", "tvdb"):
         if provider in ids:
             _text(
@@ -288,9 +289,10 @@ def build_season_nfo(
     poster = _poster_url(item, season_candidates(season.raw, config))
     if poster:
         _text(root, "thumb", poster, aspect="poster")
-    _text(root, "tvdbid", ids.get("tvdb"))
-    _text(root, "imdbid", ids.get("imdb"))
-    _text(root, "tmdbid", ids.get("tmdb"))
+    if ids:
+        _text(root, "tvdbid", ids.get("tvdb"))
+        _text(root, "imdbid", ids.get("imdb"))
+        _text(root, "tmdbid", ids.get("tmdb"))
     if "tmdb" in ids:
         _text(root, "uniqueid", ids["tmdb"], type="tmdb")
     _text(root, "premiered", item.release_date)
@@ -318,7 +320,8 @@ def build_episode_nfo(
     _text(root, "episode", episode.index_number)
     _text(root, "displayseason", -1)
     _text(root, "displayepisode", -1)
-    _text(root, "id")
+    if ids or _external_ids(session, layout.show):
+        _text(root, "id")
     if "tmdb" in ids:
         _text(root, "uniqueid", ids["tmdb"], default="true", type="tmdb")
     _ratings(session, root, episode)

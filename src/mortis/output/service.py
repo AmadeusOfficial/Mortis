@@ -6,13 +6,13 @@
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import exists, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from mortis.config.models import AppConfig, MovieScrapeConfig, TvScrapeConfig
 from mortis.config.types import type_config
 from mortis.db.models import Item, ItemSourceRecord, Library, MediaFile
 from mortis.hooks.dispatch import hook_followups
-from mortis.items.identity import work_of
+from mortis.items.identity import manual_clause, work_of
 from mortis.output.tv import write_show_files
 from mortis.output.writer import WRITTEN_KINDS, WriteReport, write_item_files
 from mortis.plugin_api.events import ArrangeFinished
@@ -58,9 +58,10 @@ def write_for(
 
 
 def _video_owner(item_id: Any) -> Any:
-    """视频挂在这个条目上，或挂在它下面的集上。"""
-    seasons = select(Item.id).where(Item.parent_id == item_id, Item.kind == "season")
-    episodes = select(Item.id).where(Item.parent_id.in_(seasons))
+    """视频挂在这个条目上，或挂在它下面的集上。item_id 可以是外层查询的 Item.id。"""
+    season, episode = aliased(Item), aliased(Item)
+    seasons = select(season.id).where(season.parent_id == item_id, season.kind == "season")
+    episodes = select(episode.id).where(episode.parent_id.in_(seasons))
     return (MediaFile.item_id == item_id) | MediaFile.item_id.in_(episodes)
 
 
@@ -207,7 +208,7 @@ def rewrite_if_arranged(
 
 
 def arrangeable_items(session: Session, library_id: int) -> list[int]:
-    """整库整理只管刮削过、有视频的电影和剧。"""
+    """整库整理只管有视频的电影和剧：刮削过的，或手动条目。"""
     return list(
         session.scalars(
             select(Item.id)
@@ -215,7 +216,7 @@ def arrangeable_items(session: Session, library_id: int) -> list[int]:
                 Item.library_id == library_id,
                 Item.kind == "work",
                 exists().where(_video_owner(Item.id), MediaFile.file_kind == "video"),
-                exists().where(ItemSourceRecord.item_id == Item.id),
+                exists().where(ItemSourceRecord.item_id == Item.id) | manual_clause(),
             )
             .order_by(Item.id)
         )

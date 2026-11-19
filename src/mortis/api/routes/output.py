@@ -11,6 +11,7 @@ from mortis.api.routes.items import Enqueued, get_item
 from mortis.config.models import TvScrapeConfig
 from mortis.db.models import Item, MediaFile
 from mortis.items.edit import ItemError
+from mortis.items.identity import is_manual
 from mortis.output.service import (
     ArrangeConfig,
     arrange_config,
@@ -61,7 +62,7 @@ def _arrangeable(session: Session, item_id: int) -> Item:
         raise ItemError("系列电影没有自己的文件，季和集跟着剧一起整理")
     if not has_video(session, item.id):
         raise ItemError("这个条目没有视频文件")
-    if not is_scraped(session, item.id):
+    if not is_scraped(session, item.id) and not is_manual(session, item):
         raise ItemError("这个条目还没刮削，先刮削再整理")
     return item
 

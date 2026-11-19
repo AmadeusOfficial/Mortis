@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, exists, select
 from sqlalchemy.orm import Session
 
 from mortis.db.models import Item, ItemExternalId, Library, utc_now
@@ -40,17 +40,17 @@ def work_of(session: Session, item_id: int) -> int:
     return item.id if item is not None else item_id
 
 
+def manual_clause() -> ColumnElement[bool]:
+    """Item 是手动条目：没有任何外部编号的作品。"""
+    return (Item.kind == "work") & ~exists().where(ItemExternalId.item_id == Item.id)
+
+
 def manual_ids(session: Session, items: list[Item]) -> set[int]:
-    """这些条目里的手动条目：没有任何外部编号的作品。"""
+    """这些条目里的手动条目。"""
     works = [item.id for item in items if item.kind == "work"]
     if not works:
         return set()
-    known = set(
-        session.scalars(
-            select(ItemExternalId.item_id).where(ItemExternalId.item_id.in_(works)).distinct()
-        )
-    )
-    return {item_id for item_id in works if item_id not in known}
+    return set(session.scalars(select(Item.id).where(Item.id.in_(works), manual_clause())))
 
 
 def is_manual(session: Session, item: Item) -> bool:
