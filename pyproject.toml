@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mortis"
-version = "0.2.0"
+version = "0.2.1"
 description = "莫提斯：智能体元数据刮削管理器"
 requires-python = ">=3.14"
 license = "GPL-3.0-only"
