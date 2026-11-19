@@ -136,7 +136,9 @@ def _seed_tv(data_dir: Path, tmp_path: Path) -> tuple[Settings, dict[str, int]]:
     return settings, ids
 
 
-def test_season_detail_includes_show_seasons_episode_meta_and_fanart_fallback(tmp_path: Path) -> None:
+def test_season_detail_includes_show_seasons_episode_meta_and_fanart_fallback(
+    tmp_path: Path,
+) -> None:
     settings, ids = _seed_tv(tmp_path / "data", tmp_path)
     app = create_app(settings, start_worker=False)
     with TestClient(app, base_url="http://127.0.0.1") as client:

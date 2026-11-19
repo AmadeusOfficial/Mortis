@@ -333,7 +333,9 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             .limit(1)
         )
     data_type = session.get(DataType, item.data_type_id)
-    is_series_work = item.kind == "work" and data_type is not None and data_type.structure == "series"
+    is_series_work = (
+        item.kind == "work" and data_type is not None and data_type.structure == "series"
+    )
     seasons = (
         _seasons(session, item)
         if is_series_work
