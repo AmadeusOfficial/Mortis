@@ -1,6 +1,7 @@
 from typing import Any
 
-from mortis.scrape.tv import _absolute, _folder_season, _resolve
+from mortis.db.models import MediaFile
+from mortis.scrape.tv import _absolute, _folder_season, _local_numbers, _resolve
 
 KAIJI: dict[str, Any] = {
     "name": "赌博默示录",
@@ -42,3 +43,21 @@ def test_resolve_keeps_explicit_seasons_and_maps_the_rest() -> None:
         r"M:\动漫\赌博默示录 (2007)\Season 1\Kaiji.S01E07.mkv": (1, (7,)),
     }
     assert list(_resolve(local, KAIJI).values()) == [(2, (1,)), (2, (4,)), (1, (3,)), (1, (7,))]
+
+
+def test_four_digit_episodes_stay_distinct() -> None:
+    shin: dict[str, Any] = {
+        "name": "蜡笔小新",
+        "first_air_date": "1992-04-13",
+        "seasons": [{"season_number": 1, "air_date": "1992-04-13", "episode_count": 1500}],
+    }
+    folder = r"Z:\动漫\蜡笔小新 (1992)\Season 1"
+    files = [
+        MediaFile(path=rf"{folder}\蜡笔小新.S01E{n}.flv", file_kind="video")
+        for n in (100, *range(1000, 1010))
+    ]
+    resolved = _resolve(_local_numbers(files), shin)
+    assert sorted(numbers for _, numbers in resolved.values()) == [
+        (100,),
+        *((n,) for n in range(1000, 1010)),
+    ]

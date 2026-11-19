@@ -208,6 +208,44 @@ def test_specials_use_season_zero(
     assert parse_episode(stem, season_folder) == expected
 
 
+# 长寿番的四位集号不能被截成三位，也不能丢掉。
+LONG_CASES = [
+    ("蜡笔小新.S01E1100.标题", "Season 1", EpisodeNumber(1, (1100,))),
+    ("蜡笔小新 S01E1000", None, EpisodeNumber(1, (1000,))),
+    ("Show.S01E1099E1100", None, EpisodeNumber(1, (1099, 1100))),
+    ("Show.S01E1000-1002", None, EpisodeNumber(1, (1000, 1001, 1002))),
+    ("Show.S01E999-E1001", None, EpisodeNumber(1, (999, 1000, 1001))),
+    ("Show.1x1100", None, EpisodeNumber(1, (1100,))),
+    ("Show E1100", None, EpisodeNumber(None, (1100,))),
+    ("Show EP1100", None, EpisodeNumber(None, (1100,))),
+    ("Show.E1100E1101", None, EpisodeNumber(None, (1100, 1101))),
+    ("Show - 1100 [1080p]", None, EpisodeNumber(None, (1100,))),
+    ("Show.1100", None, EpisodeNumber(None, (1100,))),
+    ("[Group][Show][1100][1080P]", None, EpisodeNumber(None, (1100,))),
+    ("[Group][Show][1100v2]", None, EpisodeNumber(None, (1100,))),
+    ("Show.S01.1100", None, EpisodeNumber(1, (1100,))),
+    ("Show 第1100话", "Season 1", EpisodeNumber(1, (1100,))),
+    # 五位数不是集号，也不能被截成四位。
+    ("Show.S01E12345", None, None),
+    ("Show E12345", None, None),
+    # 放宽到四位后，年份和分辨率仍然不是集号。
+    ("Show.2019", None, None),
+    ("Show - 2019", None, None),
+    ("[Group][Show][2019]", None, None),
+    ("Show.S01.2019", None, None),
+    ("Show.1080", None, None),
+    ("[Group][Show][2160]", None, None),
+    ("Show.S01E05.2019.1080p", None, EpisodeNumber(1, (5,))),
+]
+
+
+@pytest.mark.parametrize(("stem", "season_folder", "expected"), LONG_CASES)
+def test_four_digit_episode_numbers(
+    stem: str, season_folder: str | None, expected: EpisodeNumber | None
+) -> None:
+    assert parse_episode(stem, season_folder) == expected
+
+
 EXTRA_STEM_CASES = [
     ("[EMD][Jormungand -Perfect Order-][ED2][X264_AAC][1280X720]", None, True),
     ("[EMD][Jormungand -Perfect Order-][ED][X264_AAC][1280X720]", None, True),
