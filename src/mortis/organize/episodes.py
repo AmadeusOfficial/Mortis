@@ -20,23 +20,22 @@ _CN = "一二两三四五六七八九十"
 # 前后是数字或字母说明这段并不是独立的季集标记，例如 `x264`、`h265`、`E02extra`。
 _START = r"(?<![0-9a-z])"
 _END = r"(?![0-9a-z])"
-# S01E02、S01.E02、S01 E02、S01_E02，以及 1x02；季号最多 2 位、集号最多 3 位，
-# 且 x 前一串数字不能更长，避免吞掉 1280x720 这类分辨率。
+# 集号最多 4 位：蜡笔小新、名侦探柯南这类长寿番超过 1000 集。
+_NUM = "[0-9]{1,4}"
+# S01E02、S01.E02、S01 E02、S01_E02，以及 1x02；季号最多 2 位，
+# 且 x 前一串数字不能更长，避免吞掉 1280x720 这类分辨率。集号后面不能再跟数字，
+# 否则 `S01E12345` 会被截成前几位。
 _EPISODE = re.compile(
     rf"(?i){_START}(?:s(?P<season>[0-9]{{1,2}})[ ._-]*e|(?P<xseason>[0-9]{{1,2}})x)"
-    rf"(?P<episodes>[0-9]{{1,3}}(?:[ ._-]*-[ ._-]*(?:e[ ._-]*)?[0-9]{{1,3}}|\s*e[0-9]{{1,3}})*)"
+    rf"(?P<episodes>{_NUM}(?:[ ._-]*-[ ._-]*(?:e[ ._-]*)?{_NUM}|\s*e{_NUM})*)(?![0-9])"
 )
 # 集号到集号；`-` 后面只跟数字即视为范围，否则只是集号本身。
-_EPISODE_RANGE = re.compile(
-    r"(?a)([0-9]{1,3})\s*-\s*(?:e\s*)?([0-9]{1,3})(?![0-9a-z])", re.IGNORECASE
-)
-_EPISODE_E = re.compile(r"[eE]\s*([0-9]{1,3})(?![0-9a-z])")
+_EPISODE_RANGE = re.compile(rf"(?a)({_NUM})\s*-\s*(?:e\s*)?({_NUM})(?![0-9a-z])", re.IGNORECASE)
+_EPISODE_E = re.compile(rf"[eE]\s*({_NUM})(?![0-9a-z])")
 # 只有集号：第2集、第02话、EP02、Ep.02、E02。
-_CHINESE_EPISODE = re.compile(r"第\s*([0-9]{1,4})\s*[集话話]")
-_EP_PREFIX = re.compile(rf"(?i){_START}(?:(?P<ep>ep)[ ._-]?|e)(?P<number>[0-9]{{1,3}}){_END}")
-_FIRST_E = re.compile(
-    rf"(?i){_START}e(?P<number>[0-9]{{1,3}})(?P<rest>(?:e[0-9]{{1,3}})*(?![0-9a-z]))"
-)
+_CHINESE_EPISODE = re.compile(rf"第\s*({_NUM})\s*[集话話]")
+_EP_PREFIX = re.compile(rf"(?i){_START}(?:(?P<ep>ep)[ ._-]?|e)(?P<number>{_NUM}){_END}")
+_FIRST_E = re.compile(rf"(?i){_START}e(?P<number>{_NUM})(?P<rest>(?:e{_NUM})*(?![0-9a-z]))")
 # 单独的 SP01 当特别篇的集号；后面紧跟季集标记的不算。
 _SPECIAL = re.compile(rf"(?i){_START}sp[ ._-]?([0-9]{{1,3}}){_END}")
 # `SP` 只作为独立词出现：后面要么跟集号，要么是分隔符或结尾。
@@ -56,17 +55,17 @@ _SPECIAL_MARK = re.compile(
     r"|(?<![0-9a-z])特典"
 )
 # 季号加裸集号：`S01.02`、`S2-13`、`S02 13`；中间必须有分隔符，避免和 `S01E02` 抢。
-_SEASON_BARE = re.compile(
-    rf"(?i){_START}s(?P<season>[0-9]{{1,2}})[ ._-]+(?P<number>[0-9]{{1,3}}){_END}"
-)
+_SEASON_BARE = re.compile(rf"(?i){_START}s(?P<season>[0-9]{{1,2}})[ ._-]+(?P<number>{_NUM}){_END}")
 # 字幕组括号里单独的数字：`[01]`、`[06v2]`、`[12END]`。
 _BRACKET_NUMBER = re.compile(
-    r"(?i)(?<=[\[(])(?P<number>[0-9]{1,3})(?:v(?P<version>[0-9]+)|end)?(?=[\])])"
+    rf"(?i)(?<=[\[(])(?P<number>{_NUM})(?:v(?P<version>[0-9]+)|end)?(?=[\])])"
 )
 # ` - 01`：横线两边都是空白。
-_DASH_NUMBER = re.compile(rf"(?i)(?<=\s)-\s*([0-9]{{1,3}}){_END}")
+_DASH_NUMBER = re.compile(rf"(?i)(?<=\s)-\s*({_NUM}){_END}")
 # 点号裸集号：`漆黑的子弹.01`、`Steins;Gate.01起源…`、`.01][BDRIP]`。
-_DOT_NUMBER = re.compile(r"(?<=\.)([0-9]{1,3})(?![0-9a-z.])")
+_DOT_NUMBER = re.compile(rf"(?<=\.)({_NUM})(?![0-9a-z.])")
+# 没有 E、第…集 这类标记的四位裸数字，是年份或分辨率时不当集号。
+_BARE_RELEASE = re.compile(r"(?:19|20)[0-9]{2}|1080|1440|2160|4320")
 # 点号裸集号前不能是这些东西，否则 `.264`、`.10bit` 会被误判。
 _NOT_EPISODE = re.compile(
     r"(?i)(?:x[ ._-]*$|h[ ._-]*$|x26[45][ ._-]*$|"
@@ -150,7 +149,7 @@ def _seasonal(text: str) -> tuple[int, tuple[int, ...]] | None:
     for match in _EPISODE.finditer(text):
         if _is_release(text, match.start(), match.end()):
             continue
-        first = re.match(r"(?a)[0-9]{1,3}", match.group("episodes"))
+        first = re.match(rf"(?a){_NUM}", match.group("episodes"))
         assert first is not None
         episodes = _expand(int(first.group()), match.group("episodes")[first.end() :])
         if episodes is None:
@@ -190,21 +189,23 @@ def _special_episodes(text: str) -> tuple[int, ...] | None:
 
 def _is_not_episode(text: str, start: int, end: int) -> bool:
     """点号裸集号前紧挨着编码、音轨、分辨率等标记时不是集号。"""
-    if _is_release(text, start, end):
+    if _is_release(text, start, end) or _BARE_RELEASE.fullmatch(text[start:end]):
         return True
     return _NOT_EPISODE.search(text[:start]) is not None
 
 
 def _dot_not_episode(text: str, start: int, end: int) -> bool:
     """`.01` 是小数（版本号 `1.5`）时不是集号。"""
-    if text[start - 2 : start - 1].isdigit():
+    if text[start - 2 : start - 1].isdigit() or _BARE_RELEASE.fullmatch(text[start:end]):
         return True
     head = text[: start - 1]
     return _NOT_EPISODE.search(head) is not None or head.casefold() in {"x", "h"}
 
 
 def _bracket_number(match: re.Match[str]) -> int | None:
-    """`[06v2]` 取 6。"""
+    """`[06v2]` 取 6；`[2019]`、`[1080]` 不是集号。"""
+    if _BARE_RELEASE.fullmatch(match.group("number")):
+        return None
     return int(match.group("number"))
 
 

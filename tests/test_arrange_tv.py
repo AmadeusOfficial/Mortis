@@ -85,4 +85,5 @@ def test_tv_colon_keeps_fullwidth() -> None:
 def test_multi_episode_numbers() -> None:
     assert _episode_numbers(Path("Show.S01E01E02.mkv"), 1) == ("1E2", "01E02")
     assert _episode_numbers(Path("Show.S01E05.mkv"), 5) == ("5", "05")
+    assert _episode_numbers(Path("Show.S01E1100.mkv"), 1100) == ("1100", "1100")
     assert _episode_numbers(Path("无编号.mkv"), 3) == ("3", "03")
