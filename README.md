@@ -59,7 +59,7 @@ scripts\build_windows.ps1    # 打 Windows zip 和 SHA256SUMS
 
 技术栈：FastAPI · SQLAlchemy · SQLite · React + Mantine · .NET 托盘。开发约定见 [AGENTS.md](AGENTS.md)。
 
-想给莫提斯写来源、数据类型或播放插件，读 [插件规范](docs/插件规范.md)。
+想给莫提斯写来源、数据类型、播放插件或事件钩子，先读 [插件开发指南](docs/插件开发指南.md)；示例在 [`examples/plugins/`](examples/plugins/)，参考文档有 [插件规范](docs/插件规范.md)、[事件参考](docs/事件参考.md) 和 [打包与导入](docs/打包与导入.md)。
 
 ## 许可证
 
