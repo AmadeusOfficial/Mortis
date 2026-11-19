@@ -119,7 +119,7 @@ def _probe_capabilities(folder: Path) -> set[str]:
     """
     found: set[str] = set()
     try:
-        tree = ast.parse((folder / "__init__.py").read_text(encoding="utf-8"))
+        tree = ast.parse((folder / "__init__.py").read_text(encoding="utf-8-sig"))
     except OSError, UnicodeDecodeError, SyntaxError, ValueError:
         return found
     bases = {

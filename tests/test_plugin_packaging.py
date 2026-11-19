@@ -354,6 +354,15 @@ def test_dev_leftovers_are_skipped(env: Env) -> None:
     assert paths == set(plugin_files())
 
 
+def test_files_saved_with_bom_install(env: Env) -> None:
+    bom = b"\xef\xbb\xbf"
+    files = {name: bom + data for name, data in plugin_files().items()}
+    preview = env.check(make_zip(files))
+    env.installer.confirm(preview.token)
+    info = env.registry.get("me.hello")
+    assert info is not None and info.active
+
+
 def test_too_many_entries_including_skipped(tmp_path: Path) -> None:
     env = Env(tmp_path, Limits(max_entries=10))
     files = {**plugin_files(), **{f".git/o{i}": b"" for i in range(20)}}

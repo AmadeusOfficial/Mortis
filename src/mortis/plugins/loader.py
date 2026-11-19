@@ -146,7 +146,7 @@ def _read_mortis(data: dict[str, Any]) -> tuple[int, str | None]:
 
 def read_manifest(folder: Path) -> Manifest:
     try:
-        data = tomllib.loads((folder / MANIFEST).read_text(encoding="utf-8"))
+        data = tomllib.loads((folder / MANIFEST).read_text(encoding="utf-8-sig"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise PluginLoadError(f"{MANIFEST} 读不了：{error}") from None
     missing = [key for key in ("id", "name", "version") if not data.get(key)]
@@ -284,7 +284,7 @@ def check_imports(folder: Path) -> None:
         if _is_test_file(path.relative_to(folder)):
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         except (OSError, UnicodeDecodeError, SyntaxError) as error:
             raise PluginLoadError(f"{path.name} 读不了：{error}") from None
         for node in ast.walk(tree):

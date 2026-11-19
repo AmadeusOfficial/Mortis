@@ -521,7 +521,7 @@ class PluginInstaller:
     def _read_static(self, package: Path) -> Manifest:
         """只读 plugin.toml，不执行代码。"""
         try:
-            data = tomllib.loads((package / MANIFEST).read_text(encoding="utf-8"))
+            data = tomllib.loads((package / MANIFEST).read_text(encoding="utf-8-sig"))
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
             raise UserError(f"{MANIFEST} 读不了：{error}") from None
         if not isinstance(data.get("mortis"), dict):
