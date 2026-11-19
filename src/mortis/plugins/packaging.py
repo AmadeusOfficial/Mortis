@@ -22,7 +22,7 @@ import tomllib
 import uuid
 import zipfile
 import zlib
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -62,6 +62,17 @@ _RESERVED = frozenset({"con", "prn", "aux", "nul", "conin$", "conout$"})
 _RESERVED_NUMBERED = re.compile(r"^(com|lpt)[1-9\u00b9\u00b2\u00b3]$")
 _SKIPPED_TOP = frozenset({"__macosx"})
 _SKIPPED_NAMES = frozenset({".ds_store", "thumbs.db"})
+_SKIPPED_DIRS = frozenset({"__pycache__", ".git"})
+"""手工压缩时常带进来的开发残留，任何层级都跳过，不解压也不算进文件数。"""
+_SKIPPED_SUFFIXES = frozenset({".pyc", ".pyo"})
+
+
+def _skipped(keys: Sequence[str]) -> bool:
+    if keys[0] in _SKIPPED_TOP or keys[-1] in _SKIPPED_NAMES:
+        return True
+    if any(key in _SKIPPED_DIRS for key in keys):
+        return True
+    return Path(keys[-1]).suffix in _SKIPPED_SUFFIXES
 
 
 @dataclass(frozen=True)
@@ -70,6 +81,8 @@ class Limits:
     max_file_bytes: int = 5 * 1024 * 1024
     max_total_bytes: int = 30 * 1024 * 1024
     max_files: int = 500
+    max_entries: int = 5000
+    """连同跳过的开发残留（.git、__pycache__）在内的条目总数上限。"""
     max_path_length: int = 200
     max_depth: int = 8
     max_ratio: int = 100
@@ -155,7 +168,7 @@ def _check_file_type(parts: tuple[str, ...]) -> None:
     if suffix not in ALLOWED_SUFFIXES:
         raise UserError(
             f"不接受这种文件：{'/'.join(parts)}"
-            "（只收 .py、plugin.toml、.json、.md、.txt 和常见图片）"
+            "（只收 .py、plugin.toml、.json、.md、.txt 和常见图片），删掉它再重新压缩"
         )
 
 
@@ -169,7 +182,7 @@ class _Entry:
 
 def _plan(infos: list[zipfile.ZipInfo], limits: Limits) -> tuple[list[_Entry], tuple[str, ...]]:
     """逐条检查路径、类型、重复和冲突，决定包根；返回要解的条目（路径已去掉包根）。"""
-    if len(infos) > limits.max_files + 100:
+    if len(infos) > limits.max_entries:
         raise UserError(f"条目太多（上限 {limits.max_files} 个文件）")
     entries: list[_Entry] = []
     seen_files: dict[tuple[str, ...], str] = {}
@@ -177,7 +190,7 @@ def _plan(infos: list[zipfile.ZipInfo], limits: Limits) -> tuple[list[_Entry], t
     for info in infos:
         kind = _entry_kind(info)
         parts, keys = normalize_entry(info.filename, limits)
-        if keys[0] in _SKIPPED_TOP or keys[-1] in _SKIPPED_NAMES:
+        if _skipped(keys):
             continue
         for depth in range(1, len(keys)):
             prefix = keys[:depth]

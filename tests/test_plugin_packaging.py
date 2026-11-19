@@ -340,6 +340,30 @@ def test_file_count_limit(tmp_path: Path) -> None:
     rejects(env, make_zip(files), "文件太多")
 
 
+def test_dev_leftovers_are_skipped(env: Env) -> None:
+    files = {
+        **plugin_files(),
+        "__pycache__/x.cpython-314.pyc": b"\0",
+        "sub/__pycache__/y.cpython-314.pyc": b"\0",
+        "stray.pyc": b"\0",
+        ".git/HEAD": b"ref: refs/heads/main",
+        ".git/objects/ab/cdef": b"\0",
+    }
+    preview = env.check(make_zip({f"me.demo/{k}": v for k, v in files.items()}))
+    paths = {entry.path for entry in preview.files}
+    assert paths == set(plugin_files())
+
+
+def test_too_many_entries_including_skipped(tmp_path: Path) -> None:
+    env = Env(tmp_path, Limits(max_entries=10))
+    files = {**plugin_files(), **{f".git/o{i}": b"" for i in range(20)}}
+    rejects(env, make_zip(files), "条目太多")
+
+
+def test_unknown_suffix_names_file(env: Env) -> None:
+    rejects(env, make_zip({**plugin_files(), "detail-page.js.bak": b"x"}), "detail-page.js.bak")
+
+
 def test_path_length_and_depth(tmp_path: Path) -> None:
     env = Env(tmp_path, Limits(max_path_length=30, max_depth=3))
     rejects(env, make_zip({**plugin_files(), "a/b/c/d/e.py": b""}), "层级")
