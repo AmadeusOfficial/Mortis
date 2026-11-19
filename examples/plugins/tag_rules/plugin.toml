@@ -1,0 +1,17 @@
+id = "example.tag_rules"
+name = "示例：按规则补标签"
+version = "0.1.0"
+
+[mortis]
+api_version = 1
+
+[[sources]]
+id = "example.tag_rules_films"
+name = "示例片长来源"
+data_type = "movie"
+
+[[hooks]]
+id = "example.tag_rules_tagger"
+event = "scrape.finished"
+data_types = ["movie"]
+writes = ["tags:keyword"]

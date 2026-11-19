@@ -1,0 +1,6 @@
+id = "example.hello_source"
+name = "示例来源"
+version = "0.1.0"
+
+[mortis]
+api_version = 1
