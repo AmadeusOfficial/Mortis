@@ -11,6 +11,23 @@
 
 播放插件用本机播放器打开本地视频，或启动游戏文件夹里的程序，经 `PlayerHost.launch` 或
 `open_default` 启动，不自己 import subprocess，不转码，也不向浏览器输出视频。
+
+一个插件包可以带来源、播放、事件钩子和数据类型，想带几样带几样：
+
+- `PLUGIN = MySource()` 或 `PLUGIN = MyPlayer()`：单个对象的简写，plugin.toml 里不再列子项。
+- `PLUGIN = DataTypePlugin(...)`：数据类型，可带它专用的来源和播放。
+- `PLUGIN = Plugin(sources=(...), players=(...), hooks=(...), data_type=...)`：任意组合。
+
+plugin.toml 的 `[[sources]]`、`[[players]]`、`[[hooks]]` 要和代码里的对象按 id 一一对上。
+
+设置表单（`Settings`、`Secrets` 的 JSON Schema）只支持下面这个子集，其余写法按文本框处理：
+
+- `type: boolean`：开关；`type: integer` 或 `number`：数字框；`type: string`：文本框。
+- `format: "file-path"`（字符串字段，用 `json_schema_extra={"format": "file-path"}` 写）：
+  带文件选择的路径框。
+- `title` 当标签，`description` 当提示，`default` 当初始值。
+- `Secrets` 里的字段一律按密码框显示，只存字符串。
+- 不支持嵌套对象、数组、`enum`、`oneOf`；界面不会渲染它们。
 """
 
 from abc import ABC, abstractmethod
@@ -19,6 +36,7 @@ from typing import Any, ClassVar, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
+# 字段目录的两个类型定义在宿主的 catalog 模块里；作者只从本模块引用。
 from mortis.catalog.spec import DataTypeSpec, FieldSpec
 
 __all__ = [
@@ -27,6 +45,7 @@ __all__ = [
     "DataTypeSpec",
     "FieldSpec",
     "Hit",
+    "HookPlugin",
     "Host",
     "NoSecrets",
     "NoSettings",
@@ -34,6 +53,7 @@ __all__ = [
     "PlayerError",
     "PlayerHost",
     "PlayerPlugin",
+    "Plugin",
     "SourceAuthError",
     "SourceError",
     "SourcePlugin",
@@ -252,3 +272,33 @@ class PlayerPlugin(ABC):
 
         video 插件收到视频文件的绝对路径；game 插件收到要启动的程序的绝对路径。
         """
+
+
+class HookPlugin(ABC):
+    """事件钩子扩展点（预留）。宿主在库提交成功之后发布事件，处理函数不能中断或改写宿主流程。
+
+    订阅哪个事件、限定哪些数据类型、要写什么，都写在 plugin.toml 的 `[[hooks]]` 里；
+    代码里的对象只用 id 和清单对上。事件对象和 HookHost 由事件钩子的运行时补全，
+    `on_event(host, event)` 的两个槽位固定不变，新增的上下文挂在 host 或 event 的属性上。
+    """
+
+    id: ClassVar[str]
+    name: ClassVar[str]
+
+    @abstractmethod
+    def on_event(self, host: Any, event: Any) -> None: ...
+
+
+@dataclass(frozen=True)
+class Plugin:
+    """一个插件包的全部扩展项，想带几样带几样。
+
+    data_type 自己带的来源和播放（DataTypePlugin.sources、players）也算本包的。
+    每个对象的 id 要列进 plugin.toml 的 `[[sources]]`、`[[players]]`、`[[hooks]]`，
+    且包内、以及和其他插件之间都不能重名。
+    """
+
+    sources: tuple[SourcePlugin, ...] = ()
+    players: tuple[PlayerPlugin, ...] = ()
+    hooks: tuple[HookPlugin, ...] = ()
+    data_type: DataTypePlugin | None = None

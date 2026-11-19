@@ -69,7 +69,7 @@ def test_registry_loads_player_plugins(tmp_path: Path) -> None:
     registry = PluginRegistry([(tmp_path, "builtin")])
     registry.load()
     info = registry.get("fake_player")
-    assert info is not None and info.kind == "player" and info.error is None
+    assert info is not None and info.capabilities == ("player",) and info.error is None
     assert [plugin.id for plugin in registry.players()] == ["fake_player"]
     assert registry.player("fake_player") is info.plugin
     assert registry.source("fake_player") is None
@@ -88,7 +88,7 @@ def test_player_kind_requires_player_plugin(tmp_path: Path) -> None:
     registry = PluginRegistry([(tmp_path, "builtin")])
     registry.load()
     wrong = registry.get("wrong")
-    assert wrong is not None and wrong.error == "PLUGIN 不是 PlayerPlugin"
+    assert wrong is not None and wrong.error is not None and "不是插件对象" in wrong.error
     badkind = registry.get("badkind")
     assert badkind is not None and badkind.error is not None and "不一致" in badkind.error
     sneaky = registry.get("sneaky")
@@ -283,7 +283,7 @@ def test_bundled_players_pass_import_check() -> None:
     registry = PluginRegistry([(BUNDLED, "builtin")])
     registry.load()
     info = registry.get("system_player")
-    assert info is not None and info.kind == "player"
+    assert info is not None and info.capabilities == ("player",)
     assert info.error is None, info.error
     assert isinstance(info.plugin, PlayerPlugin)
     assert issubclass(info.plugin.Settings, BaseModel)

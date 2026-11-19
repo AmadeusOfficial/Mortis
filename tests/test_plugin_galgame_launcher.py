@@ -85,7 +85,8 @@ def test_launcher_loads_under_galgame(plugin: PlayerPlugin) -> None:
     assert [p.id for p in galgame.plugin.players] == [PLAYER_ID]
     info = registry.get(PLAYER_ID)
     assert info is not None and info.error is None and info.active
-    assert info.kind == "player" and info.parent == "galgame" and info.name == "Galgame 启动"
+    assert info.capabilities == ("player",) and info.parent == "galgame"
+    assert info.name == "Galgame 启动"
     assert plugin.id == PLAYER_ID and plugin.name == "Galgame 启动"
     assert plugin.file_kinds == ("game",)
 

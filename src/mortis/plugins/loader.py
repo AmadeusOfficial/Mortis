@@ -101,8 +101,6 @@ class Manifest:
     sources: tuple[ManifestSource, ...] = ()
     players: tuple[ManifestSource, ...] = ()
     hooks: tuple[ManifestHook, ...] = ()
-    kind: str = ""
-    """旧清单里的 kind，只读出来不校验；注册表还没改完时过渡用。"""
 
 
 def _version_tuple(text: str) -> tuple[int, ...] | None:
@@ -174,7 +172,6 @@ def read_manifest(folder: Path) -> Manifest:
         sources,
         players,
         hooks,
-        str(data.get("kind", "")),
     )
 
 

@@ -434,7 +434,7 @@ def test_bundled_sources_load_with_data_type(bundled) -> None:
     infos = {info.id: info for info in registry.all()}
     for source_id in BUNDLED_IDS:
         info = infos[source_id]
-        assert info.kind == "source"
+        assert info.capabilities == ("source",)
         assert info.parent == "galgame"
         assert info.active
     _assert_unique_ids(registry)
@@ -447,7 +447,7 @@ def test_disabling_data_type_disables_its_sources(bundled) -> None:
     infos = {info.id: info for info in registry.all()}
     for source_id in BUNDLED_IDS:
         info = infos[source_id]
-        assert info.kind == "source"
+        assert info.capabilities == ("source",)
         assert info.parent == "galgame"
         assert info.enabled is False
         assert not info.active

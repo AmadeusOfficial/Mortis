@@ -11,7 +11,7 @@ from mortis.errors import UserError
 from mortis.plugin_api import PlayerError, PlayerPlugin
 from mortis.plugins.host import EXECUTABLES, plugin_settings
 from mortis.plugins.launch import Launcher
-from mortis.plugins.registry import PluginRegistry
+from mortis.plugins.registry import PluginInfo, PluginRegistry
 
 logger = logging.getLogger("mortis.play")
 SWITCH_HINT = "，在设置的「播放」里换一个"
@@ -80,12 +80,19 @@ def opens(plugin: PlayerPlugin, file_kind: str) -> bool:
     return isinstance(kinds, tuple) and file_kind in kinds
 
 
+def _is_player(info: PluginInfo) -> bool:
+    """这一条是不是播放插件。加载了的包条目只有简写的播放对象才算；没加载的看清单和粗读结果。"""
+    if info.package is not None:
+        return isinstance(info.plugin, PlayerPlugin)
+    return "player" in info.capabilities
+
+
 def video_player_problem(registry: PluginRegistry, player_id: str) -> tuple[str, bool] | None:
     """设置里选的视频播放插件为什么用不了；第二项为真表示该换一个插件，而不是去启用它。"""
     plugin = registry.player(player_id)
     if plugin is None:
         info = registry.get(player_id)
-        if info is None or info.kind != "player":
+        if info is None or not _is_player(info):
             return f"没有播放插件「{player_id}」", True
         if not info.enabled:
             return f"播放插件「{info.name}」已停用", False
@@ -126,7 +133,7 @@ def _inactive_game_player(registry: PluginRegistry, data_type_id: str) -> str | 
     停用的插件不 import，看不到它的 file_kinds，只能按它属于这个数据类型来认。
     """
     for info in registry.all():
-        if info.kind != "player" or info.active or info.parent != data_type_id:
+        if "player" not in info.capabilities or info.active or info.parent != data_type_id:
             continue
         if info.error is not None:
             return f"{info.name}没有加载：{info.error}"

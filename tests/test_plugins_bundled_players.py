@@ -96,7 +96,7 @@ def test_bundled_player_loads_with_parent(tmp_path: Path) -> None:
     registry = _registry((tmp_path, "builtin"))
     info = registry.get("doujin_launcher")
     assert info is not None and info.error is None
-    assert info.kind == "player" and info.parent == "doujin" and info.active
+    assert info.capabilities == ("player",) and info.parent == "doujin" and info.active
     assert isinstance(info.plugin, PlayerPlugin)
     assert registry.player("doujin_launcher") is info.plugin
     assert [plugin.id for plugin in registry.players()] == ["doujin_launcher"]
@@ -181,7 +181,7 @@ def test_disabled_parent_lists_players_from_toml(tmp_path: Path) -> None:
     registry.load(disabled=["doujin"])
     info = registry.get("doujin_launcher")
     assert info is not None
-    assert info.kind == "player" and info.name == "启动器" and info.parent == "doujin"
+    assert info.capabilities == ("player",) and info.name == "启动器" and info.parent == "doujin"
     assert not info.enabled and not info.active and info.error is None
     assert registry.players() == []
 

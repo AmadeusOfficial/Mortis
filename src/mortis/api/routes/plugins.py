@@ -34,6 +34,8 @@ class PluginOut(BaseModel):
     name: str
     version: str
     kind: str
+    """过渡字段，前端改按 capabilities 之后去掉。"""
+    capabilities: list[str] = []
     origin: str
     enabled: bool
     error: str | None
@@ -74,12 +76,20 @@ def _secret_keys(plugin: SourcePlugin) -> list[str]:
     return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
 
 
+def _legacy_kind(info: PluginInfo) -> str:
+    for kind in ("data_type", "player", "source"):
+        if kind in info.capabilities:
+            return kind
+    return "source"
+
+
 def _out(services: Services, info: PluginInfo) -> PluginOut:
     out = PluginOut(
         id=info.id,
         name=info.name,
         version=info.version,
-        kind=info.kind,
+        kind=_legacy_kind(info),
+        capabilities=list(info.capabilities),
         origin=info.origin,
         enabled=info.enabled,
         error=info.error,
