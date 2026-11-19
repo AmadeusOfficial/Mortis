@@ -91,6 +91,8 @@ class EpisodeOut(BaseModel):
     number: int | None
     title: str
     air_date: str | None
+    overview: str | None = None
+    runtime: int | None = None
     has_file: bool
     playable: bool = False
     """视频绑在这一集上。连播的两集共用一个文件时，只有绑定的那集能直接播放。"""

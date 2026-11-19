@@ -172,6 +172,17 @@ def _first_images(session: Session, ids: list[int], kind: str) -> dict[int, str]
     return {item_id: path for item_id, path in rows}
 
 
+def _episode_runtime(episode: Item) -> int | None:
+    try:
+        raw = json.loads(episode.fields)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    val = raw.get("runtime")
+    return val if isinstance(val, int) and val > 0 else None
+
+
 def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
     seasons = list(
         session.scalars(
@@ -216,6 +227,8 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
                 "number": episode.index_number,
                 "title": episode.title,
                 "air_date": episode.release_date,
+                "overview": episode.overview,
+                "runtime": _episode_runtime(episode),
                 "has_file": has_file,
                 "playable": episode.id in owners,
                 "still_url": image_url(thumbs.get(episode.id)),
@@ -293,11 +306,23 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
     show, position = _show_of(session, item)
     if show is not None:
         parent = None
+    if fanart is None and item.kind == "season" and show is not None:
+        fanart = session.scalar(
+            select(ItemImage.file_path)
+            .where(
+                ItemImage.item_id == show.id,
+                ItemImage.image_kind == "fanart",
+                ItemImage.file_path.is_not(None),
+            )
+            .order_by(ItemImage.position)
+            .limit(1)
+        )
     data_type = session.get(DataType, item.data_type_id)
+    is_series_work = item.kind == "work" and data_type is not None and data_type.structure == "series"
     seasons = (
         _seasons(session, item)
-        if item.kind == "work" and data_type is not None and data_type.structure == "series"
-        else []
+        if is_series_work
+        else (_seasons(session, show) if item.kind == "season" and show is not None else [])
     )
     scraped_at = session.scalar(
         select(func.max(ItemSourceRecord.fetched_at)).where(
@@ -353,11 +378,17 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         "show_missing_episodes": (
             None if item.show_missing_episodes is None else bool(item.show_missing_episodes)
         )
-        if item.kind == "work" and data_type is not None and data_type.structure == "series"
+        if is_series_work
         else None,
-        "show_missing_effective": show_missing_episodes(session, item, True)
-        if item.kind == "work" and data_type is not None and data_type.structure == "series"
-        else None,
+        "show_missing_effective": (
+            show_missing_episodes(session, item, True)
+            if is_series_work
+            else (
+                show_missing_episodes(session, show, True)
+                if item.kind == "season" and show is not None
+                else None
+            )
+        ),
         "files": [
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],
