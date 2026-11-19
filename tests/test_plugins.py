@@ -93,7 +93,8 @@ def _write(folder: Path, plugin_id: str, kind: str, code: str) -> None:
     target = folder / plugin_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "plugin.toml").write_text(
-        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1.0"\nkind = "{kind}"\n',
+        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1.0"\nkind = "{kind}"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (target / "__init__.py").write_text(textwrap.dedent(code), encoding="utf-8")
@@ -645,7 +646,10 @@ PLUGIN = DataTypePlugin(
     target = folder / type_id
     target.mkdir(parents=True, exist_ok=True)
     listed = toml_sources if toml_sources is not None else [(sid, sid) for sid in source_ids]
-    toml = f'id = "{type_id}"\nname = "{type_id}"\nversion = "1.0"\nkind = "data_type"\n'
+    toml = (
+        f'id = "{type_id}"\nname = "{type_id}"\nversion = "1.0"\nkind = "data_type"\n'
+        "[mortis]\napi_version = 1\n"
+    )
     for source_id, name in listed:
         toml += f'\n[[sources]]\nid = "{source_id}"\nname = "{name}"\n'
     (target / "plugin.toml").write_text(toml, encoding="utf-8")
@@ -697,6 +701,7 @@ def test_failed_parent_disables_sources_with_error(tmp_path: Path) -> None:
     target.mkdir(parents=True)
     (target / "plugin.toml").write_text(
         'id = "doujin"\nname = "doujin"\nversion = "1.0"\nkind = "data_type"\n'
+        "[mortis]\napi_version = 1\n"
         '\n[[sources]]\nid = "beta"\nname = "Beta"\n',
         encoding="utf-8",
     )
@@ -849,7 +854,10 @@ PLUGIN = DataTypePlugin(
 def _write_galtype(folder: Path, marker: str, source_ids: list[str]) -> None:
     target = folder / "galtype"
     target.mkdir(parents=True, exist_ok=True)
-    toml = 'id = "galtype"\nname = "galtype"\nversion = "1.0"\nkind = "data_type"\n'
+    toml = (
+        'id = "galtype"\nname = "galtype"\nversion = "1.0"\nkind = "data_type"\n'
+        "[mortis]\napi_version = 1\n"
+    )
     for source_id in source_ids:
         toml += f'\n[[sources]]\nid = "{source_id}"\nname = "{source_id}"\n'
     (target / "plugin.toml").write_text(toml, encoding="utf-8")
@@ -913,11 +921,11 @@ def test_rejected_override_does_not_poison_sys_modules(tmp_path: Path) -> None:
     assert sub1.candidates({}) == {"version": "old"}
 
 
-def test_source_cannot_declare_sources(tmp_path: Path) -> None:
+def test_declared_sources_need_a_matching_object(tmp_path: Path) -> None:
     target = tmp_path / "lone"
     target.mkdir(parents=True)
     (target / "plugin.toml").write_text(
-        'id = "lone"\nname = "lone"\nversion = "1.0"\nkind = "source"\n'
+        'id = "lone"\nname = "lone"\nversion = "1.0"\nkind = "source"\n[mortis]\napi_version = 1\n'
         '\n[[sources]]\nid = "sub"\nname = "Sub"\n',
         encoding="utf-8",
     )
@@ -926,14 +934,14 @@ def test_source_cannot_declare_sources(tmp_path: Path) -> None:
     registry.load()
     info = registry.get("lone")
     assert info is not None and info.error is not None
-    assert "[[sources]]" in info.error
 
 
-def test_player_cannot_declare_sources(tmp_path: Path) -> None:
+def test_declared_sources_need_a_matching_object_for_player(tmp_path: Path) -> None:
     target = tmp_path / "myplayer"
     target.mkdir(parents=True)
     (target / "plugin.toml").write_text(
         'id = "myplayer"\nname = "myplayer"\nversion = "1.0"\nkind = "player"\n'
+        "[mortis]\napi_version = 1\n"
         '\n[[sources]]\nid = "sub"\nname = "Sub"\n',
         encoding="utf-8",
     )
@@ -942,7 +950,6 @@ def test_player_cannot_declare_sources(tmp_path: Path) -> None:
     registry.load()
     info = registry.get("myplayer")
     assert info is not None and info.error is not None
-    assert "[[sources]]" in info.error
 
 
 def test_mask_url_keeps_plain_params() -> None:

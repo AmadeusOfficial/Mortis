@@ -12,7 +12,7 @@ from mortis.plugin_api import PlayerError, PlayerPlugin
 from mortis.plugins import launch as launch_module
 from mortis.plugins.host import plugin_settings
 from mortis.plugins.launch import SystemLauncher
-from mortis.plugins.loader import PluginLoadError, import_plugin, read_manifest
+from mortis.plugins.loader import import_plugin, read_manifest
 from mortis.plugins.player import PluginPlayerHost
 from mortis.plugins.registry import PluginRegistry
 from tests.fakes import FakeLauncher
@@ -49,7 +49,8 @@ def _write(folder: Path, plugin_id: str, kind: str, code: str) -> None:
     target = folder / plugin_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "plugin.toml").write_text(
-        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1.0"\nkind = "{kind}"\n',
+        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1.0"\nkind = "{kind}"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (target / "__init__.py").write_text(textwrap.dedent(code), encoding="utf-8")
@@ -89,7 +90,7 @@ def test_player_kind_requires_player_plugin(tmp_path: Path) -> None:
     wrong = registry.get("wrong")
     assert wrong is not None and wrong.error == "PLUGIN 不是 PlayerPlugin"
     badkind = registry.get("badkind")
-    assert badkind is not None and badkind.error is not None and "player" in badkind.error
+    assert badkind is not None and badkind.error is not None and "不一致" in badkind.error
     sneaky = registry.get("sneaky")
     assert sneaky is not None and sneaky.error == "__init__.py 用了不允许的模块 subprocess"
 
@@ -288,7 +289,6 @@ def test_bundled_players_pass_import_check() -> None:
     assert issubclass(info.plugin.Settings, BaseModel)
 
 
-def test_unknown_kind_message(tmp_path: Path) -> None:
+def test_kind_is_ignored(tmp_path: Path) -> None:
     _write(tmp_path, "odd", "stream", PLAYER)
-    with pytest.raises(PluginLoadError, match="data_type、source 或 player"):
-        read_manifest(tmp_path / "odd")
+    assert read_manifest(tmp_path / "odd").id == "odd"

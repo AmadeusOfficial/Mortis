@@ -59,7 +59,8 @@ def data_dir(tmp_path: Path) -> Path:
     folder = data / "plugins" / "fake_game"
     folder.mkdir(parents=True)
     (folder / "plugin.toml").write_text(
-        'id = "fake_game"\nname = "假启动器"\nversion = "1.0"\nkind = "player"\n',
+        'id = "fake_game"\nname = "假启动器"\nversion = "1.0"\nkind = "player"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (folder / "__init__.py").write_text(textwrap.dedent(FAKE_GAME), encoding="utf-8")
@@ -497,7 +498,8 @@ def test_failed_game_player_is_503_with_error(
     broken = data_dir / "plugins" / "galgame"
     broken.mkdir(parents=True)
     (broken / "plugin.toml").write_text(
-        'id = "galgame"\nname = "Galgame"\nversion = "9"\nkind = "data_type"\n\n'
+        'id = "galgame"\nname = "Galgame"\nversion = "9"\nkind = "data_type"\n'
+        "[mortis]\napi_version = 1\n\n"
         '[[players]]\nid = "galgame_launcher"\nname = "Galgame 启动"\n',
         encoding="utf-8",
     )

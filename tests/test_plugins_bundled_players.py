@@ -59,7 +59,10 @@ def _write_type(
     instances = "".join(f"P{index}(), " for index in range(len(player_ids)))
     code = TYPE_HEADER + classes + TYPE_FOOTER.format(type_id=type_id, players=instances)
     listed = toml_players if toml_players is not None else [(p, f"{p} 启动") for p in player_ids]
-    toml = f'id = "{type_id}"\nname = "{type_id}"\nversion = "1.0"\nkind = "data_type"\n'
+    toml = (
+        f'id = "{type_id}"\nname = "{type_id}"\nversion = "1.0"\nkind = "data_type"\n'
+        "[mortis]\napi_version = 1\n"
+    )
     for player_id, name in listed:
         toml += f'\n[[players]]\nid = "{player_id}"\nname = "{name}"\n'
     target = folder / type_id
@@ -137,17 +140,17 @@ def test_toml_player_needs_name_and_valid_id(tmp_path: Path) -> None:
         raise AssertionError("应拒绝不合法的 id")
 
 
-def test_only_data_type_can_declare_players(tmp_path: Path) -> None:
+def test_declared_players_need_a_matching_object(tmp_path: Path) -> None:
     target = tmp_path / "lone"
     target.mkdir()
     (target / "plugin.toml").write_text(
-        'id = "lone"\nname = "lone"\nversion = "1.0"\nkind = "player"\n'
+        'id = "lone"\nname = "lone"\nversion = "1.0"\nkind = "player"\n[mortis]\napi_version = 1\n'
         '\n[[players]]\nid = "sub"\nname = "Sub"\n',
         encoding="utf-8",
     )
     (target / "__init__.py").write_text("PLUGIN = None\n", encoding="utf-8")
     info = _registry((tmp_path, "builtin")).get("lone")
-    assert info is not None and info.error is not None and "[[players]]" in info.error
+    assert info is not None and info.error is not None
 
 
 def test_bundled_player_must_be_player_plugin(tmp_path: Path) -> None:

@@ -67,7 +67,8 @@ def data_dir(tmp_path: Path) -> Path:
     folder = data / "plugins" / "fake_game"
     folder.mkdir(parents=True)
     (folder / "plugin.toml").write_text(
-        'id = "fake_game"\nname = "假启动器"\nversion = "1.0"\nkind = "player"\n',
+        'id = "fake_game"\nname = "假启动器"\nversion = "1.0"\nkind = "player"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (folder / "__init__.py").write_text(textwrap.dedent(FAKE_GAME), encoding="utf-8")

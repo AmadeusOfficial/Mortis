@@ -150,7 +150,8 @@ def _write(folder: Path, plugin_id: str, kind: str, code: str) -> None:
     target = folder / plugin_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "plugin.toml").write_text(
-        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1"\nkind = "{kind}"\n',
+        f'id = "{plugin_id}"\nname = "{plugin_id}"\nversion = "1"\nkind = "{kind}"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (target / "__init__.py").write_text(textwrap.dedent(code), encoding="utf-8")

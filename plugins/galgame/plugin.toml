@@ -3,21 +3,28 @@ name = "Galgame"
 version = "0.1.0"
 kind = "data_type"
 
+[mortis]
+api_version = 1
+
 [[sources]]
 id = "bangumi"
 name = "Bangumi"
+data_type = "galgame"
 
 [[sources]]
 id = "vndb"
 name = "VNDB"
+data_type = "galgame"
 
 [[sources]]
 id = "ymgal"
 name = "月幕 Galgame"
+data_type = "galgame"
 
 [[sources]]
 id = "cngal"
 name = "CnGal"
+data_type = "galgame"
 
 [[players]]
 id = "galgame_launcher"

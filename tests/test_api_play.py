@@ -74,7 +74,8 @@ def _plugin(data: Path, plugin_id: str, name: str, code: str) -> None:
     folder = data / "plugins" / plugin_id
     folder.mkdir(parents=True)
     (folder / "plugin.toml").write_text(
-        f'id = "{plugin_id}"\nname = "{name}"\nversion = "1.0"\nkind = "player"\n',
+        f'id = "{plugin_id}"\nname = "{name}"\nversion = "1.0"\nkind = "player"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (folder / "__init__.py").write_text(textwrap.dedent(code), encoding="utf-8")

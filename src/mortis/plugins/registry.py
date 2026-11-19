@@ -16,7 +16,6 @@ from mortis.catalog.spec import validate_data_type
 from mortis.db.models import DataType, SourceOrder
 from mortis.plugin_api import DataTypePlugin, PlayerPlugin, SourcePlugin
 from mortis.plugins.loader import (
-    Kind,
     Manifest,
     ManifestSource,
     PluginLoadError,
@@ -27,6 +26,7 @@ from mortis.plugins.loader import (
 from mortis.settings import Settings
 
 Origin = Literal["builtin", "user"]
+Kind = Literal["data_type", "source", "player"]
 USER_FOLDER = "plugins"
 BUILTIN_IDS = frozenset(spec.id for spec in BUILTIN_TYPES)
 _LOG = logging.getLogger(__name__)
@@ -144,10 +144,19 @@ def _validate_bundled_players(manifest: Manifest, plugin: DataTypePlugin) -> Non
         )
 
 
+def _guess_kind(plugin: object) -> Kind:
+    if isinstance(plugin, DataTypePlugin):
+        return "data_type"
+    return "player" if isinstance(plugin, PlayerPlugin) else "source"
+
+
 def _validate(manifest: Manifest, plugin: object) -> DataTypePlugin | SourcePlugin | PlayerPlugin:
-    if manifest.kind == "player":
+    kind = (
+        manifest.kind if manifest.kind in ("data_type", "source", "player") else _guess_kind(plugin)
+    )
+    if kind == "player":
         return _validate_player(manifest, plugin)
-    if manifest.kind == "data_type":
+    if kind == "data_type":
         if not isinstance(plugin, DataTypePlugin):
             raise PluginLoadError("PLUGIN 不是 DataTypePlugin")
         if plugin.spec.id in BUILTIN_IDS:
@@ -265,6 +274,12 @@ def _place(
     packages[primary] = [error_entry(clash_id, owner)]
 
 
+def _manifest_kind(manifest: Manifest) -> Kind:
+    if manifest.kind in ("data_type", "source", "player"):
+        return manifest.kind  # type: ignore[return-value]
+    return "data_type" if manifest.sources or manifest.players else "source"
+
+
 def _manifest_ids(manifest: Manifest) -> list[str]:
     """这个包会占用的全部 id：父 id 加 [[sources]]、[[players]] 的 id，仅凭 manifest，不 import。"""
     return [
@@ -281,7 +296,7 @@ def _build_infos(manifest: Manifest, origin: Origin, disabled: set[str]) -> list
         manifest.id,
         manifest.name,
         manifest.version,
-        manifest.kind,
+        _manifest_kind(manifest),
         manifest.folder,
         origin,
         enabled,
@@ -358,7 +373,7 @@ class PluginRegistry:
                 manifest.id,
                 manifest.name,
                 manifest.version,
-                manifest.kind,
+                _manifest_kind(manifest),
                 folder,
                 origin,
                 False,

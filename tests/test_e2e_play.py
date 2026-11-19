@@ -122,7 +122,8 @@ def world(tmp_path: Path) -> Iterator[tuple[World, str]]:
     plugin = data_dir / "plugins" / "fake_player"
     plugin.mkdir(parents=True)
     (plugin / "plugin.toml").write_text(
-        'id = "fake_player"\nname = "假播放器"\nversion = "1.0"\nkind = "player"\n',
+        'id = "fake_player"\nname = "假播放器"\nversion = "1.0"\nkind = "player"\n'
+        "[mortis]\napi_version = 1\n",
         encoding="utf-8",
     )
     (plugin / "__init__.py").write_text(textwrap.dedent(FAKE_PLAYER), encoding="utf-8")

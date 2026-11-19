@@ -108,7 +108,9 @@ def app(tmp_path: Path, fake: FakeTmdb, holder: dict[str, ScriptedClient]) -> Fa
     folder = data / "plugins" / "fakegal"
     folder.mkdir(parents=True)
     (folder / "plugin.toml").write_text(
-        'id = "fakegal"\nname = "假来源"\nversion = "1"\nkind = "source"\n', encoding="utf-8"
+        'id = "fakegal"\nname = "假来源"\nversion = "1"\nkind = "source"\n'
+        "[mortis]\napi_version = 1\n",
+        encoding="utf-8",
     )
     (folder / "__init__.py").write_text(textwrap.dedent(FAKE_GAL), encoding="utf-8")
 
