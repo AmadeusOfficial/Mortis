@@ -1,8 +1,10 @@
 import logging
+import threading
 from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -18,8 +20,9 @@ from mortis.plugins.host import (
     plugin_settings,
 )
 from mortis.plugins.oauth import OAuthStates, authorize_url, client_values, exchange_code
+from mortis.plugins.packaging import PluginInstaller, Preview
 from mortis.plugins.player import player_host, unavailable_reason
-from mortis.plugins.registry import PluginInfo
+from mortis.plugins.registry import USER_FOLDER, PluginInfo
 from mortis.services import Services
 
 router = APIRouter(prefix="/api")
@@ -58,6 +61,8 @@ class PluginOut(BaseModel):
     origin: str
     enabled: bool
     error: str | None
+    # 覆盖升级之后，磁盘上已是新版而内存里还是旧对象，重启莫提斯才完全生效。
+    restart_pending: bool = False
     parent: str | None = None
     data_type: str | None = None
     settings_schema: dict[str, Any] | None = None
@@ -95,7 +100,7 @@ def _secret_keys(plugin: SourcePlugin) -> list[str]:
     return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
 
 
-def _out(services: Services, info: PluginInfo) -> PluginOut:
+def _out(services: Services, info: PluginInfo, restart_pending: bool = False) -> PluginOut:
     out = PluginOut(
         id=info.id,
         name=info.name,
@@ -110,6 +115,7 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
         origin=info.origin,
         enabled=info.enabled,
         error=info.error,
+        restart_pending=restart_pending,
         parent=info.parent,
     )
     plugin = info.plugin
@@ -183,15 +189,184 @@ def _source(services: Services, plugin_id: str) -> SourcePlugin:
     return plugin
 
 
+_installer_guard = threading.Lock()
+
+
+def _installer(services: Services, request: Request) -> PluginInstaller:
+    """每个应用一个安装器：令牌和待重启名单都在它里面。"""
+    with _installer_guard:
+        state = request.app.state
+        installer: PluginInstaller | None = getattr(state, "plugin_installer", None)
+        if installer is None:
+            installer = PluginInstaller(
+                services.data_dir / USER_FOLDER,
+                services.plugins,
+                services.locks,
+                lambda: _reload(services, request),
+            )
+            state.plugin_installer = installer
+        return installer
+
+
+class FileOut(BaseModel):
+    path: str
+    size: int
+    sha256: str
+
+
+class ExistingOut(BaseModel):
+    id: str
+    name: str
+    version: str
+    package_hash: str
+    added: list[str]
+    removed: list[str]
+    changed: list[str]
+
+
+class SourceEntryOut(BaseModel):
+    id: str
+    name: str
+    data_type: str
+
+
+class PlayerEntryOut(BaseModel):
+    id: str
+    name: str
+
+
+class PreviewOut(BaseModel):
+    token: str
+    expires_in: int
+    id: str
+    name: str
+    version: str
+    api_version: int
+    min_mortis_version: str | None
+    capabilities: list[str]
+    sources: list[SourceEntryOut]
+    players: list[PlayerEntryOut]
+    hooks: list[HookOut]
+    files: list[FileOut]
+    total_size: int
+    package_hash: str
+    existing: ExistingOut | None
+    needs_restart: bool
+
+
+class ConfirmIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str
+    trust: bool = False
+
+
+class InstallOut(BaseModel):
+    id: str
+    name: str
+    version: str
+    previous_version: str | None
+    replaced: bool
+    needs_restart: bool
+
+
+class UninstallOut(BaseModel):
+    id: str
+    name: str
+
+
+def _preview_out(preview: Preview) -> PreviewOut:
+    return PreviewOut(
+        token=preview.token,
+        expires_in=preview.expires_in,
+        id=preview.id,
+        name=preview.name,
+        version=preview.version,
+        api_version=preview.api_version,
+        min_mortis_version=preview.min_mortis_version,
+        capabilities=list(preview.capabilities),
+        sources=[SourceEntryOut(id=i, name=n, data_type=d) for i, n, d in preview.sources],
+        players=[PlayerEntryOut(id=i, name=n) for i, n in preview.players],
+        hooks=[
+            HookOut(id=h.id, event=h.event, data_types=list(h.data_types), writes=list(h.writes))
+            for h in preview.hooks
+        ],
+        files=[FileOut(path=f.path, size=f.size, sha256=f.sha256) for f in preview.files],
+        total_size=preview.total_size,
+        package_hash=preview.package_hash,
+        existing=(
+            ExistingOut(
+                id=preview.existing.id,
+                name=preview.existing.name,
+                version=preview.existing.version,
+                package_hash=preview.existing.package_hash,
+                added=list(preview.existing.added),
+                removed=list(preview.existing.removed),
+                changed=list(preview.existing.changed),
+            )
+            if preview.existing is not None
+            else None
+        ),
+        needs_restart=preview.needs_restart,
+    )
+
+
+@router.post("/plugins/import/check", response_model=PreviewOut)
+async def check_plugin_package(services: ServicesDep, request: Request) -> PreviewOut:
+    """上传 zip 做静态检查，不执行任何插件代码；返回预览和一次性确认令牌。请求体就是 zip 本身。"""
+    installer = _installer(services, request)
+    declared = request.headers.get("content-length")
+    if (
+        declared is not None
+        and declared.isdigit()
+        and int(declared) > installer.limits.max_zip_bytes
+    ):
+        raise UserError("压缩包太大", status_code=413)
+    upload = installer.begin_upload()
+    try:
+        async for chunk in request.stream():
+            upload.write(chunk)
+    except BaseException:
+        upload.abort()
+        raise
+    preview = await run_in_threadpool(upload.finish)
+    return _preview_out(preview)
+
+
+@router.post("/plugins/import/confirm", response_model=InstallOut)
+async def confirm_plugin_package(
+    body: ConfirmIn, services: ServicesDep, request: Request
+) -> InstallOut:
+    if not body.trust:
+        raise UserError("要先确认信任这个插件才能导入")
+    installer = _installer(services, request)
+    result = await run_in_threadpool(installer.confirm, body.token)
+    return InstallOut(
+        id=result.id,
+        name=result.name,
+        version=result.version,
+        previous_version=result.previous_version,
+        replaced=result.replaced,
+        needs_restart=result.needs_restart,
+    )
+
+
+@router.delete("/plugins/{plugin_id}", response_model=UninstallOut)
+def uninstall_plugin(plugin_id: str, services: ServicesDep, request: Request) -> UninstallOut:
+    done_id, name = _installer(services, request).uninstall(plugin_id)
+    return UninstallOut(id=done_id, name=name)
+
+
 @router.get("/plugins", response_model=list[PluginOut])
-def list_plugins(services: ServicesDep) -> list[PluginOut]:
-    return [_out(services, info) for info in services.plugins.all()]
+def list_plugins(services: ServicesDep, request: Request) -> list[PluginOut]:
+    pending = _installer(services, request).pending_restart
+    return [_out(services, info, info.id in pending) for info in services.plugins.all()]
 
 
 @router.post("/plugins/reload", response_model=list[PluginOut])
 def reload_plugins(services: ServicesDep, request: Request) -> list[PluginOut]:
     _reload(services, request)
-    return list_plugins(services)
+    return list_plugins(services, request)
 
 
 @router.put("/plugins/{plugin_id}", response_model=PluginOut)
