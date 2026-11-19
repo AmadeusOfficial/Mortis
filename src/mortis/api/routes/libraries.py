@@ -25,6 +25,7 @@ class LibraryOut(BaseModel):
     automation: str
     is_auto_scrape: bool
     wall_collections: WallCollections
+    show_missing_episodes: bool | None
     paths: list[str]
     item_count: int
     file_count: int
@@ -63,6 +64,7 @@ class LibraryUpdate(BaseModel):
     schedule_cron: str | None = None
     refresh_running: bool | None = None
     wall_collections: WallCollections | None = None
+    show_missing_episodes: bool | None = None
 
 
 def _out(
@@ -80,6 +82,9 @@ def _out(
         automation=library.automation,
         is_auto_scrape=bool(library.is_auto_scrape),
         wall_collections=library.wall_collections,
+        show_missing_episodes=(
+            None if library.show_missing_episodes is None else bool(library.show_missing_episodes)
+        ),
         paths=[row.path for row in library.paths],
         item_count=stats.item_count,
         file_count=stats.file_count,
@@ -155,6 +160,7 @@ def update_library(
         schedule_cron=body.schedule_cron,
         refresh_running=body.refresh_running,
         wall_collections=body.wall_collections,
+        show_missing_episodes=body.show_missing_episodes,
     )
     watcher.sync()
     return _one(session, watcher, library)

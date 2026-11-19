@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from sqlalchemy import Engine, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from mortis.catalog.install import ensure_builtin_types
 from mortis.config.models import MovieScrapeConfig
@@ -349,10 +349,18 @@ def _old_database(tmp_path: Path) -> Path:
     try:
         with make_session_factory(engine)() as session:
             ensure_builtin_types(session)
-            now = utc_now()
-            library = Library(data_type_id="movie", name="电影", created_at=now, updated_at=now)
-            session.add(library)
-            session.flush()
+            session.commit()
+        # 0004 还没有后来加上的列。用当前模型插入会把新列写进去，所以这里按当时的表写。
+        now = utc_now()
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into libraries (data_type_id, name, created_at, updated_at) "
+                    "values ('movie', '电影', :now, :now)"
+                ),
+                {"now": now},
+            )
+            library_id = conn.execute(text("select id from libraries")).scalar_one()
             for number, (locked, sources) in enumerate(
                 [
                     ([], {}),  # 无法判断 → scrape
@@ -361,19 +369,23 @@ def _old_database(tmp_path: Path) -> Path:
                 ],
                 start=1,
             ):
-                session.add(
-                    Item(
-                        library_id=library.id,
-                        data_type_id="movie",
-                        kind="work",
-                        title=f"片{number}",
-                        locked_fields=json.dumps(locked),
-                        field_sources=json.dumps(sources),
-                        created_at=now,
-                        updated_at=now,
-                    )
+                conn.execute(
+                    text(
+                        "insert into items ("
+                        "library_id, data_type_id, kind, title, locked_fields, field_sources, "
+                        "created_at, updated_at"
+                        ") values ("
+                        ":library_id, 'movie', 'work', :title, :locked, :sources, :now, :now)"
+                    ),
+                    {
+                        "library_id": library_id,
+                        "title": f"片{number}",
+                        "locked": json.dumps(locked),
+                        "sources": json.dumps(sources),
+                        "now": now,
+                    },
                 )
-            session.flush()
+        with make_session_factory(engine)() as session:
             genre = Tag(tag_kind="genre", name="动作")
             keyword = Tag(tag_kind="keyword", name="赛博朋克")
             session.add_all([genre, keyword])
@@ -392,7 +404,33 @@ def _snapshot(db_path: Path) -> dict[int, tuple[list, list, bytes]]:
     out = {}
     try:
         with make_session_factory(engine)() as session:
-            for item in session.scalars(select(Item).order_by(Item.id)):
+            # 快照要能在升级前的库上读。当时还没有后来加的列，不能按当前模型整行选出。
+            for item in session.scalars(
+                select(Item)
+                .options(
+                    load_only(
+                        Item.id,
+                        Item.library_id,
+                        Item.data_type_id,
+                        Item.parent_id,
+                        Item.kind,
+                        Item.index_number,
+                        Item.title,
+                        Item.original_title,
+                        Item.sort_title,
+                        Item.subtitle,
+                        Item.overview,
+                        Item.release_date,
+                        Item.poster_path,
+                        Item.fields,
+                        Item.field_sources,
+                        Item.locked_fields,
+                        Item.created_at,
+                        Item.updated_at,
+                    )
+                )
+                .order_by(Item.id)
+            ):
                 fields = list(
                     session.scalars(
                         select(TypeField).where(

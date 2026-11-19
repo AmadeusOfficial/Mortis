@@ -21,6 +21,7 @@ from mortis.db.models import (
     Task,
     TypeField,
 )
+from mortis.items.missing import show_missing_episodes
 from mortis.organize.episodes import parse_episode
 from mortis.scrape.apply import level_fields
 from mortis.tasks import repo as task_repo
@@ -204,14 +205,18 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
             covered.add((episode.parent_id, number + offset))
     thumbs = _first_images(session, [e.id for e in episodes], "thumb")
     by_season: dict[int, list[dict[str, Any]]] = {s.id: [] for s in seasons}
+    show_missing = show_missing_episodes(session, show, True)
     for episode in episodes:
+        has_file = (episode.parent_id, episode.index_number) in covered
+        if not has_file and not show_missing:
+            continue
         by_season[episode.parent_id or 0].append(
             {
                 "id": episode.id,
                 "number": episode.index_number,
                 "title": episode.title,
                 "air_date": episode.release_date,
-                "has_file": (episode.parent_id, episode.index_number) in covered,
+                "has_file": has_file,
                 "playable": episode.id in owners,
                 "still_url": image_url(thumbs.get(episode.id)),
             }
@@ -227,6 +232,7 @@ def _seasons(session: Session, show: Item) -> list[dict[str, Any]]:
             "episodes": by_season[season.id],
         }
         for season in seasons
+        if by_season[season.id]
     ]
 
 
@@ -344,6 +350,14 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         else None,
         "position": position,
         "seasons": seasons,
+        "show_missing_episodes": (
+            None if item.show_missing_episodes is None else bool(item.show_missing_episodes)
+        )
+        if item.kind == "work" and data_type is not None and data_type.structure == "series"
+        else None,
+        "show_missing_effective": show_missing_episodes(session, item, True)
+        if item.kind == "work" and data_type is not None and data_type.structure == "series"
+        else None,
         "files": [
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],

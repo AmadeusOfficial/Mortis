@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from mortis.db.models import Item, ItemImage, Library, LibraryPath, MediaFile, Person, Task
 from mortis.files.trash import Trash
 from mortis.items.edit import ItemError
-from mortis.items.matching import is_series
 from mortis.scrape.images import ImageStore
 from mortis.scrape.service import drop_empty_collections
 from mortis.services import KeyedLocks
@@ -145,8 +144,8 @@ def check_deletable(session: Session, item: Item) -> None:
         raise ItemError("系列不能直接删，删掉其中的作品后系列会一起去掉", status_code=400)
     if item.kind in ("season", "episode"):
         raise ItemError("季和集不能单独删", status_code=400)
-    if item.kind != "work" or is_series(session, item):
-        raise ItemError("剧这次还不能删", status_code=400)
+    if item.kind != "work":
+        raise ItemError("只有作品能删", status_code=400)
 
 
 def _root_of(path: str, roots: list[str]) -> str | None:
@@ -173,11 +172,21 @@ def _candidate(rows: list[MediaFile]) -> str | None:
     return folder
 
 
-def _has_foreign(session: Session, item: Item, folder: str, resolver: _Resolver) -> bool:
+def _tree_ids(session: Session, item: Item) -> set[int]:
+    """作品自己，加上季和集。删剧时这些文件都算这部剧的。"""
+    ids = {item.id}
+    children = set(session.scalars(select(Item.id).where(Item.parent_id == item.id)))
+    ids |= children
+    if children:
+        ids |= set(session.scalars(select(Item.id).where(Item.parent_id.in_(children))))
+    return ids
+
+
+def _has_foreign(session: Session, owned: set[int], folder: str, resolver: _Resolver) -> bool:
     """文件夹里（递归，按 resolve 后的路径）有别的条目或没认出的登记文件。"""
     folder_key = resolver.key(folder)
     for item_id, path in session.execute(select(MediaFile.item_id, MediaFile.path)):
-        if item_id != item.id and _under(resolver.key(path), folder_key):
+        if item_id not in owned and _under(resolver.key(path), folder_key):
             return True
     return False
 
@@ -198,7 +207,7 @@ def _unregistered(scan: _Scan, rows: list[MediaFile]) -> list[tuple[str, int]]:
 
 def _check_safe(
     session: Session,
-    item: Item,
+    owned: set[int],
     targets: tuple[list[str], list[str]],
     roots: list[str],
     resolver: _Resolver,
@@ -214,7 +223,7 @@ def _check_safe(
     for folder in folders:
         if _contains_root(folder, resolver):
             raise ItemError(f"这个文件夹里有库目录，不删：{folder}", status_code=400)
-        if _has_foreign(session, item, folder, resolver):
+        if _has_foreign(session, owned, folder, resolver):
             raise ItemError(f"这个文件夹里还有别的条目的文件，不删：{folder}", status_code=400)
 
 
@@ -222,12 +231,13 @@ def plan_delete(
     session: Session, item: Item, trash: Trash, video_extensions: frozenset[str]
 ) -> DeletePlan:
     check_deletable(session, item)
+    owned = _tree_ids(session, item)
     library = session.get(Library, item.library_id)
     roots = [row.path for row in library.paths] if library is not None else []
     resolver = _Resolver(session.scalars(select(LibraryPath.path)))
     rows = list(
         session.scalars(
-            select(MediaFile).where(MediaFile.item_id == item.id).order_by(MediaFile.path)
+            select(MediaFile).where(MediaFile.item_id.in_(owned)).order_by(MediaFile.path)
         )
     )
     for row in rows:
@@ -248,7 +258,7 @@ def plan_delete(
         and _root_of(candidate, roots) is not None
         and _resolved_key(candidate) == resolver.key(candidate)
         and not _contains_root(candidate, resolver)
-        and not _has_foreign(session, item, candidate, resolver)
+        and not _has_foreign(session, owned, candidate, resolver)
     ):
         scan = _Scan()
         _scan(candidate, scan)
@@ -276,7 +286,7 @@ def plan_delete(
         )
         if rows:
             plan.reasons.append("条目的文件不在一个只属于它的文件夹里，只删登记的文件")
-    _check_safe(session, item, (plan.folders, plan.files), roots, resolver)
+    _check_safe(session, owned, (plan.folders, plan.files), roots, resolver)
     _measure(plan, exclusive)
     plan.permanent = any(
         trash.is_permanent(Path(target)) for target in [*plan.folders, *plan.files]
@@ -438,8 +448,9 @@ def delete_item(
                 _prune_empty(Path(target).parent, root)
 
         removed_keys = [_key(target) for target in removed]
+        owned = _tree_ids(session, item)
         with locks.hold("catalog-write"):
-            rows = list(session.scalars(select(MediaFile).where(MediaFile.item_id == item.id)))
+            rows = list(session.scalars(select(MediaFile).where(MediaFile.item_id.in_(owned))))
             if failed:
                 for row in rows:
                     if any(_under(_key(row.path), key) for key in removed_keys):
@@ -450,7 +461,11 @@ def delete_item(
                     f"有 {len(failed)} 个没删掉：{listed}。已删掉的已从库里去掉，可以再删一次",
                     status_code=409,
                 )
-            images = _images_of(session, item)
+            images: set[str] = set()
+            for owned_id in owned:
+                owned_item = session.get(Item, owned_id)
+                if owned_item is not None:
+                    images |= _images_of(session, owned_item)
             parent = session.get(Item, item.parent_id) if item.parent_id is not None else None
             if parent is not None and parent.kind == "collection":
                 others = session.scalar(
@@ -458,7 +473,7 @@ def delete_item(
                 )
                 if not others:
                     images |= _images_of(session, parent)
-            session.execute(delete(MediaFile).where(MediaFile.item_id == item.id))
+            session.execute(delete(MediaFile).where(MediaFile.item_id.in_(owned)))
             session.execute(delete(Item).where(Item.id == item.id))
             drop_empty_collections(session, library_id)
             session.commit()

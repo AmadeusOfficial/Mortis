@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from mortis.config.models import TvScrapeConfig
 from mortis.config.types import type_config
 from mortis.db.models import Item, MediaFile, utc_now
+from mortis.items.missing import show_missing_episodes
 from mortis.organize.episodes import parse_episode
 from mortis.organize.names import parse_name, subtitle_belongs_to
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
@@ -291,6 +292,7 @@ def scrape_show(
         show_fields = level_fields(session, data_type_id, "work")
         season_fields = level_fields(session, data_type_id, "season")
         episode_fields = level_fields(session, data_type_id, "episode")
+        missing_on = show_missing_episodes(session, show, config.show_missing_episodes)
 
     with open_tmdb(services, data_type_id) as tmdb:
         request = FetchRequest(services, data_type_id, config, ids, tmdb.http, ctx.log)
@@ -330,9 +332,7 @@ def scrape_show(
                 key = (number, episode.get("episode_number"))
                 has_file = key in local_episodes
                 aired = bool(episode.get("air_date")) and episode["air_date"] <= today
-                missing_ok = config.show_missing_episodes and (
-                    number != 0 or config.show_missing_specials
-                )
+                missing_ok = missing_on and (number != 0 or config.show_missing_specials)
                 if has_file or (aired and missing_ok):
                     season.episodes[key[1]] = episode_candidates(
                         episode, config, originals.get(str(key[1]))

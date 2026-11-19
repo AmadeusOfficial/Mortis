@@ -95,6 +95,8 @@ class Library(Base):
     is_auto_scrape: Mapped[int] = mapped_column(server_default=text("1"))
     # 海报墙怎么显示系列电影，只对 item_group 结构的库生效。
     wall_collections: Mapped[str] = mapped_column(server_default=text("'collapse'"))
+    # 空表示跟随数据类型设置。0/1 是这部库自己的选择。
+    show_missing_episodes: Mapped[int | None]
     created_at: Mapped[str]
     updated_at: Mapped[str]
 
@@ -133,6 +135,8 @@ class Item(Base):
     overview: Mapped[str | None]
     release_date: Mapped[str | None]
     poster_path: Mapped[str | None]
+    # 空表示跟随媒体库。0/1 是这一部自己的选择，优先于媒体库。
+    show_missing_episodes: Mapped[int | None]
     fields: Mapped[str] = mapped_column(server_default=text("'{}'"))
     field_sources: Mapped[str] = mapped_column(server_default=text("'{}'"))
     locked_fields: Mapped[str] = mapped_column(server_default=text("'[]'"))

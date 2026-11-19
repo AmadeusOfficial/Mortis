@@ -32,6 +32,82 @@ def _size(path: str) -> int | None:
         return None
 
 
+def _top_folder(path: str, roots: list[str]) -> str | None:
+    """库根下的第一层目录。直接放在库根里的文件没有这一层。"""
+    for root in roots:
+        try:
+            relative = os.path.relpath(path, root)
+        except ValueError:
+            continue
+        if relative == os.pardir or relative.startswith(os.pardir + os.sep):
+            continue
+        head, _, _rest = relative.partition(os.sep)
+        if not head or head == os.pardir:
+            continue
+        return os.path.join(root, head)
+    return None
+
+
+def _follow_renames(
+    existing: dict[str, MediaFile],
+    roots: list[str],
+    movies: list[FoundMovie],
+    now: str,
+    main_kind: str,
+) -> None:
+    """文件夹改名后，相对路径和大小都没变的文件仍算原来那一条，不当成新文件。"""
+    scanned = {path for movie in movies for path in (*movie.videos, *movie.subtitles)}
+    missing: dict[tuple[str, int | None, str], list[tuple[str, MediaFile]]] = {}
+    for path, row in existing.items():
+        if path in scanned or row.file_kind not in (main_kind, "subtitle"):
+            continue
+        folder = _top_folder(path, roots)
+        if folder is None:
+            continue
+        relative = os.path.normcase(os.path.relpath(path, folder))
+        missing.setdefault((relative, row.size, row.file_kind), []).append((folder, row))
+
+    for movie in movies:
+        folders: dict[str, list[tuple[str, MediaFile]]] = {}
+        ambiguous = False
+        for kind, paths in ((main_kind, movie.videos), ("subtitle", movie.subtitles)):
+            for path in paths:
+                if path in existing:
+                    continue
+                relative = os.path.normcase(os.path.relpath(path, movie.folder))
+                found = missing.get((relative, _size(path), kind), [])
+                if len(found) != 1:
+                    ambiguous = ambiguous or len(found) > 1
+                    continue
+                folder, row = found[0]
+                folders.setdefault(folder, []).append((path, row))
+        if ambiguous or len(folders) != 1:
+            continue
+        (old_folder, pairs), *_rest = folders.items()
+        moved: set[int] = set()
+        for path, row in pairs:
+            old = row.path
+            row.path = path
+            row.updated_at = now
+            existing.pop(old, None)
+            existing[path] = row
+            moved.add(id(row))
+            relative = os.path.normcase(os.path.relpath(path, movie.folder))
+            missing.pop((relative, row.size, row.file_kind), None)
+        for path, row in list(existing.items()):
+            if row.file_kind in (main_kind, "subtitle") or id(row) in moved:
+                continue
+            if _top_folder(path, roots) != old_folder:
+                continue
+            target = os.path.join(movie.folder, os.path.relpath(path, old_folder))
+            if target in existing or not os.path.exists(target):
+                continue
+            row.path = target
+            row.updated_at = now
+            existing.pop(path, None)
+            existing[target] = row
+
+
 def sync_media_files(
     session: Session,
     library: Library,
@@ -53,6 +129,7 @@ def sync_media_files(
     added = 0
     grown: set[int] = set()
     now = utc_now()
+    _follow_renames(existing, [row.path for row in library.paths], movies, now, main_kind)
     for movie in movies:
         bound = next(
             (

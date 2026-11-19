@@ -32,6 +32,7 @@ import {
   scrapeItem,
   updateItemFields,
   updateItemLocks,
+  updateItemMissing,
 } from "../api";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { DeleteItemModal } from "../components/DeleteItemModal";
@@ -189,6 +190,15 @@ export function ItemDetailPage() {
       queryKey: ["wall", detail.library_id],
     });
   };
+  const missing = useMutation({
+    mutationFn: (value: string | null) =>
+      updateItemMissing(id, value === "show" ? true : value === "hide" ? false : null),
+    onSuccess: (saved) => {
+      setDetail(saved);
+      notifications.show({ color: "green", message: "已更新缺少的集怎么显示" });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
   const watcher = useTaskWatcher((task) => {
     setArranging(false);
     void queryClient.invalidateQueries({ queryKey: ["item", id] });
@@ -300,6 +310,12 @@ export function ItemDetailPage() {
   }
   const detail = item.data;
   const series = isSeriesType(dataTypes.data, detail.data_type_id);
+  const missingChoice =
+    detail.show_missing_episodes === true
+      ? "show"
+      : detail.show_missing_episodes === false
+        ? "hide"
+        : "inherit";
   const allFields = detail.sections.flatMap((section) => section.fields);
   const byKey = new Map(allFields.map((field) => [field.key, field]));
   const lockedKeys = allFields
@@ -345,8 +361,8 @@ export function ItemDetailPage() {
     detail.files.some((file) => file.file_kind === "video");
   // 本地文件是游戏文件夹的条目（Galgame）按钮叫「启动」，启动的是文件夹里选定的程序。
   const canLaunch = detail.files.some((file) => file.file_kind === "game");
-  // 只有单部作品能删；剧、季、集和系列后端也不让删。
-  const canDelete = dataTypes.data !== undefined && isWork && !series;
+  // 作品都能删，季、集和系列不能。剧会连同季和集一起删。
+  const canDelete = dataTypes.data !== undefined && isWork;
   const landscape = detail.kind === "episode";
 
   const peopleFields = allFields.filter(
@@ -600,6 +616,34 @@ export function ItemDetailPage() {
                     </Button>
                   </Menu.Target>
                   <Menu.Dropdown>
+                    {series && (
+                      <>
+                        <Menu.Label>缺少的集</Menu.Label>
+                        {(
+                          [
+                            ["inherit", "跟随媒体库"],
+                            ["show", "显示"],
+                            ["hide", "不显示"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <Menu.Item
+                            key={value}
+                            disabled={missing.isPending}
+                            leftSection={
+                              <span className={classes.menuMark}>
+                                {missingChoice === value ? "✓" : ""}
+                              </span>
+                            }
+                            onClick={() => {
+                              if (missingChoice !== value) missing.mutate(value);
+                            }}
+                          >
+                            {label}
+                          </Menu.Item>
+                        ))}
+                        <Menu.Divider />
+                      </>
+                    )}
                     <Menu.Item
                       leftSection={<IconSparkle size={14} />}
                       onClick={() => agent.openWithDraft(rematchDraft(detail))}

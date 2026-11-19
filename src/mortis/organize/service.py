@@ -13,6 +13,7 @@ from mortis.items.identity import (
     find_or_create_work,
     work_of,
 )
+from mortis.items.presence import drop_fileless_works
 from mortis.organize.files import sync_media_files
 from mortis.organize.names import ParsedName
 from mortis.organize.scan import scan_folders, scan_paths, scan_shows
@@ -155,6 +156,11 @@ def organize_library(
                     f"匹配度 {match.score:.2f}"
                 )
 
+    dropped = drop_fileless_works(session, library.id)
+    if dropped:
+        session.commit()
+        ctx.log(f"去掉了 {dropped} 个已经没有文件的作品")
+
     should_scrape = bool(library.is_auto_scrape) if scrape is None else scrape
     followups: list[Followup] = []
     if should_scrape:
@@ -179,6 +185,7 @@ def organize_library(
         "errors": errors,
         "identified": identified,
         "scrape_queued": len(followups),
+        "dropped": dropped,
     }
     events.append(_scan_finished(library, result))
     return TaskResult(result=result, followups=[*followups, *hook_followups(ctx, *events)])
@@ -289,6 +296,11 @@ def organize_plugin_library(
             f"匹配度 {match.score:.2f}"
         )
 
+    dropped = drop_fileless_works(session, library.id)
+    if dropped:
+        session.commit()
+        ctx.log(f"去掉了 {dropped} 个已经没有文件的作品")
+
     should_scrape = bool(library.is_auto_scrape) if scrape is None else scrape
     followups: list[Followup] = []
     if should_scrape:
@@ -304,6 +316,7 @@ def organize_plugin_library(
         "errors": 0,
         "identified": bool(sources),
         "scrape_queued": len(followups),
+        "dropped": dropped,
     }
     events.append(_scan_finished(library, result))
     return TaskResult(result=result, followups=[*followups, *hook_followups(ctx, *events)])

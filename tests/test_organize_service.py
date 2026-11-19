@@ -9,6 +9,7 @@ from sqlalchemy import select
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
 from mortis.db.models import Item, ItemExternalId, ItemSourceRecord, MediaFile, Task, utc_now
+from mortis.items.presence import drop_fileless_works
 from mortis.libraries import create_library
 from mortis.settings import Settings
 from mortis.tasks import repo
@@ -91,6 +92,7 @@ def test_first_scan_identifies_and_queues_scrapes(app: FastAPI, movies: Path) ->
         "errors": 0,
         "identified": True,
         "scrape_queued": 2,
+        "dropped": 0,
     }
     with app.state.session_factory() as session:
         items = session.scalars(select(Item).order_by(Item.title)).all()
@@ -129,6 +131,46 @@ def test_rescan_is_idempotent_and_removes_missing_files(app: FastAPI, movies: Pa
         assert new_sub.item_id is not None and new_sub.file_kind == "subtitle"
 
 
+def test_renamed_folder_stays_on_the_same_item(app: FastAPI, movies: Path) -> None:
+    """刮削之后手动改文件夹名：再扫描只改路径，不重新识别，也不再刮削。"""
+    library_id = _library(app, movies, auto=False)
+    _organize(app, library_id)
+    with app.state.session_factory() as session:
+        matrix = session.scalar(select(Item).where(Item.title == "黑客帝国"))
+        heat = session.scalar(select(Item).where(Item.title == "盗火线"))
+        assert matrix is not None and heat is not None
+        matrix_id, heat_id = matrix.id, heat.id
+        session.add_all(
+            [
+                ItemSourceRecord(item_id=item_id, source="tmdb", fetched_at=utc_now(), raw="{}")
+                for item_id in (matrix_id, heat_id)
+            ]
+        )
+        session.commit()
+    (movies / "The Matrix (1999)").rename(movies / "The Matrix (1999) 美版")
+    (movies / "Heat (1995)").rename(movies / "Heat (1995) 导演剪辑")
+    result = _result(app, _organize(app, library_id, scrape=True))
+    assert (result["added"], result["removed"], result["matched"], result["scrape_queued"]) == (
+        0,
+        0,
+        0,
+        0,
+    )
+    with app.state.session_factory() as session:
+        assert {row.id for row in session.scalars(select(Item))} == {matrix_id, heat_id}
+        paths = session.scalars(select(MediaFile.path).where(MediaFile.item_id == matrix_id)).all()
+        assert {Path(path).name for path in paths} == {
+            "The.Matrix.1999.mkv",
+            "The.Matrix.1999.zh.srt",
+        }
+        assert all("美版" in path for path in paths)
+        heat_paths = session.scalars(
+            select(MediaFile.path).where(MediaFile.item_id == heat_id)
+        ).all()
+        assert {Path(path).name for path in heat_paths} == {"Heat.cd1.mkv", "Heat.cd2.mkv"}
+        assert all("导演剪辑" in path for path in heat_paths)
+
+
 def test_scrape_override_and_skip_already_scraped(app: FastAPI, movies: Path) -> None:
     library_id = _library(app, movies, auto=False)
     _organize(app, library_id)
@@ -160,6 +202,101 @@ def test_rejected_key_fails_task(tmp_path: Path, movies: Path) -> None:
     library_id = _library(app, movies)
     task = _task(app, _organize(app, library_id))
     assert (task.status, task.error) == ("failed", "TMDB 拒绝了这个 API Key")
+
+
+def test_scan_drops_works_without_files(app: FastAPI, movies: Path) -> None:
+    library_id = _library(app, movies, auto=False)
+    with app.state.session_factory() as session:
+        now = utc_now()
+        ghost = Item(
+            library_id=library_id,
+            data_type_id="movie",
+            kind="work",
+            title="没有文件",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(ghost)
+        session.commit()
+        ghost_id = ghost.id
+    result = _result(app, _organize(app, library_id, scrape=False))
+    assert result["dropped"] == 1
+    with app.state.session_factory() as session:
+        assert session.get(Item, ghost_id) is None
+        titles = set(session.scalars(select(Item.title).where(Item.library_id == library_id)))
+    assert titles == {"黑客帝国", "盗火线"}
+
+
+def test_fileless_show_drops_beside_a_show_that_has_episodes(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "tv"
+    root.mkdir()
+    video = root / "有文件.S01E01.mkv"
+    video.write_bytes(b"x")
+    with app.state.session_factory() as session:
+        library = create_library(session, name="剧", data_type_id="tv", paths=[str(root)])
+        now = utc_now()
+        show = Item(
+            library_id=library.id,
+            data_type_id="tv",
+            kind="work",
+            title="有文件",
+            created_at=now,
+            updated_at=now,
+        )
+        ghost = Item(
+            library_id=library.id,
+            data_type_id="tv",
+            kind="work",
+            title="没有文件",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add_all([show, ghost])
+        session.flush()
+        season = Item(
+            library_id=library.id,
+            data_type_id="tv",
+            kind="season",
+            parent_id=show.id,
+            title="第 1 季",
+            index_number=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(season)
+        session.flush()
+        episode = Item(
+            library_id=library.id,
+            data_type_id="tv",
+            kind="episode",
+            parent_id=season.id,
+            title="第 1 集",
+            index_number=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(episode)
+        session.flush()
+        session.add(
+            MediaFile(
+                library_id=library.id,
+                item_id=episode.id,
+                path=str(video),
+                file_kind="video",
+                size=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+        library_id, show_id, ghost_id = library.id, show.id, ghost.id
+    with app.state.session_factory() as session:
+        assert drop_fileless_works(session, library_id) == 1
+        session.commit()
+        assert session.get(Item, ghost_id) is None
+        assert session.get(Item, show_id) is not None
 
 
 def test_missing_library_fails(app: FastAPI) -> None:

@@ -10,10 +10,40 @@ from mortis.db.models import Item, MediaFile
 from mortis.organize.episodes import parse_episode
 from mortis.organize.names import strip_stack, subtitle_belongs_to
 from mortis.output.tv import show_layout
-from mortis.rename.plan import Move, RenamePlan, _check_conflicts, _inside, tokens_of
+from mortis.rename.plan import Move, RenamePlan, _check_conflicts, _inside, _same, tokens_of
 from mortis.rename.template import render
 
 _EDGE = " ._-"
+
+
+def _other_show_wants_name(
+    session: Session, show: Item, folder: Path, show_name: str, output: TvOutputConfig
+) -> bool:
+    """同一个库、同一层目录下，还有另一部剧会整理成这个目录名。"""
+    others = session.scalars(
+        select(Item).where(
+            Item.library_id == show.library_id,
+            Item.kind == "work",
+            Item.id != show.id,
+        )
+    )
+    for other in others:
+        layout = show_layout(session, other)
+        if layout.folder is None or not _same(layout.folder.parent, folder.parent):
+            continue
+        try:
+            other_name = render(
+                output.show_template,
+                show_tokens(session, other),
+                space=output.show_space,
+                colon=output.colon_replacement,
+                fullwidth_colon=False,
+            )
+        except ValueError:
+            continue
+        if other_name == show_name:
+            return True
+    return False
 
 
 def show_tokens(session: Session, show: Item) -> dict[str, str | None]:
@@ -59,6 +89,15 @@ def plan_show_rename(session: Session, show: Item, output: TvOutputConfig) -> Re
     except ValueError as error:
         plan.problems.append(str(error))
         return plan
+    # 两部剧标题和年份相同（蜡笔小新 30623 和 324301）会算出同一个目录名。
+    # 已经叫这个名字的保持不动；另一部加上 TMDB 编号，免得后整理的那一部整部跳过。
+    tmdb_id = base.get("tmdb")
+    if (
+        tmdb_id
+        and folder.name != show_name
+        and _other_show_wants_name(session, show, folder, show_name, output)
+    ):
+        show_name = f"{show_name} [tmdbid-{tmdb_id}]"
     new_folder = folder.parent / show_name
     if folder.name != show_name:
         plan.folder_from, plan.folder_to = str(folder), str(new_folder)

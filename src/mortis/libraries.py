@@ -307,6 +307,7 @@ def update_library(
     schedule_cron: str | None = None,
     refresh_running: bool | None = None,
     wall_collections: str | None = None,
+    show_missing_episodes: bool | None = None,
 ) -> Library:
     library = get_library(session, library_id)
     _apply_wall_collections(library, wall_collections)
@@ -321,6 +322,10 @@ def update_library(
         library.paths.extend(LibraryPath(path=path) for path in normalized)
     if is_auto_scrape is not None:
         library.is_auto_scrape = int(is_auto_scrape)
+    if show_missing_episodes is not None:
+        if library.data_type.structure != "series":
+            raise LibraryError("只有剧和动漫库能设置是否显示缺少的集", status_code=422)
+        library.show_missing_episodes = int(show_missing_episodes)
     _apply_automation(
         session,
         library,

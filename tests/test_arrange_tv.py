@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from mortis.db.models import Item, MediaFile
+from mortis.db.models import Item, ItemExternalId, ItemSourceRecord, MediaFile, utc_now
 from mortis.rename.template import render
 from mortis.rename.tv_plan import _episode_numbers
 from tests.test_scrape_tv import EPISODE, _run, _scrape, app, fake, root, show_id
@@ -51,6 +51,104 @@ def test_arrange_renames_show_seasons_and_episodes(app: FastAPI, show_id: int, r
     with _client(app) as client:
         again = client.get(f"/api/items/{show_id}/arrange-preview").json()
     assert (again["changes"], again["problems"]) == (False, [])
+
+
+def _sibling_show(app: FastAPI, show_id: int, root: Path, folder_name: str, tmdb_id: str) -> int:
+    video = root / folder_name / "a.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"x")
+    with app.state.session_factory() as session:
+        show = session.get(Item, show_id)
+        assert show is not None
+        now = utc_now()
+        other = Item(
+            library_id=show.library_id,
+            data_type_id=show.data_type_id,
+            kind="work",
+            title=show.title,
+            release_date=show.release_date,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(other)
+        session.flush()
+        session.add(
+            ItemExternalId(item_id=other.id, provider="tmdb", external_id=tmdb_id, is_primary=1)
+        )
+        session.add(ItemSourceRecord(item_id=other.id, source="tmdb", fetched_at=now, raw="{}"))
+        season = Item(
+            library_id=show.library_id,
+            data_type_id=show.data_type_id,
+            parent_id=other.id,
+            kind="season",
+            index_number=1,
+            title="第 1 季",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(season)
+        session.flush()
+        episode = Item(
+            library_id=show.library_id,
+            data_type_id=show.data_type_id,
+            parent_id=season.id,
+            kind="episode",
+            index_number=1,
+            title="第一话",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(episode)
+        session.flush()
+        session.add(
+            MediaFile(
+                library_id=show.library_id,
+                item_id=episode.id,
+                path=str(video),
+                file_kind="video",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+        return other.id
+
+
+def test_same_title_and_year_keeps_folders_apart(app: FastAPI, show_id: int, root: Path) -> None:
+    """两部剧标题和年份相同：还没占用短目录名的，各自加上 TMDB 编号。"""
+    _scrape(app, show_id)
+    other = _sibling_show(app, show_id, root, "另一版", "324301")
+    with _client(app) as client:
+        first = client.get(f"/api/items/{show_id}/arrange-preview").json()
+        second = client.get(f"/api/items/{other}/arrange-preview").json()
+        assert first["problems"] == []
+        assert second["problems"] == []
+        assert Path(first["folder_to"]).name == f"{SHOW} [tmdbid-80968]"
+        assert Path(second["folder_to"]).name == f"{SHOW} [tmdbid-324301]"
+        assert client.post(f"/api/items/{other}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+    with _client(app) as client:
+        assert client.post(f"/api/items/{show_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+    assert (
+        root / f"{SHOW} [tmdbid-324301]" / "Season 1" / "毒枭：墨西哥.S01E01.第一话.mp4"
+    ).is_file()
+    assert (root / f"{SHOW} [tmdbid-80968]" / "Season 1").is_dir()
+    assert not (root / SHOW).exists()
+
+
+def test_show_already_using_plain_folder_keeps_it(app: FastAPI, show_id: int, root: Path) -> None:
+    _scrape(app, show_id)
+    with _client(app) as client:
+        assert client.post(f"/api/items/{show_id}/arrange").status_code == 202
+    app.state.task_runner.run_until_idle()
+    other = _sibling_show(app, show_id, root, "另一版", "324301")
+    with _client(app) as client:
+        first = client.get(f"/api/items/{show_id}/arrange-preview").json()
+        second = client.get(f"/api/items/{other}/arrange-preview").json()
+    assert first["changes"] is False
+    assert Path(second["folder_to"]).name == f"{SHOW} [tmdbid-324301]"
+    assert second["problems"] == []
 
 
 def test_existing_target_folder_blocks_whole_show(app: FastAPI, show_id: int, root: Path) -> None:

@@ -262,6 +262,50 @@ def test_without_missing_episodes_only_local_ones(app: FastAPI, show_id: int) ->
     assert {n: sorted(e) for n, e in _tree(app, show_id).items()} == {1: [1, 2, 3], 2: [1, 2, 3]}
 
 
+def test_library_switch_hides_missing_and_show_wins(app: FastAPI, show_id: int) -> None:
+    _scrape(app, show_id)
+    with app.state.session_factory() as session:
+        show = session.get(Item, show_id)
+        assert show is not None
+        library = session.get(Library, show.library_id)
+        assert library is not None
+        library.show_missing_episodes = 0
+        session.commit()
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        detail = client.get(f"/api/items/{show_id}").json()
+        assert detail["show_missing_episodes"] is None
+        assert detail["show_missing_effective"] is False
+        assert detail["seasons"]
+        assert all(
+            episode["has_file"] for season in detail["seasons"] for episode in season["episodes"]
+        )
+        saved = client.put(
+            f"/api/items/{show_id}/missing-episodes", json={"show_missing_episodes": True}
+        )
+        assert saved.status_code == 200, saved.text
+        shown = saved.json()
+        assert shown["show_missing_episodes"] is True
+        assert shown["show_missing_effective"] is True
+        assert any(
+            not episode["has_file"] for season in shown["seasons"] for episode in season["episodes"]
+        )
+
+
+def test_show_override_keeps_missing_when_library_hides(app: FastAPI, show_id: int) -> None:
+    with app.state.session_factory() as session:
+        show = session.get(Item, show_id)
+        assert show is not None
+        library = session.get(Library, show.library_id)
+        assert library is not None
+        library.show_missing_episodes = 0
+        show.show_missing_episodes = 1
+        session.commit()
+    _scrape(app, show_id)
+    tree = _tree(app, show_id)
+    assert len(tree[1]) == 10
+    assert 3 in tree
+
+
 def test_locked_episode_title_and_disabled_thumbs(
     app: FastAPI, show_id: int, fake: FakeTmdb
 ) -> None:

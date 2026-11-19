@@ -103,6 +103,19 @@ export function LibraryCard({
     onError: (error) => notifications.show({ color: "red", message: error.message }),
   });
 
+  const seriesLibrary = library.data_type_id === "tv" || library.data_type_id === "anime";
+  const missing = useMutation({
+    mutationFn: (show: boolean) => updateLibrary(library.id, { show_missing_episodes: show }),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      notifications.show({
+        color: "green",
+        message: saved.show_missing_episodes === false ? "已隐藏缺少的集" : "已显示缺少的集",
+      });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+
   const watcher = useTaskWatcher((task) => {
     setRunning(null);
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
@@ -244,6 +257,23 @@ export function LibraryCard({
                 },
               }}
             />
+            {seriesLibrary && (
+              <Switch
+                size="sm"
+                label="显示缺少的集"
+                checked={library.show_missing_episodes !== false}
+                disabled={missing.isPending}
+                onChange={(event) => missing.mutate(event.currentTarget.checked)}
+                styles={{
+                  label: {
+                    fontSize: 12.5,
+                    color: "var(--mo-dim)",
+                    paddingLeft: 8,
+                    cursor: "pointer",
+                  },
+                }}
+              />
+            )}
             <span
               className={[
                 classes.autoMode,

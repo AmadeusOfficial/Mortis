@@ -11,6 +11,13 @@
   color: var(--mo-text);
 }
 
+.menuMark {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  color: var(--mo-text);
+}
+
 /* 头图 */
 .hero {
   position: relative;

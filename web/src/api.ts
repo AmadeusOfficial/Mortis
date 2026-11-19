@@ -419,6 +419,7 @@ export interface Library {
   automation: Automation;
   is_auto_scrape: boolean;
   wall_collections: WallCollections;
+  show_missing_episodes: boolean | null;
   item_count: number;
   file_count: number;
   scraped_count: number;
@@ -457,6 +458,7 @@ export interface LibraryUpdate {
   schedule_cron?: string | null;
   refresh_running?: boolean;
   wall_collections?: WallCollections;
+  show_missing_episodes?: boolean;
 }
 
 export interface CronPreview {
@@ -607,6 +609,9 @@ export interface ItemDetail {
   position: string | null;
   // 只有电视剧的剧才非空。
   seasons: SeasonInfo[];
+  // 剧自己的选择。null 是跟随媒体库。电影和季集为 null。
+  show_missing_episodes: boolean | null;
+  show_missing_effective: boolean | null;
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
   sections: { name: string; fields: FieldOut[] }[];
@@ -678,6 +683,10 @@ export const createLibrary = (body: LibraryCreate) =>
   request<Library>("POST", "/api/libraries", body);
 export const updateLibrary = (id: number, body: LibraryUpdate) =>
   request<Library>("PATCH", `/api/libraries/${id}`, body);
+export const updateItemMissing = (id: number, showMissingEpisodes: boolean | null) =>
+  request<ItemDetail>("PUT", `/api/items/${id}/missing-episodes`, {
+    show_missing_episodes: showMissingEpisodes,
+  });
 export const deleteLibrary = (id: number) => request<void>("DELETE", `/api/libraries/${id}`);
 export const fetchLibrary = (id: number) => request<Library>("GET", `/api/libraries/${id}`);
 export const organizeLibrary = (id: number, scrape: boolean | null = null) =>

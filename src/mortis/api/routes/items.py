@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
-from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag
+from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag, utc_now
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
@@ -132,6 +132,8 @@ class ItemDetail(BaseModel):
     show: CollectionRef | None
     position: str | None
     seasons: list[SeasonOut]
+    show_missing_episodes: bool | None = None
+    show_missing_effective: bool | None = None
     files: list[FileOut]
     scraped_at: str | None
     sections: list[SectionOut]
@@ -149,6 +151,12 @@ class LocksUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     locked: list[str]
+
+
+class MissingEpisodesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    show_missing_episodes: bool | None
 
 
 class ImageChoiceOut(BaseModel):
@@ -528,6 +536,21 @@ def update_fields(
 def update_locks(item_id: int, body: LocksUpdate, session: SessionDep) -> dict[str, Any]:
     item = get_item(session, item_id)
     set_locks(session, item, body.locked)
+    return detail_of(session, item)
+
+
+@router.put("/items/{item_id}/missing-episodes", response_model=ItemDetail)
+def update_missing_episodes(
+    item_id: int, body: MissingEpisodesUpdate, session: SessionDep
+) -> dict[str, Any]:
+    item = get_item(session, item_id)
+    if item.kind != "work" or not is_series(session, item):
+        raise ItemError("只有剧和动漫能设置是否显示缺少的集", status_code=422)
+    item.show_missing_episodes = (
+        None if body.show_missing_episodes is None else int(body.show_missing_episodes)
+    )
+    item.updated_at = utc_now()
+    session.commit()
     return detail_of(session, item)
 
 

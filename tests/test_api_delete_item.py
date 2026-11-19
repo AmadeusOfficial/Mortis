@@ -316,7 +316,7 @@ def test_library_root_itself_never_deleted(
     assert (root / "game.exe").exists()
 
 
-@pytest.mark.parametrize("kind", ["collection", "series", "season", "episode"])
+@pytest.mark.parametrize("kind", ["collection", "season", "episode"])
 def test_shows_and_collections_rejected(
     client: TestClient, app: FastAPI, tmp_path: Path, kind: str
 ) -> None:
@@ -328,12 +328,31 @@ def test_shows_and_collections_rejected(
         show = _item(app, library, "剧", data_type="tv")
         season = _item(app, library, "第 1 季", data_type="tv", kind="season", parent_id=show)
         episode = _item(app, library, "第 1 集", data_type="tv", kind="episode", parent_id=season)
-        target = {"series": show, "season": season, "episode": episode}[kind]
+        target = {"season": season, "episode": episode}[kind]
 
     assert client.get(f"/api/items/{target}/delete-preview").status_code == 400
     body = {"confirm_title": "x", "expected": EMPTY_EXPECTED}
     assert client.request("DELETE", f"/api/items/{target}", json=body).status_code == 400
     assert not _gone(app, target)
+
+
+def test_series_deletes_episode_files(client: TestClient, app: FastAPI, tmp_path: Path) -> None:
+    root = tmp_path / "tv"
+    library = _library(client, root, "tv")
+    show = _item(app, library, "剧", data_type="tv")
+    season = _item(app, library, "第 1 季", data_type="tv", kind="season", parent_id=show)
+    episode = _item(app, library, "第 1 集", data_type="tv", kind="episode", parent_id=season)
+    video = root / "剧" / "Season 1" / "剧.S01E01.mkv"
+    _file(app, library, episode, video)
+
+    preview = _preview(client, show)
+    assert str(video) in preview["files"] or any(
+        str(video).startswith(folder) for folder in preview["folders"]
+    )
+    assert _delete(client, show, preview, "剧").status_code == 200
+    assert not video.exists()
+    assert _gone(app, show)
+    assert _gone(app, episode)
 
 
 def _task(app: FastAPI, status: str, payload: str, task_type: str = "scrape") -> int:
