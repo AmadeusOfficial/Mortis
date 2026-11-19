@@ -1,0 +1,576 @@
+.root {
+  max-width: 1480px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mo-muted);
+}
+
+.breadcrumb a {
+  color: var(--mo-dim);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+
+.breadcrumb a:hover {
+  color: var(--mo-text);
+}
+
+.sep {
+  opacity: 0.55;
+}
+
+.current {
+  color: var(--mo-text);
+  font-weight: 500;
+}
+
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.switchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--mo-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.switchBtn:hover:not(:disabled) {
+  background: var(--mo-surface-2);
+  color: var(--mo-text);
+}
+
+.switchBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.seasonSelect {
+  appearance: none;
+  background-color: var(--mo-surface-2);
+  border: 1px solid var(--mo-line);
+  color: var(--mo-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  height: 26px;
+  padding: 0 26px 0 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa6b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+/* Linear 风格季 Hero 头图 */
+.hero {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--mo-line);
+  background: var(--mo-surface);
+  overflow: hidden;
+  isolation: isolate;
+  margin-bottom: 24px;
+}
+
+.heroBg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 25%;
+  z-index: -2;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      90deg,
+      var(--mo-bg) 0%,
+      color-mix(in srgb, var(--mo-bg) 82%, transparent) 42%,
+      color-mix(in srgb, var(--mo-bg) 35%, transparent) 78%,
+      color-mix(in srgb, var(--mo-bg) 55%, transparent) 100%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--mo-bg) 88%, transparent) 0%,
+      transparent 55%
+    );
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.14) 30%,
+    rgba(96, 165, 250, 0.35) 50%,
+    rgba(255, 255, 255, 0.14) 70%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.heroInner {
+  display: flex;
+  gap: 24px;
+  padding: 28px 28px 24px;
+  align-items: flex-end;
+}
+
+@media (max-width: 48em) {
+  .heroInner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 18px;
+    gap: 16px;
+  }
+}
+
+.poster {
+  width: 144px;
+  flex: none;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--mo-line-2);
+  background: var(--mo-surface-2);
+  box-shadow: var(--mo-shadow);
+}
+
+.poster img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.posterBlank {
+  aspect-ratio: 2 / 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
+  background: linear-gradient(
+    155deg,
+    var(--mo-surface-2) 0%,
+    var(--mo-surface-3) 100%
+  );
+}
+
+.posterBadge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mo-bg) 70%, transparent);
+  border: 1px solid var(--mo-line-2);
+  color: var(--mo-dim);
+}
+
+.posterBlankTitle {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--mo-text);
+}
+
+.posterBlankSub {
+  font-size: 11px;
+  color: var(--mo-dim);
+  margin-top: 2px;
+}
+
+.heroContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.showKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mo-accent-hi);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+.showKicker:hover {
+  text-decoration: underline;
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.airDate {
+  font-size: 13.5px;
+  color: var(--mo-muted);
+}
+
+.metaPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.overview {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--mo-dim);
+  max-width: 780px;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* 下方双栏 */
+.bodyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 75em) {
+  .bodyGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.epColumn {
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sectionTitleGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sectionTitleGroup h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sectionTitleGroup small {
+  font-size: 12px;
+  color: var(--mo-muted);
+}
+
+.rangeBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.rangeChip {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--mo-line);
+  background: var(--mo-surface);
+  color: var(--mo-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.rangeChip:hover {
+  border-color: var(--mo-accent-bd);
+  color: var(--mo-text);
+  background: var(--mo-surface-2);
+}
+
+.emptyList {
+  padding: 36px;
+  text-align: center;
+  border: 1px solid var(--mo-line);
+  border-radius: 12px;
+  background: var(--mo-surface);
+  color: var(--mo-muted);
+  font-size: 13px;
+}
+
+/* 纵向分集列表 */
+.epList {
+  border: 1px solid var(--mo-line);
+  border-radius: 12px;
+  background: var(--mo-surface);
+  overflow: hidden;
+}
+
+.epRow {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--mo-line);
+  align-items: center;
+  transition: background-color 120ms ease;
+}
+
+@media (max-width: 48em) {
+  .epRow {
+    grid-template-columns: 124px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+  }
+}
+
+.epRow:last-child {
+  border-bottom: 0;
+}
+
+.epRow:hover {
+  background: var(--mo-surface-2);
+}
+
+.epMissing {
+  opacity: 0.6;
+}
+
+.epMissing:hover {
+  opacity: 0.92;
+}
+
+.epThumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--mo-line);
+  background: linear-gradient(
+    135deg,
+    var(--mo-surface-2) 0%,
+    var(--mo-surface-3) 100%
+  );
+}
+
+.epThumbLink {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.epThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.epMissing .epThumbImg {
+  filter: saturate(0.45);
+}
+
+.epThumbNum {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--mo-dim);
+  letter-spacing: 0.04em;
+}
+
+.missingBadge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mo-bg) 85%, transparent);
+  color: var(--mo-warn);
+  border: 1px solid var(--mo-warn-bd);
+}
+
+.thumbPlayOverlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--mo-bg) 45%, transparent);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease;
+}
+
+.epRow:hover .thumbPlayOverlay,
+.epThumb:focus-within .thumbPlayOverlay {
+  opacity: 1;
+}
+
+.playCircle {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--mo-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.epMain {
+  min-width: 0;
+}
+
+.epTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mo-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.epTitle:hover {
+  color: var(--mo-accent-hi);
+}
+
+.epMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--mo-muted);
+}
+
+.epOverview {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mo-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.epActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.72;
+  transition: opacity 120ms ease;
+}
+
+.epRow:hover .epActions {
+  opacity: 1;
+}
+
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--mo-line);
+  background: var(--mo-surface);
+  color: var(--mo-dim);
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.iconBtn:hover {
+  border-color: var(--mo-accent-bd);
+  color: var(--mo-text);
+  background: var(--mo-surface-3);
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.imageBox {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}

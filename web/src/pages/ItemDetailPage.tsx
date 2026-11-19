@@ -47,6 +47,7 @@ import { useAgent } from "../components/agent/AgentContext";
 import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
 import { PosterCard } from "../components/PosterCard";
+import { SeasonDetailView } from "../components/episodes/SeasonDetailView";
 import { SeasonGrid } from "../components/episodes/SeasonGrid";
 import { SourceSearchModal } from "../components/SourceSearchModal";
 import { TmdbSearchModal } from "../components/TmdbSearchModal";
@@ -999,49 +1000,8 @@ export function ItemDetailPage() {
     </aside>
   );
 
-  return (
-    <div style={{ maxWidth: 1480 }}>
-      <Link to={`/libraries/${detail.library_id}`} className={classes.crumb}>
-        <IconBack size={14} /> {detail.library_name}
-      </Link>
-      {hero}
-      {player.chooser}
-      <div className={classes.body}>
-        <Tabs value={tab} onChange={setTab} keepMounted={false}>
-          <Tabs.List mb="lg">
-            <Tabs.Tab value="overview">概览</Tabs.Tab>
-            <Tabs.Tab value="people">
-              演职员{" "}
-              {peopleCount > 0 && (
-                <span className="mo-mono">{peopleCount}</span>
-              )}
-            </Tabs.Tab>
-            <Tabs.Tab value="images">
-              图片{" "}
-              <span className="mo-mono">
-                {imagesFilled}/{imageFields.length}
-              </span>
-            </Tabs.Tab>
-            <Tabs.Tab value="files">
-              文件{" "}
-              {sourceFiles.length > 0 && (
-                <span className="mo-mono">{sourceFiles.length}</span>
-              )}
-            </Tabs.Tab>
-          </Tabs.List>
-          <Tabs.Panel value="overview">{overviewTab}</Tabs.Panel>
-          <Tabs.Panel value="people">{peopleTab}</Tabs.Panel>
-          <Tabs.Panel value="images">
-            {imageFields.length === 0 ? (
-              <div className={classes.empty}>这个类型没有图片字段</div>
-            ) : (
-              <div className={classes.images}>{imageFields.map(imageSlot)}</div>
-            )}
-          </Tabs.Panel>
-          <Tabs.Panel value="files">{filesTab}</Tabs.Panel>
-        </Tabs>
-        {panel}
-      </div>
+  const modals = (
+    <>
       {editing !== null && (
         <FieldEditModal
           field={editing}
@@ -1134,6 +1094,81 @@ export function ItemDetailPage() {
         onConfirm={() => arrange.mutate()}
         confirming={arrange.isPending}
       />
+    </>
+  );
+
+  if (detail.kind === "season") {
+    const seasonOverview = textValue(byKey, "overview");
+    const seasonRelease = textValue(byKey, "release_date");
+    const posterPick = pickableFields.find((f) => f.key === "poster");
+    return (
+      <>
+        <SeasonDetailView
+          detail={detail}
+          sidePanel={panel}
+          imageSlots={
+            imageFields.length > 0 ? imageFields.map(imageSlot) : undefined
+          }
+          playingId={player.playingId}
+          onPlayEpisode={(ep) =>
+            player.play(ep.id, `第 ${ep.number ?? "?"} 集 ${ep.title}`)
+          }
+          onPickPoster={
+            posterPick !== undefined ? () => setPicking("poster") : undefined
+          }
+          overviewText={seasonOverview}
+          releaseDate={seasonRelease}
+        />
+        {player.chooser}
+        {modals}
+      </>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1480 }}>
+      <Link to={`/libraries/${detail.library_id}`} className={classes.crumb}>
+        <IconBack size={14} /> {detail.library_name}
+      </Link>
+      {hero}
+      {player.chooser}
+      <div className={classes.body}>
+        <Tabs value={tab} onChange={setTab} keepMounted={false}>
+          <Tabs.List mb="lg">
+            <Tabs.Tab value="overview">概览</Tabs.Tab>
+            <Tabs.Tab value="people">
+              演职员{" "}
+              {peopleCount > 0 && (
+                <span className="mo-mono">{peopleCount}</span>
+              )}
+            </Tabs.Tab>
+            <Tabs.Tab value="images">
+              图片{" "}
+              <span className="mo-mono">
+                {imagesFilled}/{imageFields.length}
+              </span>
+            </Tabs.Tab>
+            <Tabs.Tab value="files">
+              文件{" "}
+              {sourceFiles.length > 0 && (
+                <span className="mo-mono">{sourceFiles.length}</span>
+              )}
+            </Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="overview">{overviewTab}</Tabs.Panel>
+          <Tabs.Panel value="people">{peopleTab}</Tabs.Panel>
+          <Tabs.Panel value="images">
+            {imageFields.length === 0 ? (
+              <div className={classes.empty}>这个类型没有图片字段</div>
+            ) : (
+              <div className={classes.images}>{imageFields.map(imageSlot)}</div>
+            )}
+          </Tabs.Panel>
+          <Tabs.Panel value="files">{filesTab}</Tabs.Panel>
+        </Tabs>
+        {panel}
+      </div>
+      {modals}
     </div>
   );
 }
