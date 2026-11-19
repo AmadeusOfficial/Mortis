@@ -373,7 +373,12 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         if parent
         else None,
         "parts": parts,
-        "show": {"id": show.id, "title": show.title, "poster_url": image_url(show.poster_path)}
+        "show": {
+            "id": show.id,
+            "title": show.title,
+            "poster_url": image_url(show.poster_path),
+            "logo_url": image_url(_first_images(session, [show.id], "clearlogo").get(show.id)),
+        }
         if show
         else None,
         "position": position,

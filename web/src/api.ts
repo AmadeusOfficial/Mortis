@@ -606,7 +606,12 @@ export interface ItemDetail {
   collection: { id: number; title: string; poster_url: string | null } | null;
   parts: WallItem[];
   // 季和集所属的剧；其他条目为 null。
-  show: { id: number; title: string; poster_url: string | null } | null;
+  show: {
+    id: number;
+    title: string;
+    poster_url: string | null;
+    logo_url?: string | null;
+  } | null;
   // 季「第 1 季」，集「第 1 季 第 2 集」；其他条目为 null。
   position: string | null;
   // 只有电视剧的剧才非空。

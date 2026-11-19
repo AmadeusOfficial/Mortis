@@ -80,6 +80,7 @@ class CollectionRef(BaseModel):
     id: int
     title: str
     poster_url: str | None
+    logo_url: str | None = None
 
 
 class FileOut(BaseModel):

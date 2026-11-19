@@ -1105,10 +1105,6 @@ export function ItemDetailPage() {
       <>
         <SeasonDetailView
           detail={detail}
-          sidePanel={panel}
-          imageSlots={
-            imageFields.length > 0 ? imageFields.map(imageSlot) : undefined
-          }
           playingId={player.playingId}
           onPlayEpisode={(ep) =>
             player.play(ep.id, `第 ${ep.number ?? "?"} 集 ${ep.title}`)

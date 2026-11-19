@@ -1,5 +1,5 @@
 import { Button, Menu } from "@mantine/core";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { EpisodeInfo, ItemDetail } from "../../api";
 import {
@@ -16,8 +16,6 @@ import classes from "./SeasonDetailView.module.css";
 
 export interface SeasonDetailViewProps {
   detail: ItemDetail;
-  sidePanel: ReactNode;
-  imageSlots?: ReactNode;
   playingId?: number | null;
   onPlayEpisode: (episode: EpisodeInfo) => void;
   onPickPoster?: () => void;
@@ -49,8 +47,6 @@ function buildPageTokens(current: number, total: number): (number | "dots-l" | "
 
 export function SeasonDetailView({
   detail,
-  sidePanel,
-  imageSlots,
   playingId,
   onPlayEpisode,
   onPickPoster,
@@ -220,21 +216,39 @@ export function SeasonDetailView({
         </div>
       )}
 
-      {/* 顶部面包屑 + 切季栏 */}
+      {/* 顶部返回 + 切季栏 */}
       <div className={classes.topBar}>
-        <nav className={classes.breadcrumb} aria-label="面包屑">
-          <Link to={`/libraries/${detail.library_id}`}>
-            {detail.library_name}
+        {detail.show !== null ? (
+          <Link
+            to={`/items/${detail.show.id}`}
+            className={classes.backLogoLink}
+            aria-label={`返回 ${detail.show.title}`}
+          >
+            <IconBack size={20} />
+            {detail.show.logo_url !== null &&
+            detail.show.logo_url !== undefined ? (
+              <img
+                src={detail.show.logo_url}
+                alt={detail.show.title}
+                className={classes.showLogo}
+              />
+            ) : (
+              <span className={classes.showFallbackTitle}>
+                {detail.show.title}
+              </span>
+            )}
           </Link>
-          <span className={classes.sep}>/</span>
-          {detail.show !== null && (
-            <>
-              <Link to={`/items/${detail.show.id}`}>{detail.show.title}</Link>
-              <span className={classes.sep}>/</span>
-            </>
-          )}
-          <span className={classes.current}>{seasonHeading}</span>
-        </nav>
+        ) : (
+          <Link
+            to={`/libraries/${detail.library_id}`}
+            className={classes.backLogoLink}
+          >
+            <IconBack size={18} />
+            <span className={classes.showFallbackTitle}>
+              {detail.library_name}
+            </span>
+          </Link>
+        )}
 
         {sortedSeasons.length > 1 && (
           <div className={classes.switcher}>
@@ -320,15 +334,6 @@ export function SeasonDetailView({
           </div>
 
           <div className={classes.heroContent}>
-            {detail.show !== null && (
-              <Link
-                to={`/items/${detail.show.id}`}
-                className={classes.showKicker}
-              >
-                <IconBack size={13} /> 返回《{detail.show.title}》
-              </Link>
-            )}
-
             <div className={classes.titleRow}>
               <h1 className={classes.title}>{seasonHeading}</h1>
               {releaseDate !== null && releaseDate !== undefined && (
@@ -374,8 +379,8 @@ export function SeasonDetailView({
         </div>
       </section>
 
-      {/* 下方双栏：左侧干净的纵向分集列表 + 右侧资料栏 */}
-      <div className={classes.bodyGrid}>
+      {/* 单栏分集列表（隐藏右侧资料栏，保留通透背景与舒展空间） */}
+      <div className={classes.epSection}>
         <div className={classes.epColumn} id="season-episodes-top">
           <div className={classes.sectionHead}>
             <div className={classes.sectionTitleGroup}>
@@ -500,13 +505,6 @@ export function SeasonDetailView({
                 <div className={classes.bottomPager}>{renderPager(true)}</div>
               )}
             </>
-          )}
-        </div>
-
-        <div className={classes.sideColumn}>
-          {sidePanel}
-          {imageSlots !== undefined && (
-            <div className={classes.imageBox}>{imageSlots}</div>
           )}
         </div>
       </div>
