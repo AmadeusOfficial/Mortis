@@ -435,6 +435,10 @@ export function SourcePluginSettings({
   );
 }
 
+// 设置表单只认 JSON Schema 的一个子集（和 plugin_api 模块文档一致）：
+// boolean 是开关，integer 和 number 是数字框，string 是文本框，
+// format 为 "file-path" 的 string 是带文件选择的路径框；title 当标签，description 当提示，
+// default 当初始值。嵌套对象、数组、enum 都按文本框处理。密钥只有字符串，一律是密码框。
 function PluginSchemaField({
   fieldKey,
   property,

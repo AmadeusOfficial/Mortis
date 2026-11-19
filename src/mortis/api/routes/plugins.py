@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 from urllib.parse import urlencode
 
@@ -22,6 +23,14 @@ from mortis.plugins.registry import PluginInfo
 from mortis.services import Services
 
 router = APIRouter(prefix="/api")
+_LOG = logging.getLogger("mortis.plugins")
+
+
+def _log_plugin_message(message: str) -> None:
+    """设置页上调用插件（检查提示、登录、账号）时，插件的日志写进后端日志，不丢掉。"""
+    _LOG.info("%s", message)
+
+
 _states = OAuthStates()
 TOKEN_KEYS = frozenset({"refresh_token", "expires_at", "redirect_uri"})
 """宿主登录时写的键，设置页不显示也不能改。"""
@@ -129,7 +138,7 @@ def _out(services: Services, info: PluginInfo) -> PluginOut:
     out.logged_in = bool(values.get("access_token"))
     out.expires_at = int(values["expires_at"]) if values.get("expires_at") else None
     with services.http_client() as client:
-        host = PluginHost(plugin, client, store, lambda _message: None)
+        host = PluginHost(plugin, client, store, _log_plugin_message)
         out.notice = plugin.disabled_reason(host)
     return out
 
@@ -272,7 +281,7 @@ def oauth_callback(
         return _back(plugin_id, "登录已过期，请重新点登录")
     if error or not code:
         return _back(plugin_id, "在授权页取消了授权" if error else "授权页没有返回授权码")
-    with open_host(services, plugin, lambda _message: None) as host:
+    with open_host(services, plugin, _log_plugin_message) as host:
         try:
             exchange_code(host, code, redirect_uri)
         except SourceError as failure:
@@ -283,7 +292,7 @@ def oauth_callback(
 @router.get("/plugins/{plugin_id}/account", response_model=AccountOut)
 def plugin_account(plugin_id: str, services: ServicesDep) -> AccountOut:
     plugin = _source(services, plugin_id)
-    with open_host(services, plugin, lambda _message: None) as host:
+    with open_host(services, plugin, _log_plugin_message) as host:
         try:
             return AccountOut(account=plugin.account(host))
         except SourceAuthError:
