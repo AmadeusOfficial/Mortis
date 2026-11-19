@@ -157,7 +157,7 @@ export function ManualItemModal({
           )}
           <Stack gap="sm" style={{ flex: 1, minWidth: 0 }}>
             <TextInput
-              label="片名"
+              label="标题"
               required
               data-autofocus
               value={title}

@@ -98,7 +98,7 @@ export function UnmatchedPage() {
     manualFile === null
       ? ""
       : isSeriesType(dataTypes.data, manualFile.data_type_id)
-        ? `会建第 1 季，按目录下的 ${manualFile.video_count} 个视频建集。`
+        ? `按目录下的 ${manualFile.video_count} 个视频建季和集：文件名都有季集号就照用，否则按文件名顺序编为第 1 季各集。`
         : isPluginType(dataTypes.data, manualFile.data_type_id)
           ? ""
           : "同目录下同一部的分段和字幕会一并归入。";

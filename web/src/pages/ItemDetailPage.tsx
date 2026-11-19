@@ -594,7 +594,7 @@ export function ItemDetailPage() {
                   重新匹配
                 </Button>
               )}
-              {isWork && pluginType && (
+              {isWork && pluginType && !detail.is_manual && (
                 <Button
                   variant="default"
                   leftSection={<IconLink size={16} />}
