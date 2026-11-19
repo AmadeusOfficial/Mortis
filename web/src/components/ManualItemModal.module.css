@@ -1,0 +1,23 @@
+.posterCol {
+  width: 120px;
+  flex: none;
+}
+
+.poster {
+  width: 120px;
+  aspect-ratio: 2 / 3;
+  border-radius: 9px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--mo-muted);
+  background: var(--mo-surface-2);
+  box-shadow: 0 0 0 1px var(--mo-line);
+}
+
+.poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

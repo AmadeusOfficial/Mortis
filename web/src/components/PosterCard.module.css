@@ -113,6 +113,10 @@
   background: color-mix(in srgb, var(--mo-warn) 88%, black);
 }
 
+.badgeManual {
+  background: color-mix(in srgb, var(--mo-accent) 88%, black);
+}
+
 .badgeBad {
   background: color-mix(in srgb, var(--mo-bad) 88%, black);
 }

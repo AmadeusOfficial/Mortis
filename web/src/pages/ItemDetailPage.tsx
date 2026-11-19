@@ -358,7 +358,10 @@ export function ItemDetailPage() {
   );
   // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
   const isWork = detail.kind === "work";
-  const canArrange = isWork && hasVideo && detail.scraped_at !== null;
+  // 手动条目没有来源编号，不能刮削，但可以整理；插件类型不整理。
+  const canScrape = isWork && !detail.is_manual;
+  const canArrange =
+    isWork && hasVideo && !pluginType && (detail.scraped_at !== null || detail.is_manual);
   // 剧、季和系列不能直接播放；电影、集和单条目有视频文件才显示。
   const canPlay =
     (detail.kind === "episode" || (isWork && !series)) &&
@@ -473,9 +476,11 @@ export function ItemDetailPage() {
   const hero = (
     <div className={classes.hero}>
       <span className={classes.scrapedAt}>
-        {detail.scraped_at !== null
-          ? `上次刮削 ${formatTime(detail.scraped_at)}`
-          : "还没刮削"}
+        {detail.is_manual
+          ? "手动条目"
+          : detail.scraped_at !== null
+            ? `上次刮削 ${formatTime(detail.scraped_at)}`
+            : "还没刮削"}
       </span>
       <div className={classes.heroInner}>
         <div
@@ -565,7 +570,7 @@ export function ItemDetailPage() {
                   </Button>
                 )
               )}
-              {isWork && (
+              {canScrape && (
                 <Button
                   variant={canPlay || canLaunch ? "default" : "filled"}
                   leftSection={<IconScrape size={16} />}

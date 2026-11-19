@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { WallItem } from "../api";
-import { IconImage, IconScrape, IconWarning } from "../icons";
+import { IconEdit, IconImage, IconScrape, IconWarning } from "../icons";
 import styles from "./PosterCard.module.css";
 
 export interface PosterCardProps {
@@ -10,7 +10,13 @@ export interface PosterCardProps {
 
 export function PosterCard({ item, className }: PosterCardProps) {
   const hasIssue = typeof item.issue === "string" && item.issue !== "";
-  const state = hasIssue ? "issue" : !item.is_scraped ? "unscraped" : "normal";
+  const state = hasIssue
+    ? "issue"
+    : item.is_manual
+      ? "manual"
+      : !item.is_scraped
+        ? "unscraped"
+        : "normal";
   const caption = [item.year, item.subtitle]
     .filter((part) => part !== null && part !== "")
     .join(" · ");
@@ -46,6 +52,12 @@ export function PosterCard({ item, className }: PosterCardProps) {
           <span className={`${styles.badge} ${styles.badgeWarn}`}>
             <IconScrape size={12} />
             未刮削
+          </span>
+        )}
+        {state === "manual" && (
+          <span className={`${styles.badge} ${styles.badgeManual}`}>
+            <IconEdit size={12} />
+            手动
           </span>
         )}
       </div>

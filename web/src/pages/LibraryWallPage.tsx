@@ -67,7 +67,7 @@ function readSort(libraryId: number): string {
 }
 
 type ActionKind = "organize" | "scrape" | "arrange";
-type StatusFilter = "all" | "scraped" | "unscraped" | "issue";
+type StatusFilter = "all" | "scraped" | "unscraped" | "manual" | "issue";
 
 const START_MESSAGES: Record<ActionKind, string> = {
   organize: "已开始扫描",
@@ -243,10 +243,13 @@ export function LibraryWallPage() {
   const counts = useMemo(() => {
     let scraped = 0;
     let unscraped = 0;
+    let manual = 0;
     let issue = 0;
     for (const item of items) {
       if (item.is_scraped) {
         scraped += 1;
+      } else if (item.is_manual) {
+        manual += 1;
       } else {
         unscraped += 1;
       }
@@ -254,7 +257,7 @@ export function LibraryWallPage() {
         issue += 1;
       }
     }
-    return { all: items.length, scraped, unscraped, issue };
+    return { all: items.length, scraped, unscraped, manual, issue };
   }, [items]);
 
   const filteredItems = useMemo(() => {
@@ -262,7 +265,9 @@ export function LibraryWallPage() {
       case "scraped":
         return items.filter((item) => item.is_scraped);
       case "unscraped":
-        return items.filter((item) => !item.is_scraped);
+        return items.filter((item) => !item.is_scraped && !item.is_manual);
+      case "manual":
+        return items.filter((item) => item.is_manual);
       case "issue":
         return items.filter((item) => typeof item.issue === "string" && item.issue !== "");
       default:
@@ -443,6 +448,15 @@ export function LibraryWallPage() {
                 >
                   未刮削
                 </FilterChip>
+                {(counts.manual > 0 || statusFilter === "manual") && (
+                  <FilterChip
+                    active={statusFilter === "manual"}
+                    count={counts.manual}
+                    onClick={() => setStatusFilter("manual")}
+                  >
+                    手动
+                  </FilterChip>
+                )}
                 <FilterChip
                   active={statusFilter === "issue"}
                   count={counts.issue}

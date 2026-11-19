@@ -21,6 +21,7 @@ import {
   fetchUnmatched,
   typeSection,
 } from "../api";
+import { ManualItemModal } from "../components/ManualItemModal";
 import { useAgent } from "../components/agent/AgentContext";
 import { bindDraft } from "../components/agent/drafts";
 import { SourceSearchPanel } from "../components/match/SourceSearchPanel";
@@ -28,7 +29,7 @@ import { TmdbSearchPanel } from "../components/match/TmdbSearchPanel";
 import { PageHeader, Pill } from "../components/ui";
 import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize } from "../format";
-import { DataTypeIcon, IconCheck, IconSearch, IconSparkle } from "../icons";
+import { DataTypeIcon, IconCheck, IconEdit, IconSearch, IconSparkle } from "../icons";
 import classes from "./UnmatchedPage.module.css";
 
 function splitPath(path: string): [string, string] {
@@ -49,6 +50,7 @@ export function UnmatchedPage() {
     queryFn: () => fetchUnmatched(selectedLib),
   });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [manualId, setManualId] = useState<number | null>(null);
 
   const bind = useMutation({
     mutationFn: ({
@@ -91,6 +93,15 @@ export function UnmatchedPage() {
       : 0.75;
   const selectedIsPlugin =
     selectedFile !== null && isPluginType(dataTypes.data, selectedFile.data_type_id);
+  const manualFile = rows.find((file) => file.id === manualId) ?? null;
+  const manualNote =
+    manualFile === null
+      ? ""
+      : isSeriesType(dataTypes.data, manualFile.data_type_id)
+        ? `会建第 1 季，按目录下的 ${manualFile.video_count} 个视频建集。`
+        : isPluginType(dataTypes.data, manualFile.data_type_id)
+          ? ""
+          : "同目录下同一部的分段和字幕会一并归入。";
 
   return (
     <Stack gap={0}>
@@ -101,7 +112,7 @@ export function UnmatchedPage() {
             <Pill tone="warn">{rows.length} 条待处理</Pill>
           ) : undefined
         }
-        description="扫描时没能自动认出的文件和文件夹，点「匹配」搜索并绑定"
+        description="扫描时没能自动认出的文件和文件夹，点「匹配」搜索并绑定，搜不到的可以手动建条目"
         actions={
           <Select
             placeholder="全部媒体库"
@@ -212,6 +223,18 @@ export function UnmatchedPage() {
                     </Button>
                     <Button
                       size="xs"
+                      variant="subtle"
+                      leftSection={<IconEdit size={12} />}
+                      aria-label={`手动建条目${name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setManualId(file.id);
+                      }}
+                    >
+                      手动建条目
+                    </Button>
+                    <Button
+                      size="xs"
                       variant={isSelected ? "filled" : "default"}
                       leftSection={<IconSearch size={12} />}
                       aria-label={`匹配${name}`}
@@ -279,6 +302,16 @@ export function UnmatchedPage() {
               </>
             )}
           </Modal>
+
+          {manualFile !== null && (
+            <ManualItemModal
+              key={manualFile.id}
+              file={manualFile}
+              name={splitPath(manualFile.path)[1]}
+              note={manualNote}
+              onClose={() => setManualId(null)}
+            />
+          )}
         </>
       )}
     </Stack>

@@ -531,6 +531,8 @@ export interface WallItem {
   year: number | null;
   poster_url: string | null;
   is_scraped: boolean;
+  // 没有任何外部编号的作品，由人在未识别页建的。
+  is_manual: boolean;
   issue: string | null;
 }
 
@@ -622,6 +624,8 @@ export interface ItemDetail {
   show_missing_effective: boolean | null;
   files: { id: number; path: string; file_kind: string; size: number | null }[];
   scraped_at: string | null;
+  // 季和集跟着所属的剧。
+  is_manual: boolean;
   sections: { name: string; fields: FieldOut[] }[];
   // 作品的第一个视频或游戏目录，和从它解析出的标题、年份；没有文件时为 null。
   guess?: FileGuess | null;
@@ -754,6 +758,16 @@ export const bindMediaFile = (fileId: number, hit: MovieHit) =>
     original_title: hit.original_title,
     release_date: hit.release_date,
   });
+
+export interface ManualItemCreate {
+  title: string;
+  original_title?: string;
+  release_date?: string;
+  overview?: string;
+}
+
+export const createManualItem = (fileId: number, body: ManualItemCreate) =>
+  request<{ item_id: number }>("POST", `/api/media-files/${fileId}/manual`, body);
 
 export const bindMediaFileToSource = (fileId: number, source: string, hit: SourceHit) =>
   request<{ item_id: number; task_id: number }>("POST", `/api/media-files/${fileId}/bind`, {
