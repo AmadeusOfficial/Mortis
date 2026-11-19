@@ -80,6 +80,22 @@ def test_hook_rule_saved_and_applied(
     expect(page.get_by_text("黑客", exact=True).first).to_be_visible(timeout=SLOW)
 
 
+def test_new_rule_is_validated_only_on_save(
+    page: Page, base_url: str, tmp_path: Path
+) -> None:
+    install_tag_rules(page, base_url, tmp_path)
+    card = open_hook_settings(page)
+    card.get_by_role("button", name="+ 添加").click()
+    expect(card.get_by_text("第 1 条", exact=True)).to_be_visible()
+    card.get_by_role("textbox", name="标题正则").focus()
+    card.get_by_role("textbox", name="标签", exact=True).focus()
+    expect(card.get_by_text("应当有必需属性")).to_have_count(0)
+
+    card.get_by_role("button", name="保存钩子设置").click()
+    expect(card.get_by_text("应当有必需属性").first).to_be_visible(timeout=SLOW)
+    assert hook_settings(base_url)["rules"] == []
+
+
 def test_invalid_rule_shows_error_and_keeps_config(
     page: Page, base_url: str, tmp_path: Path
 ) -> None:

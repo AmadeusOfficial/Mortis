@@ -7,6 +7,7 @@ import {
   type DescriptionFieldProps,
   type IconButtonProps,
   type RJSFSchema,
+  type TitleFieldProps,
   type UiSchema,
   type WidgetProps,
   TranslatableString,
@@ -15,7 +16,7 @@ import {
 } from "@rjsf/utils";
 import { customizeValidator } from "@rjsf/validator-ajv8";
 import localizeZh from "ajv-i18n/localize/zh";
-import { type Ref, useImperativeHandle, useMemo, useRef } from "react";
+import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { JsonSchema } from "../api";
 import { PathPicker } from "./PathPicker";
 
@@ -216,6 +217,32 @@ function DescriptionField({ id, description, registry, uiSchema }: DescriptionFi
   );
 }
 
+// 主题用三级标题显示对象标题；列表项的标题是 rjsf 拼的「外框标题-序号」，和外框重复。
+// 列表项（id 形如 root_rules_0__title）改成小号的「第 N 条」，其余对象标题也改小一号。
+const ARRAY_ITEM_TITLE = /_(\d+)__title$/;
+
+function TitleField({ id, title, optionalDataControl }: TitleFieldProps) {
+  const item = ARRAY_ITEM_TITLE.exec(id);
+  const text = item ? `第 ${Number(item[1]) + 1} 条` : title;
+  if (!text) {
+    return null;
+  }
+  const heading = (
+    <Text id={id} size="sm" fw={600} c={item ? "dimmed" : undefined} mb={4}>
+      {text}
+    </Text>
+  );
+  if (!optionalDataControl) {
+    return heading;
+  }
+  return (
+    <Group justify="space-between" wrap="nowrap">
+      {heading}
+      {optionalDataControl}
+    </Group>
+  );
+}
+
 function AddButton({ onClick, disabled, id, className }: IconButtonProps) {
   return (
     <Button
@@ -232,7 +259,11 @@ function AddButton({ onClick, disabled, id, className }: IconButtonProps) {
 }
 
 const widgets = { "file-path": FilePathWidget };
-const templates = { ButtonTemplates: { AddButton }, DescriptionFieldTemplate: DescriptionField };
+const templates = {
+  ButtonTemplates: { AddButton },
+  DescriptionFieldTemplate: DescriptionField,
+  TitleFieldTemplate: TitleField,
+};
 
 export interface PluginSettingsFormHandle {
   // 校验当前值并把错误显示在字段下面；有错误时返回 false。
@@ -258,7 +289,18 @@ export default function PluginSettingsForm({
     () => ({ ...split.uiSchema, "ui:submitButtonOptions": { norender: true } }),
     [split.uiSchema],
   );
-  useImperativeHandle(ref, () => ({ validate: () => form.current?.validateForm() ?? true }), []);
+  // 只在点保存时校验，免得刚点「+ 添加」还没填完就满屏必填提示；保存失败过之后边改边校验。
+  const [checked, setChecked] = useState(false);
+  useImperativeHandle(
+    ref,
+    () => ({
+      validate: () => {
+        setChecked(true);
+        return form.current?.validateForm() ?? true;
+      },
+    }),
+    [],
+  );
 
   return (
     <Form
@@ -271,7 +313,7 @@ export default function PluginSettingsForm({
       templates={templates}
       translateString={translateString}
       disabled={disabled}
-      liveValidate="onBlur"
+      liveValidate={checked ? "onChange" : false}
       showErrorList={false}
       noHtml5Validate
       onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
