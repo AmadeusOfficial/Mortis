@@ -11,15 +11,14 @@ from mortis.db.models import (
     ItemImage,
     ItemPerson,
     ItemRating,
-    ItemTag,
     Person,
     PersonExternalId,
     SourceOrder,
-    Tag,
     TypeField,
     utc_now,
 )
 from mortis.items.subtitle import refresh_subtitle
+from mortis.items.tags import replace_scrape_tags
 from mortis.scrape.common import person_key
 
 EMPTY: tuple[Any, ...] = (None, "", [], {})
@@ -142,22 +141,6 @@ def image_urls(
             if images and images[0]["url"] not in urls:
                 urls.append(images[0]["url"])
     return urls
-
-
-def write_tags(session: Session, item: Item, tag_kind: str, names: list[str]) -> None:
-    session.execute(
-        delete(ItemTag).where(
-            ItemTag.item_id == item.id,
-            ItemTag.tag_id.in_(select(Tag.id).where(Tag.tag_kind == tag_kind)),
-        )
-    )
-    for position, name in enumerate(dict.fromkeys(names)):
-        tag = session.scalar(select(Tag).where(Tag.tag_kind == tag_kind, Tag.name == name))
-        if tag is None:
-            tag = Tag(tag_kind=tag_kind, name=name)
-            session.add(tag)
-            session.flush()
-        session.add(ItemTag(item_id=item.id, tag_id=tag.id, position=position))
 
 
 def _person_for(session: Session, entry: Mapping[str, Any], files: Mapping[str, str]) -> Person:
@@ -304,7 +287,7 @@ def write_plan(
                 else:
                     extra[key] = value
             case "tags":
-                write_tags(session, item, field.tag_kind or key, value or [])
+                replace_scrape_tags(session, item, field.tag_kind or key, value or [])
             case "people":
                 _write_people(session, item, field.person_role or key, value or [], files)
             case "ratings":

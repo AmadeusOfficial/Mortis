@@ -409,7 +409,7 @@ def _update_fields(ctx: ToolContext, args: dict[str, Any]) -> Result:
     values: dict[str, Any] = args["values"]
     if not values:
         raise ItemError("values 里至少要有一个字段")
-    edit_fields(session, item, values)
+    edit_fields(session, item, values, ctx.services.locks)
     rewrite_if_arranged(session, ctx.runner, item)
     fields = {f.field_key: f for f in level_fields(session, item.data_type_id, item.kind)}
     return {

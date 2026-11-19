@@ -516,10 +516,10 @@ def _video_extensions(services: Services) -> frozenset[str]:
 
 @router.patch("/items/{item_id}/fields", response_model=ItemDetail)
 def update_fields(
-    item_id: int, body: FieldsUpdate, session: SessionDep, runner: RunnerDep
+    item_id: int, body: FieldsUpdate, session: SessionDep, runner: RunnerDep, services: ServicesDep
 ) -> dict[str, Any]:
     item = get_item(session, item_id)
-    edit_fields(session, item, body.values)
+    edit_fields(session, item, body.values, services.locks)
     rewrite_if_arranged(session, runner, item)
     return detail_of(session, item)
 

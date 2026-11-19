@@ -9,7 +9,9 @@ from mortis.db.models import Item, TypeField, utc_now
 from mortis.errors import UserError
 from mortis.items.detail import is_editable
 from mortis.items.subtitle import refresh_subtitle
-from mortis.scrape.apply import level_fields, write_tags
+from mortis.items.tags import hold_item, set_manual_tags
+from mortis.scrape.apply import level_fields
+from mortis.services import KeyedLocks
 
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 MANUAL = "manual"
@@ -47,7 +49,8 @@ def _coerce(field: TypeField, raw: Any) -> Any:
     return value
 
 
-def edit_fields(session: Session, item: Item, values: dict[str, Any]) -> None:
+def edit_fields(session: Session, item: Item, values: dict[str, Any], locks: KeyedLocks) -> None:
+    """锁顺序：catalog-write，再 item:{id}（标签服务的约定）。标签和别的字段同一事务提交。"""
     fields = {f.field_key: f for f in level_fields(session, item.data_type_id, item.kind)}
     prepared: list[tuple[TypeField, Any]] = []
     for key, raw in values.items():
@@ -57,6 +60,17 @@ def edit_fields(session: Session, item: Item, values: dict[str, Any]) -> None:
         if not is_editable(field):
             raise ItemError(f"「{field.label}」不能手动修改")
         prepared.append((field, _coerce(field, raw)))
+    with hold_item(locks, item.id):
+        try:
+            session.refresh(item)  # 等锁期间刮削可能改过
+            _apply_edit(session, item, prepared)
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
+
+
+def _apply_edit(session: Session, item: Item, prepared: list[tuple[TypeField, Any]]) -> None:
     extra = json.loads(item.fields)
     sources = json.loads(item.field_sources)
     locked = json.loads(item.locked_fields)
@@ -69,7 +83,7 @@ def edit_fields(session: Session, item: Item, values: dict[str, Any]) -> None:
             else:
                 extra[field.field_key] = value
         else:
-            write_tags(session, item, field.tag_kind or field.field_key, value)
+            set_manual_tags(session, item, field.tag_kind or field.field_key, value)
         sources[field.field_key] = MANUAL
         if field.is_lockable and field.field_key not in locked:
             locked.append(field.field_key)
@@ -78,7 +92,6 @@ def edit_fields(session: Session, item: Item, values: dict[str, Any]) -> None:
     item.locked_fields = json.dumps(locked, ensure_ascii=False)
     item.updated_at = utc_now()
     refresh_subtitle(session, item)
-    session.commit()
 
 
 def set_locks(session: Session, item: Item, keys: list[str]) -> None:
