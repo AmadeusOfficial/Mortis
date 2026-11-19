@@ -23,6 +23,7 @@ from mortis.plugins.oauth import OAuthStates, authorize_url, client_values, exch
 from mortis.plugins.packaging import PluginInstaller, Preview
 from mortis.plugins.player import player_host, unavailable_reason
 from mortis.plugins.registry import USER_FOLDER, PluginInfo
+from mortis.plugins.settings_form import form_schema, storable
 from mortis.services import Services
 
 router = APIRouter(prefix="/api")
@@ -154,7 +155,7 @@ def _out(services: Services, info: PluginInfo, restart_pending: bool = False) ->
         key: value for key, value in schema.get("properties", {}).items() if key in keys
     }
     out.data_type = plugin.data_type
-    out.settings_schema = plugin.Settings.model_json_schema()
+    out.settings_schema = form_schema(plugin.Settings)
     out.settings = plugin_settings(store.load_config(), plugin).model_dump(mode="json")
     out.secrets_schema = schema
     out.secrets = {key: bool(getattr(plugin_secrets(secrets, plugin), key)) for key in keys}
@@ -173,7 +174,7 @@ def _out(services: Services, info: PluginInfo, restart_pending: bool = False) ->
 
 def _player_out(services: Services, plugin: PlayerPlugin, out: PluginOut) -> PluginOut:
     host = player_host(plugin, services.launcher, services.config_store)
-    schema = plugin.Settings.model_json_schema()
+    schema = form_schema(plugin.Settings)
     schema["properties"] = {
         key: value
         for key, value in schema.get("properties", {}).items()
@@ -411,7 +412,7 @@ def update_plugin(
         if isinstance(plugin, PlayerPlugin):
             submitted = {k: v for k, v in submitted.items() if k not in PLAYER_HOST_KEYS}
         try:
-            values = plugin.Settings.model_validate(submitted).model_dump(mode="json")
+            values = storable(plugin.Settings.model_validate(submitted).model_dump(mode="json"))
         except ValidationError as error:
             raise UserError(f"设置不合法：{validation_problems(error)}") from None
         if isinstance(plugin, PlayerPlugin):
