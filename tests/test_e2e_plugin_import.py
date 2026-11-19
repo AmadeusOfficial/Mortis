@@ -93,7 +93,11 @@ def api(base_url: str, method: str, path: str, **kwargs: Any) -> Any:
 
 
 def keywords(base_url: str, item_id: int) -> list[str]:
-    detail = api(base_url, "GET", f"/items/{item_id}")
+    response = httpx.get(f"{base_url}/api/items/{item_id}", timeout=20)
+    if response.status_code == 404:  # 整理任务还没建出条目
+        return []
+    assert response.status_code < 300, response.text
+    detail = response.json()
     for section in detail["sections"]:
         for field in section["fields"]:
             if field["key"] == "keywords":
