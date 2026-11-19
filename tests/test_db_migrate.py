@@ -36,6 +36,7 @@ EXPECTED_TABLES = {
     "item_people",
     "tags",
     "item_tags",
+    "item_tag_origins",
     "item_images",
     "item_ratings",
     "source_orders",

@@ -218,6 +218,20 @@ class ItemTag(Base):
     position: Mapped[int]
 
 
+class ItemTagOrigin(Base):
+    """标签是谁加的：scrape、插件 id、manual；manual_removed 是用户删除过的记号。"""
+
+    __tablename__ = "item_tag_origins"
+    __table_args__ = (
+        PrimaryKeyConstraint("item_id", "tag_id", "origin"),
+        Index("ix_item_tag_origins_tag", "tag_id"),
+    )
+
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"))
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
+    origin: Mapped[str]
+
+
 class ItemImage(Base):
     __tablename__ = "item_images"
     __table_args__ = (Index("ix_item_images_item", "item_id", "image_kind", "position"),)
