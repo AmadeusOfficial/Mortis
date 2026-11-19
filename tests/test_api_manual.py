@@ -10,7 +10,9 @@ from sqlalchemy import select
 from mortis.api.app import create_app
 from mortis.config.models import Secrets
 from mortis.db.models import Item, Library, MediaFile, Task, utc_now
-from mortis.items.identity import create_manual_work
+from mortis.items.edit import ItemError
+from mortis.items.identity import ExternalRef, MovieRef, create_manual_work
+from mortis.items.matching import bind_file, bind_folder, bind_manual
 from mortis.organize.service import unscraped_work_ids
 from mortis.output.service import arrangeable_items
 from mortis.settings import Settings
@@ -602,3 +604,115 @@ def test_manual_show_arranges_and_writes_nfo(
     client.patch(f"/api/items/{item_id}/fields", json={"values": {"overview": "改过"}})
     app.state.task_runner.run_until_idle()
     assert "<plot>改过</plot>" in (folder / "tvshow.nfo").read_text(encoding="utf-8")
+
+
+def test_rematch_manual_show_drops_built_episodes_and_keeps_locked_fields(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "剧"
+    show = root / "某剧"
+    show.mkdir(parents=True)
+    library = _library(client, root, "tv")
+    ids = _add_files(
+        app,
+        library,
+        {name: (show / f"Show.S01E0{name}.mkv", "video") for name in ("1", "2", "3")},
+    )
+    body = {"title": "手填的剧名", "overview": "手填的简介"}
+    item_id = client.post(f"/api/media-files/{ids['1']}/manual", json=body).json()["item_id"]
+    with app.state.session_factory() as session:
+        built = list(session.scalars(select(Item.id).where(Item.parent_id == item_id)))
+    assert len(built) == 1
+
+    response = client.post(f"/api/items/{item_id}/rematch", json={"tmdb_id": 1399})
+    assert response.status_code == 202, response.text
+
+    detail = client.get(f"/api/items/{item_id}").json()
+    assert detail["is_manual"] is False
+    assert detail["external_ids"] == {"tmdb": "1399"}
+    assert detail["seasons"] == []
+    for key, value in (("title", "手填的剧名"), ("overview", "手填的简介")):
+        field = _field(detail, key)
+        assert (field["value"], field["source"], field["locked"]) == (value, "manual", True), key
+    with app.state.session_factory() as session:
+        assert session.scalars(select(Item).where(Item.parent_id == item_id)).all() == []
+        children = select(Item.id).where(Item.parent_id.in_(built))
+        assert session.scalars(select(Item).where(Item.id.in_(children))).all() == []
+        for file_id in ids.values():
+            assert session.get(MediaFile, file_id).item_id == item_id
+
+
+def _item_count(app: FastAPI) -> int:
+    with app.state.session_factory() as session:
+        return len(session.scalars(select(Item.id)).all())
+
+
+def test_manual_refuses_file_bound_by_another_session(
+    client: TestClient, app: FastAPI, files: dict[str, int]
+) -> None:
+    with app.state.session_factory() as racing:
+        media_file = racing.get(MediaFile, files["cd1"])
+        assert media_file.item_id is None
+        winner = _manual(client, files["cd1"], "先到的")
+        count = _item_count(app)
+        with pytest.raises(ItemError) as error:
+            bind_manual(racing, media_file, {"title": "后到的"}, app.state.services.locks)
+        assert (error.value.status_code, error.value.message) == (409, "这个文件已经匹配过了")
+    assert _item_count(app) == count
+    assert _owner(app, files["cd1"])[2] == "先到的"
+    with app.state.session_factory() as session:
+        assert session.get(MediaFile, files["cd1"]).item_id == winner
+
+
+def test_bind_refuses_file_bound_by_another_session(
+    client: TestClient, app: FastAPI, files: dict[str, int]
+) -> None:
+    with app.state.session_factory() as racing:
+        media_file = racing.get(MediaFile, files["loose"])
+        winner = _manual(client, files["loose"], "先到的")
+        count = _item_count(app)
+        ref = MovieRef(tmdb_id=949, title="盗火线")
+        with pytest.raises(ItemError) as error:
+            bind_file(racing, media_file, ref, app.state.services.locks)
+        assert (error.value.status_code, error.value.message) == (409, "这个文件已经匹配过了")
+    assert _item_count(app) == count
+    with app.state.session_factory() as session:
+        assert session.get(MediaFile, files["loose"]).item_id == winner
+
+
+def test_game_folder_bound_by_another_session_is_not_overwritten(
+    client: TestClient, app: FastAPI, tmp_path: Path
+) -> None:
+    root = tmp_path / "游戏"
+    library = _library(client, root, "galgame")
+    ids = _add_files(app, library, {"game": (root / "同人小游戏", "game")})
+    locks = app.state.services.locks
+    with app.state.session_factory() as racing:
+        media_file = racing.get(MediaFile, ids["game"])
+        winner = _manual(client, ids["game"], "先到的")
+        count = _item_count(app)
+        with pytest.raises(ItemError) as manual:
+            bind_manual(racing, media_file, {"title": "后到的"}, locks)
+        assert (manual.value.status_code, manual.value.message) == (409, "这个文件已经匹配过了")
+        ref = ExternalRef(provider="vndb", external_id="v1", title="后到的")
+        with pytest.raises(ItemError) as folder:
+            bind_folder(racing, media_file, ref, locks)
+        assert (folder.value.status_code, folder.value.message) == (409, "这个目录已经匹配过了")
+    assert _item_count(app) == count
+    with app.state.session_factory() as session:
+        assert session.get(MediaFile, ids["game"]).item_id == winner
+
+
+def test_manual_refuses_file_deleted_by_another_session(
+    client: TestClient, app: FastAPI, files: dict[str, int]
+) -> None:
+    with app.state.session_factory() as racing:
+        media_file = racing.get(MediaFile, files["loose"])
+        with app.state.session_factory() as other:
+            other.delete(other.get(MediaFile, files["loose"]))
+            other.commit()
+        count = _item_count(app)
+        with pytest.raises(ItemError) as error:
+            bind_manual(racing, media_file, {"title": "x"}, app.state.services.locks)
+        assert (error.value.status_code, error.value.message) == (404, "没有这个文件")
+    assert _item_count(app) == count

@@ -1,8 +1,10 @@
 import os
 import re
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import Session
 
 from mortis.db.models import (
@@ -117,6 +119,25 @@ def add_source(session: Session, item: Item, source: str, provider: str, externa
     session.commit()
 
 
+def _unbound_rows(
+    session: Session,
+    media_file: MediaFile,
+    bound_message: str,
+    collect: Callable[[], list[MediaFile]],
+) -> list[MediaFile]:
+    """持有 catalog-write 锁时调用：锁外读到的文件可能已被别处绑定或删除，重读再收集。"""
+    try:
+        session.refresh(media_file)
+    except InvalidRequestError:
+        raise ItemError("没有这个文件", status_code=404) from None
+    if media_file.item_id is not None:
+        raise ItemError(bound_message, status_code=409)
+    rows = collect()
+    if media_file not in rows:
+        raise ItemError(bound_message, status_code=409)
+    return rows
+
+
 def bind_folder(
     session: Session, media_file: MediaFile, ref: ExternalRef, locks: KeyedLocks
 ) -> Item:
@@ -128,6 +149,7 @@ def bind_folder(
     if library is None:
         raise ItemError("媒体库不存在，可能已被删除", status_code=404)
     with locks.hold("catalog-write"):
+        _unbound_rows(session, media_file, "这个目录已经匹配过了", lambda: [media_file])
         item, _ = find_or_create_work(session, library, ref)
         media_file.item_id = item.id
         media_file.updated_at = utc_now()
@@ -246,6 +268,16 @@ def _show_files(session: Session, library: Library, media_file: MediaFile) -> li
     ]
 
 
+def _rows_to_bind(
+    session: Session, library: Library, media_file: MediaFile, *, game: bool, series: bool
+) -> list[MediaFile]:
+    if game:
+        return [media_file]
+    if series:
+        return _show_files(session, library, media_file)
+    return _siblings(session, library, media_file)
+
+
 def _episode_numbers(paths: list[str]) -> dict[str, tuple[int, int]]:
     """视频路径 → (季号, 集号)。都解析得出且不重复就照文件名，没写季号的当第 1 季；
     否则全部按路径排序编为第 1 季第 1..N 集。一个文件多集时挂到第一集。"""
@@ -305,12 +337,12 @@ def bind_manual(
     series = not game and is_series(session, library)
     prepared = prepare_values(session, library.data_type_id, "work", filled, skip_unknown=True)
     with locks.hold("catalog-write"):
-        if game:
-            rows = [media_file]
-        elif series:
-            rows = _show_files(session, library, media_file)
-        else:
-            rows = _siblings(session, library, media_file)
+        rows = _unbound_rows(
+            session,
+            media_file,
+            "这个文件已经匹配过了",
+            lambda: _rows_to_bind(session, library, media_file, game=game, series=series),
+        )
         item = create_manual_work(session, library, title)
         apply_edit(session, item, prepared)
         for row in rows:
@@ -330,12 +362,15 @@ def bind_file(session: Session, media_file: MediaFile, ref: MovieRef, locks: Key
     library = session.get(Library, media_file.library_id)
     if library is None:
         raise ItemError("媒体库不存在，可能已被删除", status_code=404)
+    series = is_series(session, library)
     with locks.hold("catalog-write"):
+        rows = _unbound_rows(
+            session,
+            media_file,
+            "这个文件已经匹配过了",
+            lambda: _rows_to_bind(session, library, media_file, game=False, series=series),
+        )
         item, _ = find_or_create_movie(session, library, ref)
-        if is_series(session, library):
-            rows = _show_files(session, library, media_file)
-        else:
-            rows = _siblings(session, library, media_file)
         for row in rows:
             row.item_id = item.id
             row.updated_at = utc_now()
