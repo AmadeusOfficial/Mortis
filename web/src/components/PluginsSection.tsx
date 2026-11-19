@@ -24,8 +24,10 @@ import {
   type JsonSchemaProperty,
   type PackagePreview,
   type PluginCapability,
+  type PluginHookState,
   type PluginInfo,
   checkPluginPackage,
+  enablePluginHook,
   fetchDataTypes,
   fetchPluginAccount,
   fetchPlugins,
@@ -267,6 +269,51 @@ export function PluginsSection() {
   );
 }
 
+// 一个事件钩子：订阅的事件、权限声明和运行状态。连续失败会被自动停用，可以在这里重新启用。
+// 停用原因和失败记录只在内存里，重启莫提斯后只显示通用提示。
+function HookLine({ pluginId, hook }: { pluginId: string; hook: PluginHookState }) {
+  const queryClient = useQueryClient();
+  const enable = useMutation({
+    mutationFn: () => enablePluginHook(pluginId, hook.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      notifications.show({ color: "green", message: `已重新启用钩子 ${hook.id}` });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+  return (
+    <Stack gap={2}>
+      <Group gap="xs" wrap="wrap">
+        <Text size="xs" c="var(--mo-muted)">
+          钩子 {hook.id}：订阅 {hook.event}
+          {hook.writes.length > 0 ? `；权限声明（可写）：${hook.writes.join("、")}` : "；只读"}
+        </Text>
+        {hook.disabled && <Pill tone="neutral">已停用</Pill>}
+        {hook.disabled && (
+          <Button
+            variant="light"
+            size="compact-xs"
+            loading={enable.isPending}
+            onClick={() => enable.mutate()}
+          >
+            重新启用
+          </Button>
+        )}
+      </Group>
+      {hook.disabled && hook.reason !== null && (
+        <Text size="xs" c="red">
+          {hook.reason}
+        </Text>
+      )}
+      {!hook.disabled && hook.failures > 0 && (
+        <Text size="xs" c="var(--mo-muted)">
+          连续失败 {hook.failures} 次{hook.last_error !== null ? `：${hook.last_error}` : ""}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
 // 插件页里的一行：顶层插件或缩进在数据类型下的子来源。
 function PluginRow({
   plugin,
@@ -281,7 +328,6 @@ function PluginRow({
   parentPlugin?: PluginInfo;
   onUninstall?: (plugin: PluginInfo) => void;
 }) {
-  const permissions = [...new Set(plugin.hooks.flatMap((hook) => hook.writes))];
   // 父插件停用时，子来源整行变灰、开关禁用，状态随父恢复。
   const parentDisabled = parentPlugin !== undefined && !parentPlugin.enabled;
   // 父插件正在切换时也锁住子来源开关，避免并发竞态。
@@ -324,16 +370,9 @@ function PluginRow({
               服务的数据类型：{typeName(plugin.data_type)}
             </Text>
           )}
-          {plugin.hooks.length > 0 && (
-            <Text size="xs" c="var(--mo-muted)">
-              订阅事件：{plugin.hooks.map((hook) => hook.event).join("、")}
-            </Text>
-          )}
-          {permissions.length > 0 && (
-            <Text size="xs" c="var(--mo-muted)">
-              权限声明（可写）：{permissions.join("、")}
-            </Text>
-          )}
+          {plugin.hooks.map((hook) => (
+            <HookLine key={hook.id} pluginId={plugin.id} hook={hook} />
+          ))}
           {parentDisabled && (
             <Text size="xs" c="var(--mo-muted)">
               随 {parentPlugin?.name} 停用

@@ -283,6 +283,15 @@ export interface PluginHook {
   writes: string[];
 }
 
+// 设置页里钩子的运行状态。熔断原因和失败记录只在内存里，重启后只剩通用提示。
+export interface PluginHookState extends PluginHook {
+  disabled: boolean;
+  reason: string | null;
+  failures: number;
+  last_error: string | null;
+  runs: number;
+}
+
 export interface PluginInfo {
   id: string;
   name: string;
@@ -291,7 +300,7 @@ export interface PluginInfo {
   capabilities: PluginCapability[];
   // 这个包带的来源和播放条目的 id；没有成员的才是自己带设置和开关的条目。
   members: string[];
-  hooks: PluginHook[];
+  hooks: PluginHookState[];
   origin: "builtin" | "user";
   enabled: boolean;
   error: string | null;
@@ -741,6 +750,8 @@ export const fetchPlugins = () => request<PluginInfo[]>("GET", "/api/plugins");
 export const reloadPlugins = () => request<PluginInfo[]>("POST", "/api/plugins/reload");
 export const updatePlugin = (id: string, body: PluginUpdate) =>
   request<PluginInfo>("PUT", `/api/plugins/${id}`, body);
+export const enablePluginHook = (pluginId: string, hookId: string) =>
+  request<PluginInfo>("POST", `/api/plugins/${pluginId}/hooks/${hookId}/enable`);
 export interface PackageFile {
   path: string;
   size: number;

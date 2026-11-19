@@ -48,6 +48,16 @@ class HookOut(BaseModel):
     writes: list[str]
 
 
+class HookStateOut(HookOut):
+    """设置页显示的钩子：清单声明加运行状态。原因和失败记录只在内存里，重启后只剩通用提示。"""
+
+    disabled: bool = False
+    reason: str | None = None
+    failures: int = 0
+    last_error: str | None = None
+    runs: int = 0
+
+
 class PluginOut(BaseModel):
     id: str
     name: str
@@ -57,7 +67,7 @@ class PluginOut(BaseModel):
     # 这个包带的来源和播放条目的 id；没有成员的才是自己带设置和开关的叶子。
     members: list[str] = []
     # 清单里声明的事件钩子。
-    hooks: list[HookOut] = []
+    hooks: list[HookStateOut] = []
     origin: str
     enabled: bool
     error: str | None
@@ -100,6 +110,21 @@ def _secret_keys(plugin: SourcePlugin) -> list[str]:
     return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
 
 
+def _hook_out(services: Services, hook: Any) -> HookStateOut:
+    status = services.plugins.hook_status(hook.id)
+    return HookStateOut(
+        id=hook.id,
+        event=hook.event,
+        data_types=list(hook.data_types),
+        writes=list(hook.writes),
+        disabled=status.disabled,
+        reason=status.reason,
+        failures=status.failures,
+        last_error=status.last_error,
+        runs=status.runs,
+    )
+
+
 def _out(services: Services, info: PluginInfo, restart_pending: bool = False) -> PluginOut:
     out = PluginOut(
         id=info.id,
@@ -107,10 +132,7 @@ def _out(services: Services, info: PluginInfo, restart_pending: bool = False) ->
         version=info.version,
         capabilities=list(info.capabilities),
         members=[item.id for item in services.plugins.all() if item.parent == info.id],
-        hooks=[
-            HookOut(id=h.id, event=h.event, data_types=list(h.data_types), writes=list(h.writes))
-            for h in info.hooks
-        ],
+        hooks=[_hook_out(services, h) for h in info.hooks],
         data_type=info.data_type,
         origin=info.origin,
         enabled=info.enabled,
@@ -415,6 +437,20 @@ def update_plugin(
     if update.enabled is not None and update.enabled != info.enabled:
         store.save_plugin(plugin_id, disabled=not update.enabled)
         _reload(services, request)
+    refreshed = services.plugins.get(plugin_id)
+    assert refreshed is not None
+    return _out(services, refreshed)
+
+
+@router.post("/plugins/{plugin_id}/hooks/{hook_id}/enable", response_model=PluginOut)
+def enable_hook(plugin_id: str, hook_id: str, services: ServicesDep, request: Request) -> PluginOut:
+    """重新启用被熔断或手动停用的钩子：清失败记录、从停用名单去掉并写进设置文件。"""
+    info = services.plugins.get(plugin_id)
+    if info is None or all(h.id != hook_id for h in info.hooks):
+        raise UserError("这个插件里没有这个钩子", status_code=404)
+    services.plugins.enable_hook(hook_id)
+    services.config_store.save_plugin(hook_id, disabled=False)
+    _reload(services, request)
     refreshed = services.plugins.get(plugin_id)
     assert refreshed is not None
     return _out(services, refreshed)
