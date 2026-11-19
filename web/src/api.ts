@@ -295,6 +295,8 @@ export interface PluginInfo {
   origin: "builtin" | "user";
   enabled: boolean;
   error: string | null;
+  // 覆盖升级之后，磁盘上已是新版而内存里还是旧对象，要重启莫提斯才完全生效。
+  restart_pending: boolean;
   // 子来源插件的父数据类型插件 id；顶层插件为 null。
   parent: string | null;
   data_type: string | null;
@@ -739,6 +741,59 @@ export const fetchPlugins = () => request<PluginInfo[]>("GET", "/api/plugins");
 export const reloadPlugins = () => request<PluginInfo[]>("POST", "/api/plugins/reload");
 export const updatePlugin = (id: string, body: PluginUpdate) =>
   request<PluginInfo>("PUT", `/api/plugins/${id}`, body);
+export interface PackageFile {
+  path: string;
+  size: number;
+  sha256: string;
+}
+
+export interface PackageExisting {
+  id: string;
+  name: string;
+  version: string;
+  package_hash: string;
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+export interface PackagePreview {
+  // 一次性确认令牌，确认安装时带上。
+  token: string;
+  expires_in: number;
+  id: string;
+  name: string;
+  version: string;
+  api_version: number;
+  min_mortis_version: string | null;
+  capabilities: PluginCapability[];
+  sources: { id: string; name: string; data_type: string }[];
+  players: { id: string; name: string }[];
+  hooks: PluginHook[];
+  files: PackageFile[];
+  total_size: number;
+  package_hash: string;
+  // 同 id 的旧版本；全新安装为 null。
+  existing: PackageExisting | null;
+  needs_restart: boolean;
+}
+
+export interface PackageInstalled {
+  id: string;
+  name: string;
+  version: string;
+  previous_version: string | null;
+  replaced: boolean;
+  needs_restart: boolean;
+}
+
+// 请求体就是 zip 文件本身，不用 multipart。
+export const checkPluginPackage = (file: Blob) =>
+  request<PackagePreview>("POST", "/api/plugins/import/check", file);
+export const confirmPluginPackage = (token: string, trust: boolean) =>
+  request<PackageInstalled>("POST", "/api/plugins/import/confirm", { token, trust });
+export const uninstallPlugin = (id: string) =>
+  request<{ id: string; name: string }>("DELETE", `/api/plugins/${id}`);
 export const fetchPluginAccount = (id: string) =>
   request<PluginAccount>("GET", `/api/plugins/${id}/account`);
 export const logoutPlugin = (id: string) => request<PluginInfo>("DELETE", `/api/plugins/${id}/oauth`);

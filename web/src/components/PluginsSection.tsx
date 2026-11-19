@@ -22,8 +22,10 @@ import {
   type DataType,
   type JsonSchema,
   type JsonSchemaProperty,
+  type PackagePreview,
   type PluginCapability,
   type PluginInfo,
+  checkPluginPackage,
   fetchDataTypes,
   fetchPluginAccount,
   fetchPlugins,
@@ -36,6 +38,7 @@ import {
 import styles from "../pages/SettingsPage.module.css";
 import { IconRefresh } from "../icons";
 import { PathPicker } from "./PathPicker";
+import { PluginImportModal, UninstallModal } from "./PluginImportModal";
 import { SettingCard, SettingRow } from "./settings/SettingLayout";
 import { Pill } from "./ui";
 
@@ -157,21 +160,54 @@ export function PluginsSection() {
   });
 
   const toggle = useToggleMutation();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<PackagePreview | null>(null);
+  const [removing, setRemoving] = useState<PluginInfo | null>(null);
+  // 上传只做静态检查，不执行插件代码；通过后弹出预览，由用户确认。
+  const check = useMutation({
+    mutationFn: checkPluginPackage,
+    onSuccess: setPreview,
+    onError: (error) =>
+      notifications.show({ color: "red", title: "这个压缩包不能导入", message: error.message }),
+  });
 
   return (
     <SettingCard
       title="插件"
       description="插件从自带的 plugins 目录和数据目录的 plugins 目录加载。停用后不参与识别和刮削，已有的条目保留。来源插件的设置在「来源」里，播放插件的设置在「播放」里。"
       actions={
-        <Button
-          variant="default"
-          size="sm"
-          leftSection={<IconRefresh size={15} />}
-          loading={reload.isPending}
-          onClick={() => reload.mutate()}
-        >
-          重新加载插件
-        </Button>
+        <Group gap="xs">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file !== undefined) {
+                check.mutate(file);
+              }
+            }}
+          />
+          <Button
+            variant="default"
+            size="sm"
+            loading={check.isPending}
+            onClick={() => fileInput.current?.click()}
+          >
+            导入插件（zip）
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            leftSection={<IconRefresh size={15} />}
+            loading={reload.isPending}
+            onClick={() => reload.mutate()}
+          >
+            重新加载插件
+          </Button>
+        </Group>
       }
     >
       {plugins.isError && (
@@ -205,6 +241,7 @@ export function PluginsSection() {
                 plugin={plugin}
                 typeName={typeName}
                 toggle={toggle}
+                onUninstall={setRemoving}
               />
               {children.length > 0 && (
                 <div className={styles.childSources}>
@@ -222,6 +259,10 @@ export function PluginsSection() {
             </div>
           );
         })}
+      {preview !== null && <PluginImportModal preview={preview} onClose={() => setPreview(null)} />}
+      {removing !== null && (
+        <UninstallModal id={removing.id} name={removing.name} onClose={() => setRemoving(null)} />
+      )}
     </SettingCard>
   );
 }
@@ -232,12 +273,15 @@ function PluginRow({
   typeName,
   toggle,
   parentPlugin,
+  onUninstall,
 }: {
   plugin: PluginInfo;
   typeName: (id: string | null) => string;
   toggle: ReturnType<typeof useToggleMutation>;
   parentPlugin?: PluginInfo;
+  onUninstall?: (plugin: PluginInfo) => void;
 }) {
+  const permissions = [...new Set(plugin.hooks.flatMap((hook) => hook.writes))];
   // 父插件停用时，子来源整行变灰、开关禁用，状态随父恢复。
   const parentDisabled = parentPlugin !== undefined && !parentPlugin.enabled;
   // 父插件正在切换时也锁住子来源开关，避免并发竞态。
@@ -285,6 +329,11 @@ function PluginRow({
               订阅事件：{plugin.hooks.map((hook) => hook.event).join("、")}
             </Text>
           )}
+          {permissions.length > 0 && (
+            <Text size="xs" c="var(--mo-muted)">
+              权限声明（可写）：{permissions.join("、")}
+            </Text>
+          )}
           {parentDisabled && (
             <Text size="xs" c="var(--mo-muted)">
               随 {parentPlugin?.name} 停用
@@ -307,8 +356,19 @@ function PluginRow({
             }
             onChange={(event) => toggle.mutate({ id: plugin.id, enabled: event.currentTarget.checked })}
           />
+          {/* 内置插件和包带的子条目不显示卸载。 */}
+          {plugin.origin === "user" && parentPlugin === undefined && onUninstall !== undefined && (
+            <Button variant="subtle" color="red" size="xs" onClick={() => onUninstall(plugin)}>
+              卸载
+            </Button>
+          )}
         </Group>
       </Group>
+      {plugin.restart_pending && (
+        <Alert color="yellow" title="需要重启">
+          这个插件被覆盖升级过，磁盘上已是新版，要重启莫提斯才完全生效。
+        </Alert>
+      )}
       {showError && (
         <Alert color="red" title="加载失败">
           {plugin.error}
