@@ -53,6 +53,22 @@ api_version = 1
 """
 
 
+_DEFAULT_MARKER: dict[str, str] = {}
+
+
+@pytest.fixture(autouse=True)
+def marker_in_tmp(tmp_path: Path) -> str:
+    """测试插件被执行时写的标记文件：默认放进 tmp_path，不往当前工作目录写东西。"""
+    path = str(tmp_path / "plugin-imported.txt")
+    _DEFAULT_MARKER["path"] = path
+    return path
+
+
+def default_marker() -> str:
+    assert _DEFAULT_MARKER, "要用 marker_in_tmp 这个自动夹具，不然测试插件会往工作目录写文件"
+    return _DEFAULT_MARKER["path"]
+
+
 def plugin_files(
     pid: str = "me.hello", version: str = "1.0", marker: str = "", toml: str | None = None
 ) -> dict[str, bytes]:
@@ -60,7 +76,7 @@ def plugin_files(
         "plugin.toml": (
             toml if toml is not None else TOML.format(pid=pid, version=version)
         ).encode(),
-        "__init__.py": CODE.format(pid=pid, marker=marker or "nowhere.txt").encode(),
+        "__init__.py": CODE.format(pid=pid, marker=marker or default_marker()).encode(),
     }
 
 
@@ -95,7 +111,7 @@ class Env:
             TOML.format(pid="builtin_demo", version="1.0"), encoding="utf-8"
         )
         (builtin / "__init__.py").write_text(
-            CODE.format(pid="builtin_demo", marker="nowhere.txt"), encoding="utf-8"
+            CODE.format(pid="builtin_demo", marker=default_marker()), encoding="utf-8"
         )
         self.registry = PluginRegistry([(self.builtin, "builtin"), (self.user_dir, "user")])
         self.registry.load()
@@ -522,7 +538,7 @@ def test_uninstall_unknown_and_child_rejected(env: Env) -> None:
         '\n[[sources]]\nid = "me.inner"\nname = "s"\n'
     )
     code = (
-        CODE.format(pid="me.inner", marker="nowhere.txt").replace(
+        CODE.format(pid="me.inner", marker=default_marker()).replace(
             "PLUGIN = Src()",
             "from mortis.plugin_api import Plugin\nPLUGIN = Plugin(sources=(Src(),))",
         )
@@ -623,7 +639,7 @@ def test_http_uninstall_builtin_refused(tmp_path: Path) -> None:
         TOML.format(pid="builtin_demo", version="1"), encoding="utf-8"
     )
     (builtin / "__init__.py").write_text(
-        CODE.format(pid="builtin_demo", marker="nowhere.txt"), encoding="utf-8"
+        CODE.format(pid="builtin_demo", marker=default_marker()), encoding="utf-8"
     )
     settings = Settings(data_dir=tmp_path / "data", plugins_dir=tmp_path / "builtin", web_dist=None)
     client = TestClient(create_app(settings), base_url="http://127.0.0.1")

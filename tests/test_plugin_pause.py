@@ -14,7 +14,12 @@ from mortis.hooks.dispatch import HOOK_TASK
 from mortis.tasks.base import TaskContext, TaskResult
 from mortis.tasks.runner import TaskRunner
 from tests.test_hooks_dispatch import _enqueue_hook, movie_app, tasks
-from tests.test_plugin_packaging import Env, make_zip, plugin_files
+from tests.test_plugin_packaging import (  # noqa: F401
+    Env,
+    make_zip,
+    marker_in_tmp,
+    plugin_files,
+)
 
 
 @pytest.fixture
