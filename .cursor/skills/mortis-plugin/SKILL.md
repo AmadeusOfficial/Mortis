@@ -3,7 +3,7 @@ name: mortis-plugin
 description: >-
   莫提斯插件的开发方法：接新来源前先调研、按《插件规范》搭目录和 plugin.toml、
   用假 Host 先写测试、放进数据目录热加载、在设置页验证。
-  Use when 写或改莫提斯的数据类型插件、来源插件、播放插件，评估一个新站点能不能接成来源，
+  Use when 写或改莫提斯的插件（数据类型、来源、播放、事件钩子），评估一个新站点能不能接成来源，
   排查插件加载失败，or when asked how to add a metadata source or data type to Mortis.
 ---
 
@@ -17,18 +17,22 @@ description: >-
 
 ## 1. 先读
 
-- `docs/` 下的《插件规范》：目录、id、停用规则、import 检查、三种插件的约定。和本技能冲突时以规范为准。这份文档是公开的，改它的时候不要写进本机路径和内部计划。
-- `src/mortis/plugin_api.py`：接口和每个方法的注释，开头写着 `candidates` 返回值的格式。
-- 参照现成的实现：数据类型带来源看 `plugins/galgame/`，播放看 `plugins/system_player/`。
+- `docs/` 下的文档：《插件开发指南》（上手）、《插件规范》（目录、id 命名空间、停用规则、import 检查、各能力的约定）、《事件参考》（钩子、限额、熔断、标签）、《打包与导入》（zip）。和本技能冲突时以规范为准。这些文档是公开的，改它们的时候不要写进本机路径和内部计划。
+- `src/mortis/plugin_api/` 包（`__init__.py`、`events.py`、`hooks.py`、`testing.py`）：接口和每个方法的注释，`__init__.py` 开头写着 `candidates` 返回值的格式。插件只从 `mortis.plugin_api` 引用。
+- 参照现成的实现：数据类型带来源看 `plugins/galgame/`，播放看 `plugins/system_player/`，来源加钩子看 `examples/plugins/tag_rules/`，最小来源看 `examples/plugins/hello_source/`。
+- 钩子的硬边界：只订阅事件；经 `HookHost` 读条目、增删自己名下的标签、联网；不写 SQL，写什么要在 `[[hooks]]` 的 `writes` 里声明；有额度和熔断，处理要幂等。
 - 字段目录的定义在 `src/mortis/catalog/spec.py`，内置类型的字段在 `src/mortis/catalog/` 下。
 
-## 2. 选种类
+## 2. 选能力
 
-- 给一个新类型做字段目录：写 `data_type` 插件，这个类型专用的来源放进它的 `sources/` 里一起发布。
-- 给已有类型（电影、电视剧、动漫，或别的插件的类型）补来源：写 `source` 插件。
-- 打开本地文件的另一种方式：写 `player` 插件。网页内播放还没做，不要写。
+插件是能力组合，没有互斥的种类；一个包想带几样带几样，在 `plugin.toml` 里声明：
 
-先定 id：小写字母、数字和下划线，以字母开头。id 一旦有人用过就不能改，因为快照、设置、密钥和登录都按它存。名称以后随时可以改。
+- 给一个新类型做字段目录：带数据类型（`DataTypePlugin`），这个类型专用的来源和播放放进同一个包。
+- 给已有类型（电影、电视剧、动漫，或别的插件的类型）补来源：`[[sources]]`，只含来源的包即可。
+- 打开本地文件的另一种方式：`[[players]]`。网页内播放还没做，不要写。
+- 在宿主事件之后做点事（比如刮削完成后补标签）：`[[hooks]]`，一个钩子订阅一个事件。
+
+先定 id：包 id 和子项 id 用 `作者.名字`，只能一个点，每段小写字母、数字和下划线，以字母开头；不带点的留给程序自带插件，`mortis.*`、`builtin.*` 保留。id 一旦有人用过就不能改，因为快照、设置、密钥、标签来源、熔断记录和登录都按它存。名称以后随时可以改。
 
 ## 3. 接新来源前先调研
 
@@ -53,14 +57,17 @@ description: >-
 plugins/<id>/
   plugin.toml
   __init__.py          定义 PLUGIN
-  sources/             只有数据类型插件带来源时才有
+  sources/             带多个来源时按需组织
     __init__.py
     <来源 id>.py
+  tests/               作者自己的测试，不随包加载和打包
 ```
 
-- 先在仓库的 `plugins/` 里开发；程序自带的插件也放这里。
-- `plugin.toml` 写 `id`、`name`、`version`、`kind`；数据类型插件把带的来源列在 `[[sources]]` 里，名单要和 `PLUGIN.sources` 完全一致。
+- 先在仓库的 `plugins/` 里开发；程序自带的插件也放这里。第三方风格的示例放 `examples/plugins/`。
+- `plugin.toml` 写 `id`、`name`、`version`，必填 `[mortis] api_version`（可选 `min_mortis_version`）；不再有 `kind`。带的来源、播放、钩子分别列在 `[[sources]]`、`[[players]]`、`[[hooks]]` 里，名单要和 `PLUGIN` 里的对象按 id 完全一致，多了少了都会报错。钩子写 `event`、可选 `data_types` 和 `writes`。
+- `PLUGIN` 可以是单个来源或播放对象的简写（此时清单里不能再列子项），也可以是 `DataTypePlugin(...)` 或 `Plugin(sources, players, hooks, data_type)`。
 - 包内模块之间用相对导入。只 import 标准库、`pydantic`、`mortis.plugin_api`。
+- 要给别人用时，用 `scripts/pack_plugin.py` 打成 zip，再从设置页导入；导入的代码和宿主同进程，没有沙箱。
 - 联网只用 `host.get_json` / `post_json` / `get_text`；开播放器只用 `host.launch` / `open_default`。
 
 ## 5. 先写测试
@@ -76,6 +83,7 @@ plugins/<id>/
 - **录下来的响应**放在 `tests/fixtures/<来源 id>/`，只留用得到的部分，去掉令牌、账号和个人信息。测试不连真站。
 - **数据类型**：参照 `tests/test_plugins.py`。至少覆盖：注册表能加载它，字段目录能通过校验，默认来源顺序写进了库，停用后它带的来源一起停。
 - **播放**：用假的 `PlayerHost` 记下 `launch` 或 `open_default` 收到的参数，断言程序和参数列表正确。
+- **钩子**：用 `mortis.plugin_api.testing` 的 `FakeHookHost`（只在测试里 import），参照 `examples/plugins/tag_rules/tests/`。至少覆盖：幂等（同一事件处理两次结果一样）、撤旧标签、不碰别人的标签、字段被锁定和用户删除过时的表现、超出额度。
 
 ## 6. 实现时注意
 

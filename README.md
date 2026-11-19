@@ -53,7 +53,7 @@ cd web; npm install; cd ..
 
 scripts\dev.ps1              # 后端 :8100（热重载）加前端开发服务器 :5174
 python -m pytest -q          # 测试
-python -m ruff check src tests plugins
+python -m ruff check src tests plugins examples scripts
 scripts\build_windows.ps1    # 打 Windows zip 和 SHA256SUMS
 ```
 
