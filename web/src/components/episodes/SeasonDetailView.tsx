@@ -1,4 +1,4 @@
-import { Button, Menu, ScrollArea } from "@mantine/core";
+import { Button, Menu } from "@mantine/core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { EpisodeInfo, ItemDetail } from "../../api";
@@ -147,7 +147,7 @@ export function SeasonDetailView({
             </button>
           </Menu.Target>
           <Menu.Dropdown className={classes.menuDropdown}>
-            <ScrollArea.Autosize mah={280} type="hover">
+            <div className={classes.menuScroll}>
               {pageRanges.map((r) => (
                 <Menu.Item
                   key={r.page}
@@ -159,7 +159,7 @@ export function SeasonDetailView({
                   {r.label}
                 </Menu.Item>
               ))}
-            </ScrollArea.Autosize>
+            </div>
           </Menu.Dropdown>
         </Menu>
 
@@ -267,7 +267,7 @@ export function SeasonDetailView({
                 </button>
               </Menu.Target>
               <Menu.Dropdown className={classes.menuDropdown}>
-                <ScrollArea.Autosize mah={280} type="hover">
+                <div className={classes.menuScroll}>
                   {sortedSeasons.map((s) => (
                     <Menu.Item
                       key={s.id}
@@ -279,7 +279,7 @@ export function SeasonDetailView({
                       {formatSeasonHeading(s)} · {s.episode_count} 集
                     </Menu.Item>
                   ))}
-                </ScrollArea.Autosize>
+                </div>
               </Menu.Dropdown>
             </Menu>
             <button

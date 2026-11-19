@@ -18,7 +18,7 @@
   inset: -24px;
   background-size: cover;
   background-position: center 22%;
-  opacity: 0.58;
+  opacity: 0.78;
   transform: scale(1.03);
 }
 
@@ -364,6 +364,31 @@
   border-radius: 10px;
   padding: 4px;
   box-shadow: var(--mo-shadow);
+}
+
+.menuScroll {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+.menuScroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.menuScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.menuScroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+}
+
+.menuScroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .menuItem {
