@@ -11,9 +11,17 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from mortis.api.deps import ServicesDep
 from mortis.config.models import validation_problems
 from mortis.errors import UserError
-from mortis.plugin_api import Account, PlayerPlugin, SourceAuthError, SourceError, SourcePlugin
+from mortis.plugin_api import (
+    Account,
+    HookPlugin,
+    PlayerPlugin,
+    SourceAuthError,
+    SourceError,
+    SourcePlugin,
+)
 from mortis.plugins.host import (
     EXECUTABLES,
+    HasSecrets,
     PluginHost,
     open_host,
     plugin_secrets,
@@ -57,6 +65,11 @@ class HookStateOut(HookOut):
     failures: int = 0
     last_error: str | None = None
     runs: int = 0
+    # 钩子声明了 Settings、Secrets 才有；密钥只回传填没填。
+    settings_schema: dict[str, Any] | None = None
+    settings: dict[str, Any] | None = None
+    secrets_schema: dict[str, Any] | None = None
+    secrets: dict[str, bool] | None = None
 
 
 class PluginOut(BaseModel):
@@ -107,23 +120,57 @@ class PluginUpdate(BaseModel):
     secrets: dict[str, str] | None = None
 
 
-def _secret_keys(plugin: SourcePlugin) -> list[str]:
+class HookUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    settings: dict[str, Any] | None = None
+    secrets: dict[str, str] | None = None
+
+
+def _secret_keys(plugin: HasSecrets) -> list[str]:
     return [key for key in plugin.Secrets.model_fields if key not in TOKEN_KEYS]
 
 
-def _hook_out(services: Services, hook: Any) -> HookStateOut:
-    status = services.plugins.hook_status(hook.id)
-    return HookStateOut(
-        id=hook.id,
-        event=hook.event,
-        data_types=list(hook.data_types),
-        writes=list(hook.writes),
+def _secrets_schema(plugin: HasSecrets, keys: list[str]) -> dict[str, Any]:
+    schema = plugin.Secrets.model_json_schema()
+    schema["properties"] = {
+        key: value for key, value in schema.get("properties", {}).items() if key in keys
+    }
+    return schema
+
+
+def _hook_object(info: PluginInfo, hook_id: str) -> HookPlugin | None:
+    if info.package is None:
+        return None
+    return next((hook for hook in info.package.hooks if hook.id == hook_id), None)
+
+
+def _hook_out(services: Services, info: PluginInfo, entry: Any) -> HookStateOut:
+    status = services.plugins.hook_status(entry.id)
+    out = HookStateOut(
+        id=entry.id,
+        event=entry.event,
+        data_types=list(entry.data_types),
+        writes=list(entry.writes),
         disabled=status.disabled,
         reason=status.reason,
         failures=status.failures,
         last_error=status.last_error,
         runs=status.runs,
     )
+    hook = _hook_object(info, entry.id)
+    if hook is None:
+        return out
+    store = services.config_store
+    if hook.Settings.model_fields:
+        out.settings_schema = form_schema(hook.Settings)
+        out.settings = plugin_settings(store.load_config(), hook).model_dump(mode="json")
+    keys = _secret_keys(hook)
+    if keys:
+        current = plugin_secrets(store.load_secrets(), hook)
+        out.secrets_schema = _secrets_schema(hook, keys)
+        out.secrets = {key: bool(getattr(current, key)) for key in keys}
+    return out
 
 
 def _out(services: Services, info: PluginInfo, restart_pending: bool = False) -> PluginOut:
@@ -133,7 +180,7 @@ def _out(services: Services, info: PluginInfo, restart_pending: bool = False) ->
         version=info.version,
         capabilities=list(info.capabilities),
         members=[item.id for item in services.plugins.all() if item.parent == info.id],
-        hooks=[_hook_out(services, h) for h in info.hooks],
+        hooks=[_hook_out(services, info, h) for h in info.hooks],
         data_type=info.data_type,
         origin=info.origin,
         enabled=info.enabled,
@@ -150,14 +197,10 @@ def _out(services: Services, info: PluginInfo, restart_pending: bool = False) ->
     secrets = store.load_secrets()
     values = secrets.sources.get(plugin.id, {})
     keys = _secret_keys(plugin)
-    schema = plugin.Secrets.model_json_schema()
-    schema["properties"] = {
-        key: value for key, value in schema.get("properties", {}).items() if key in keys
-    }
     out.data_type = plugin.data_type
     out.settings_schema = form_schema(plugin.Settings)
     out.settings = plugin_settings(store.load_config(), plugin).model_dump(mode="json")
-    out.secrets_schema = schema
+    out.secrets_schema = _secrets_schema(plugin, keys)
     out.secrets = {key: bool(getattr(plugin_secrets(secrets, plugin), key)) for key in keys}
     out.oauth = plugin.oauth is not None
     if plugin.oauth is not None:
@@ -456,6 +499,40 @@ def enable_hook(plugin_id: str, hook_id: str, services: ServicesDep, request: Re
     refreshed = services.plugins.get(plugin_id)
     assert refreshed is not None
     return _out(services, refreshed)
+
+
+@router.put("/plugins/{plugin_id}/hooks/{hook_id}", response_model=PluginOut)
+def update_hook(
+    plugin_id: str, hook_id: str, update: HookUpdate, services: ServicesDep
+) -> PluginOut:
+    """改钩子的设置和密钥，按钩子 id 存；先全部校验，再写文件。"""
+    info = services.plugins.get(plugin_id)
+    hook = _hook_object(info, hook_id) if info is not None else None
+    if info is None or hook is None or all(h.id != hook_id for h in info.hooks):
+        raise UserError("这个插件里没有这个钩子", status_code=404)
+    values: dict[str, Any] | None = None
+    if update.settings is not None:
+        if not hook.Settings.model_fields:
+            raise UserError("这个钩子没有可改的设置")
+        try:
+            values = storable(hook.Settings.model_validate(update.settings).model_dump(mode="json"))
+        except ValidationError as error:
+            raise UserError(f"设置不合法：{validation_problems(error)}", status_code=422) from None
+    changes: dict[str, Any] | None = None
+    if update.secrets is not None:
+        allowed = set(_secret_keys(hook))
+        if not allowed:
+            raise UserError("这个钩子没有密钥")
+        unknown = sorted(set(update.secrets) - allowed)
+        if unknown:
+            raise UserError(f"没有这些密钥：{'、'.join(unknown)}")
+        changes = {key: value.strip() for key, value in update.secrets.items()}
+    store = services.config_store
+    if values is not None:
+        store.save_plugin(hook_id, values=values)
+    if changes is not None:
+        store.update_plugin_secrets(hook_id, changes)
+    return _out(services, info)
 
 
 @router.get("/plugins/{plugin_id}/oauth/login")

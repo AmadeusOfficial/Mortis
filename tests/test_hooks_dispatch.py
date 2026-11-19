@@ -47,6 +47,7 @@ BUNDLED = Path(__file__).resolve().parents[1] / "plugins"
 
 PREAMBLE = """
 import json
+from pydantic import BaseModel, Field
 from mortis.plugin_api import HookPlugin, Plugin
 
 
@@ -68,6 +69,8 @@ class H:
     data_types: tuple[str, ...] = ()
     writes: tuple[str, ...] = ()
     extra: dict[str, Any] = field(default_factory=dict)
+    members: str = ""
+    """写在钩子类里的其他成员，比如 Settings、Secrets。"""
 
 
 def write_hooks(root: Path, plugin_id: str, hooks: list[H]) -> None:
@@ -86,9 +89,11 @@ def write_hooks(root: Path, plugin_id: str, hooks: list[H]) -> None:
             f"writes = {json.dumps(list(hook.writes))}\n"
         )
         body = textwrap.dedent(hook.body or f'record(host, event, "{hook.id}")').strip("\n")
+        members = textwrap.dedent(hook.members).strip("\n")
         classes.append(
             f'class H{index}(HookPlugin):\n    id = "{hook.id}"\n    name = "{hook.id}"\n\n'
-            f"    def on_event(self, host, event):\n{textwrap.indent(body, ' ' * 8)}\n"
+            + (f"{textwrap.indent(members, ' ' * 4)}\n\n" if members else "")
+            + f"    def on_event(self, host, event):\n{textwrap.indent(body, ' ' * 8)}\n"
         )
         objects.append(f"H{index}()")
     code = (

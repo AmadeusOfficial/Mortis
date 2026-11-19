@@ -1,9 +1,18 @@
 import logging
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
-from mortis.plugin_api import Host, PlayerError, PlayerHost
+from mortis.plugin_api import (
+    Event,
+    HookHost,
+    HookPlugin,
+    Host,
+    NoSecrets,
+    NoSettings,
+    PlayerError,
+    PlayerHost,
+)
 from mortis.plugin_api.testing import FakeHookHost, FakeHost, FakePlayerHost, FakeRequest
 
 
@@ -60,6 +69,40 @@ def test_fake_hook_host_is_a_minimal_placeholder() -> None:
     host = FakeHookHost()
     host.log("x")
     assert host.logs == ["x"]
+    assert isinstance(host.settings, NoSettings) and isinstance(host.secrets, NoSecrets)
+
+
+class Rules(HookPlugin):
+    id = "t.rules"
+    name = "规则"
+
+    class Settings(BaseModel):
+        words: list[str] = ["默认"]
+        limit: int = Field(default=3, ge=1)
+
+    class Secrets(BaseModel):
+        token: str = ""
+
+    def on_event(self, host: HookHost, event: Event) -> None: ...
+
+
+def test_fake_hook_host_settings_from_dict_use_the_hooks_models() -> None:
+    host = FakeHookHost(hook=Rules(), settings={"words": ["甲"]}, secrets={"token": "k"})
+    assert isinstance(host.settings, Rules.Settings)
+    assert host.settings.words == ["甲"] and host.settings.limit == 3  # type: ignore[attr-defined]
+    assert host.secrets.token == "k"  # type: ignore[attr-defined]
+    with pytest.raises(ValidationError):
+        FakeHookHost(hook=Rules, settings={"limit": 0})
+    with pytest.raises(ValueError, match="hook"):
+        FakeHookHost(settings={"words": []})
+
+
+def test_fake_hook_host_takes_model_instances_or_hook_defaults() -> None:
+    given = Rules.Settings(words=["乙"])
+    host = FakeHookHost(settings=given, secrets=Rules.Secrets(token="t"))
+    assert host.settings is given and host.secrets.token == "t"  # type: ignore[attr-defined]
+    defaults = FakeHookHost(hook=Rules())
+    assert defaults.settings == Rules.Settings() and defaults.secrets == Rules.Secrets()
 
 
 def test_plugin_log_messages_reach_backend_logger(

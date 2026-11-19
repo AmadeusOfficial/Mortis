@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from mortis.plugin_api import NoSecrets, NoSettings, PlayerError
+from mortis.plugin_api import HookPlugin, NoSecrets, NoSettings, PlayerError
 from mortis.plugin_api.hooks import (
     DEFAULT_LIMITS,
     HookBudget,
@@ -134,9 +134,11 @@ class FakeHookHost:
     - `removed_by_user`：用户手动删除过的 `(条目 id, 标签类别, 标签名)`。
     - `responses`：联网用的假响应，规则同 `FakeHost`。
     - `added`：本插件加过的标签 `{(条目 id, 标签类别): [名字]}`；`tag_calls` 记下每次调用。
+    - `settings`、`secrets`：模型实例原样使用；给 dict 时要同时给 `hook`（钩子对象或类），
+      按它的 `Settings`、`Secrets` 校验。不给时是 `hook` 的模型默认值，没有 `hook` 时是空设置。
     """
 
-    settings: BaseModel = field(default_factory=NoSettings)
+    settings: BaseModel | dict[str, Any] | None = None
     writes: tuple[str, ...] = ()
     items: dict[int, ItemView] = field(default_factory=dict)
     locked_kinds: set[str] = field(default_factory=set)
@@ -148,6 +150,8 @@ class FakeHookHost:
     logs: list[str] = field(default_factory=list)
     added: dict[tuple[int, str], list[str]] = field(default_factory=dict)
     tag_calls: list[tuple[str, int, str, list[str]]] = field(default_factory=list)
+    secrets: BaseModel | dict[str, Any] | None = None
+    hook: HookPlugin | type[HookPlugin] | None = None
     budget: HookBudget = field(init=False)
 
     def __post_init__(self) -> None:
@@ -158,6 +162,19 @@ class FakeHookHost:
                 "钩子一次也不会运行。要写成 tags:<标签类别>，比如 tags:keyword"
             )
         self.budget = HookBudget(self.limits)
+        settings_model = self.hook.Settings if self.hook is not None else NoSettings
+        secrets_model = self.hook.Secrets if self.hook is not None else NoSecrets
+        self.settings = self._model("settings", self.settings, settings_model)
+        self.secrets = self._model("secrets", self.secrets, secrets_model)
+
+    def _model(self, name: str, value: Any, model: type[BaseModel]) -> BaseModel:
+        if isinstance(value, BaseModel):
+            return value
+        if value is None:
+            return model()
+        if self.hook is None:
+            raise ValueError(f"{name} 给的是 dict 时要同时传 hook，才知道按哪个模型校验")
+        return model.model_validate(value)
 
     def log(self, message: str) -> None:
         self.logs.append(message)

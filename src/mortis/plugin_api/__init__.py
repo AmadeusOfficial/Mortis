@@ -344,10 +344,15 @@ class HookPlugin(ABC):
     连续失败 3 次会被自动停用；一次事件处理超过 60 秒只记一次失败，宿主不会强行结束它。
     钩子里不再产生事件，钩子失败也不触发 `task.failed`。事件会重复投递（比如重新刮削），
     处理函数要写成幂等的。
+
+    `Settings`、`Secrets` 和来源插件的写法一样：设置页按它们画表单，按钩子 id 存，
+    钩子运行时从 `host.settings`、`host.secrets` 读到校验过的实例。不声明就没有设置。
     """
 
     id: ClassVar[str]
     name: ClassVar[str]
+    Settings: ClassVar[type[BaseModel]] = NoSettings
+    Secrets: ClassVar[type[BaseModel]] = NoSecrets
 
     @abstractmethod
     def on_event(self, host: HookHost, event: Event) -> None: ...

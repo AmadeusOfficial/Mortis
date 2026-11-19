@@ -6,15 +6,15 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx2 as httpx
 from pydantic import BaseModel, ValidationError
 
-from mortis.config.models import AppConfig, Secrets
+from mortis.config.models import AppConfig, Secrets, validation_problems
 from mortis.config.store import ConfigStore
-from mortis.plugin_api import PlayerPlugin, SourceAuthError, SourceError, SourcePlugin
+from mortis.plugin_api import SourceAuthError, SourceError, SourcePlugin
 from mortis.services import Services
 
 REFRESH_BEFORE_SECONDS = 24 * 3600
@@ -28,7 +28,27 @@ EXECUTABLES = "executables"
 """game 播放插件设置里记住的启动程序，宿主读写，设置页不显示也不能改。"""
 
 
-def plugin_settings(config: AppConfig, plugin: SourcePlugin | PlayerPlugin) -> BaseModel:
+class HasSettings(Protocol):
+    """存设置的对象：来源、播放和事件钩子，都按自己的 id 存在 `[sources.<id>]`。"""
+
+    id: str
+    Settings: type[BaseModel]
+
+
+class HasSecrets(Protocol):
+    id: str
+    Secrets: type[BaseModel]
+
+
+def _broken(log: Callable[[str], None] | None, what: str, error: ValidationError) -> None:
+    if log is not None:
+        log(f"{what}文件里的值不合法，用默认值：{validation_problems(error)}")
+
+
+def plugin_settings(
+    config: AppConfig, plugin: HasSettings, log: Callable[[str], None] | None = None
+) -> BaseModel:
+    """读不出时是默认值；给了 log 就记一条原因（只有位置，不带值）。"""
     values = dict(config.sources.get(plugin.id, {}))
     if EXECUTABLES in values:
         # 宿主写的这一项被手改坏时只丢掉坏的条目，不让整份设置回到默认值。
@@ -40,14 +60,18 @@ def plugin_settings(config: AppConfig, plugin: SourcePlugin | PlayerPlugin) -> B
         )
     try:
         return plugin.Settings.model_validate(values)
-    except ValidationError:
+    except ValidationError as error:
+        _broken(log, "设置", error)
         return plugin.Settings()
 
 
-def plugin_secrets(secrets: Secrets, plugin: SourcePlugin) -> BaseModel:
+def plugin_secrets(
+    secrets: Secrets, plugin: HasSecrets, log: Callable[[str], None] | None = None
+) -> BaseModel:
     try:
         return plugin.Secrets.model_validate(secrets.sources.get(plugin.id, {}))
-    except ValidationError:
+    except ValidationError as error:
+        _broken(log, "密钥", error)
         return plugin.Secrets()
 
 

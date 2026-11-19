@@ -273,6 +273,10 @@ def test_api_lists_combined_package_by_capabilities(tmp_path: Path) -> None:
                 "failures": 0,
                 "last_error": None,
                 "runs": 0,
+                "settings_schema": None,
+                "settings": None,
+                "secrets_schema": None,
+                "secrets": None,
             }
         ]
         assert listed["me.src"]["capabilities"] == ["source"]

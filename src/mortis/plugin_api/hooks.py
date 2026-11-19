@@ -169,6 +169,19 @@ class HookHost(Protocol):
         """插件自己的数据目录，文件只能写在这里面。目录在第一次使用时创建。"""
         ...
 
+    @property
+    def settings(self) -> BaseModel:
+        """本钩子 `Settings` 的实例，值来自设置页，按钩子 id 存。
+
+        没保存过、或文件里的值不合法时是模型的默认值（不合法时宿主记一条日志）。
+        """
+        ...
+
+    @property
+    def secrets(self) -> BaseModel:
+        """本钩子 `Secrets` 的实例，规则同 `settings`，存在密钥文件里。"""
+        ...
+
     def get_item(self, item_id: int) -> ItemView | None:
         """条目不存在时返回 None。"""
         ...

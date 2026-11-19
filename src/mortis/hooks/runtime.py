@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx2 as httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 
 from mortis.db.models import Item, ItemTag, Tag, TypeField
@@ -22,6 +22,7 @@ from mortis.hooks.dispatch import HOOK_TASK
 from mortis.hooks.netguard import Resolver, fetch_json
 from mortis.items import tags as tag_service
 from mortis.items.detail import read_value, year_of
+from mortis.plugin_api import HookPlugin, NoSecrets, NoSettings
 from mortis.plugin_api.events import event_from_dict
 from mortis.plugin_api.hooks import (
     DEFAULT_LIMITS,
@@ -32,6 +33,7 @@ from mortis.plugin_api.hooks import (
     TagResult,
     require_tag_permission,
 )
+from mortis.plugins.host import plugin_secrets, plugin_settings
 from mortis.tasks.base import TaskCancelled, TaskContext, TaskError, TaskResult
 
 __all__ = ["HOOK_TASK", "HookHostImpl", "build_view", "handle_hook"]
@@ -97,6 +99,7 @@ class HookHostImpl:
         writes: tuple[str, ...],
         *,
         label: str = "",
+        hook: HookPlugin | None = None,
         limits: HookLimits = DEFAULT_LIMITS,
         resolver: Resolver | None = None,
     ) -> None:
@@ -104,15 +107,38 @@ class HookHostImpl:
         self._plugin_id = plugin_id
         self._writes = writes
         self._label = label or plugin_id
+        self._hook = hook
         self._resolver = resolver
         self.budget = HookBudget(limits)
         self._client: httpx.Client | None = None
+        self._settings: BaseModel | None = None
+        self._secrets: BaseModel | None = None
 
     @property
     def data_dir(self) -> Path:
         folder = self._ctx.services.data_dir / DATA_FOLDER / self._plugin_id
         folder.mkdir(parents=True, exist_ok=True)
         return folder
+
+    @property
+    def settings(self) -> BaseModel:
+        if self._settings is None:
+            if self._hook is None:
+                self._settings = NoSettings()
+            else:
+                config = self._ctx.services.config_store.load_config()
+                self._settings = plugin_settings(config, self._hook, self.log)
+        return self._settings
+
+    @property
+    def secrets(self) -> BaseModel:
+        if self._secrets is None:
+            if self._hook is None:
+                self._secrets = NoSecrets()
+            else:
+                secrets = self._ctx.services.config_store.load_secrets()
+                self._secrets = plugin_secrets(secrets, self._hook, self.log)
+        return self._secrets
 
     def log(self, message: str) -> None:
         self._ctx.log(f"[{self._label}] {message}")
@@ -217,7 +243,7 @@ def handle_hook(payload: dict[str, Any], ctx: TaskContext) -> TaskResult:
         event = event_from_dict(payload.get("event") or {})
     except ValidationError:
         raise TaskError("事件内容不认识，可能是旧版本留下的任务") from None
-    host = HookHostImpl(ctx, plugin_id, entry.writes, label=hook.name)
+    host = HookHostImpl(ctx, plugin_id, entry.writes, label=hook.name, hook=hook)
     started = time.monotonic()
     try:
         ctx.check_cancelled()
