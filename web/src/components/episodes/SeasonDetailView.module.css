@@ -18,7 +18,7 @@
   inset: -24px;
   background-size: cover;
   background-position: center 22%;
-  opacity: 0.34;
+  opacity: 0.58;
   transform: scale(1.03);
 }
 
@@ -26,22 +26,16 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(
-      ellipse 85% 75% at 72% 24%,
-      transparent 0%,
-      color-mix(in srgb, var(--mo-bg) 55%, transparent) 62%,
-      var(--mo-bg) 100%
-    ),
     linear-gradient(
       90deg,
-      color-mix(in srgb, var(--mo-bg) 92%, transparent) 0%,
-      color-mix(in srgb, var(--mo-bg) 62%, transparent) 42%,
-      color-mix(in srgb, var(--mo-bg) 32%, transparent) 100%
+      color-mix(in srgb, var(--mo-bg) 76%, transparent) 0%,
+      color-mix(in srgb, var(--mo-bg) 42%, transparent) 44%,
+      color-mix(in srgb, var(--mo-bg) 16%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--mo-bg) 35%, transparent) 0%,
-      color-mix(in srgb, var(--mo-bg) 72%, transparent) 65%,
+      color-mix(in srgb, var(--mo-bg) 18%, transparent) 0%,
+      color-mix(in srgb, var(--mo-bg) 46%, transparent) 62%,
       var(--mo-bg) 100%
     );
 }
@@ -256,6 +250,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55);
 }
 
 .airDate {
