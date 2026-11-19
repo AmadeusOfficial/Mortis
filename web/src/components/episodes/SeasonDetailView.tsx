@@ -1,5 +1,5 @@
 import { Button } from "@mantine/core";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { EpisodeInfo, ItemDetail } from "../../api";
 import {
@@ -24,6 +24,28 @@ export interface SeasonDetailViewProps {
   releaseDate?: string | null;
 }
 
+const PAGE_SIZE = 30;
+
+function buildPageTokens(current: number, total: number): (number | "dots-l" | "dots-r")[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const tokens: (number | "dots-l" | "dots-r")[] = [1];
+  const left = Math.max(2, current - 1);
+  const right = Math.min(total - 1, current + 1);
+  if (left > 2) {
+    tokens.push("dots-l");
+  }
+  for (let p = left; p <= right; p++) {
+    tokens.push(p);
+  }
+  if (right < total - 1) {
+    tokens.push("dots-r");
+  }
+  tokens.push(total);
+  return tokens;
+}
+
 export function SeasonDetailView({
   detail,
   sidePanel,
@@ -35,6 +57,11 @@ export function SeasonDetailView({
   releaseDate,
 }: SeasonDetailViewProps) {
   const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [detail.id]);
 
   const sortedSeasons = useMemo(
     () => sortSeasons(detail.seasons),
@@ -53,22 +80,33 @@ export function SeasonDetailView({
   const episodes = currentSeason?.episodes ?? [];
   const firstPlayable = episodes.find((ep) => ep.playable);
 
-  const rangeChunks = useMemo(() => {
-    if (episodes.length <= 24) {
+  const totalPages = Math.max(1, Math.ceil(episodes.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedEpisodes = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return episodes.slice(start, start + PAGE_SIZE);
+  }, [episodes, safePage]);
+
+  const pageTokens = useMemo(
+    () => buildPageTokens(safePage, totalPages),
+    [safePage, totalPages],
+  );
+
+  const pageRanges = useMemo(() => {
+    if (totalPages <= 1) {
       return [];
     }
-    const chunks: { label: string; targetId: number }[] = [];
-    for (let i = 0; i < episodes.length; i += 20) {
-      const slice = episodes.slice(i, i + 20);
-      const startLabel = slice[0].number ?? i + 1;
-      const endLabel = slice[slice.length - 1].number ?? i + slice.length;
-      chunks.push({
-        label: `${startLabel}–${endLabel}`,
-        targetId: slice[0].id,
-      });
-    }
-    return chunks;
-  }, [episodes]);
+    return Array.from({ length: totalPages }, (_, idx) => {
+      const startIdx = idx * PAGE_SIZE;
+      const endIdx = Math.min(episodes.length - 1, startIdx + PAGE_SIZE - 1);
+      const startNum = episodes[startIdx]?.number ?? startIdx + 1;
+      const endNum = episodes[endIdx]?.number ?? endIdx + 1;
+      return {
+        page: idx + 1,
+        label: `第 ${startNum}–${endNum} 集`,
+      };
+    });
+  }, [episodes, totalPages]);
 
   const seasonHeading =
     currentSeason !== undefined ? formatSeasonHeading(currentSeason) : detail.title;
@@ -79,11 +117,75 @@ export function SeasonDetailView({
         ? `SEASON ${String(currentSeason.number).padStart(2, "0")}`
         : "SEASON";
 
-  const jumpToEpisode = (epId: number) => {
-    const el = document.getElementById(`season-ep-${epId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const goToPage = (nextPage: number, scrollTop = false) => {
+    const clamped = Math.max(1, Math.min(totalPages, nextPage));
+    setPage(clamped);
+    if (scrollTop) {
+      document
+        .getElementById("season-episodes-top")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  };
+
+  const renderPager = (scrollTop: boolean) => {
+    if (totalPages <= 1) {
+      return null;
+    }
+    return (
+      <div className={classes.pager}>
+        <select
+          className={`${classes.rangeSelect} mo-mono`}
+          aria-label="选择分集页"
+          value={String(safePage)}
+          onChange={(e) => goToPage(Number(e.target.value), scrollTop)}
+        >
+          {pageRanges.map((r) => (
+            <option key={r.page} value={String(r.page)}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+
+        <div className={classes.pageGroup}>
+          <button
+            type="button"
+            className={classes.pageBtn}
+            aria-label="上一页"
+            disabled={safePage <= 1}
+            onClick={() => goToPage(safePage - 1, scrollTop)}
+          >
+            <IconBack size={13} />
+          </button>
+          {pageTokens.map((token) =>
+            typeof token === "number" ? (
+              <button
+                key={token}
+                type="button"
+                className={`${classes.pageBtn} ${
+                  token === safePage ? classes.pageBtnActive : ""
+                } mo-mono`}
+                onClick={() => goToPage(token, scrollTop)}
+              >
+                {token}
+              </button>
+            ) : (
+              <span key={token} className={`${classes.pageDots} mo-mono`}>
+                …
+              </span>
+            ),
+          )}
+          <button
+            type="button"
+            className={classes.pageBtn}
+            aria-label="下一页"
+            disabled={safePage >= totalPages}
+            onClick={() => goToPage(safePage + 1, scrollTop)}
+          >
+            <IconChevronRight size={13} />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -232,34 +334,22 @@ export function SeasonDetailView({
 
       {/* 下方双栏：左侧干净的纵向分集列表 + 右侧资料栏 */}
       <div className={classes.bodyGrid}>
-        <div className={classes.epColumn}>
+        <div className={classes.epColumn} id="season-episodes-top">
           <div className={classes.sectionHead}>
             <div className={classes.sectionTitleGroup}>
               <h2>分集</h2>
               <small className="mo-mono">{episodes.length} 集</small>
             </div>
 
-            {rangeChunks.length > 0 && (
-              <div className={classes.rangeBar}>
-                {rangeChunks.map((chunk) => (
-                  <button
-                    key={chunk.targetId}
-                    type="button"
-                    className={`${classes.rangeChip} mo-mono`}
-                    onClick={() => jumpToEpisode(chunk.targetId)}
-                  >
-                    {chunk.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            {renderPager(false)}
           </div>
 
           {episodes.length === 0 ? (
             <div className={classes.emptyList}>这一季还没有分集记录</div>
           ) : (
-            <div className={classes.epList}>
-              {episodes.map((ep) => {
+            <>
+              <div className={classes.epList}>
+                {pagedEpisodes.map((ep) => {
                 const epHref = `/items/${ep.id}`;
                 const epLabel =
                   ep.number !== null ? `${ep.number}. ${ep.title}` : ep.title;
@@ -363,7 +453,11 @@ export function SeasonDetailView({
                   </div>
                 );
               })}
-            </div>
+              </div>
+              {totalPages > 1 && (
+                <div className={classes.bottomPager}>{renderPager(true)}</div>
+              )}
+            </>
           )}
         </div>
 
