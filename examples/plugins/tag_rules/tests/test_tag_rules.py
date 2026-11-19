@@ -2,6 +2,7 @@
 
 FakeHookHost 的规则和真宿主一致：写权限、锁定字段、只能撤自己加的标签、
 用户删除过的标签补不回来、每次事件的额度。一个实例对应一次事件，下一次事件要新建一个。
+传 `hook=` 后，`settings` 可以给 dict，按钩子的 `Settings` 校验；不给就是模型默认值。
 """
 
 import importlib.util
@@ -9,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from mortis.plugin_api import (
     HookPermissionError,
@@ -41,25 +43,29 @@ API = sys.modules[f"{MODULE.__name__}.source"].API
 
 WRITES = ("tags:keyword",)
 EVENT = ScrapeFinished(data_type="movie", item_id=1)
+ALIEN = {"rules": [{"pattern": "^(异形|alien)", "tag": "异形系列"}]}
 
 
-def movie(runtime: int | None, year: int | None = 2005, **tags: tuple[str, ...]) -> ItemView:
+def movie(
+    runtime: int | None, year: int | None = 2005, title: str = "片", **tags: tuple[str, ...]
+) -> ItemView:
     fields = {} if runtime is None else {"runtime": runtime}
     return ItemView(
-        id=1, kind="work", data_type="movie", title="片", year=year, fields=fields, tags=tags
+        id=1, kind="work", data_type="movie", title=title, year=year, fields=fields, tags=tags
     )
 
 
 def run(item: ItemView, **options) -> FakeHookHost:
-    host = FakeHookHost(writes=WRITES, items={1: item}, **options)
+    host = FakeHookHost(writes=WRITES, items={1: item}, hook=HOOK, **options)
     HOOK.on_event(host, EVENT)
     return host
 
 
-def test_adds_tags_for_matching_rules() -> None:
+def test_default_settings_tag_by_runtime_and_year() -> None:
     host = run(movie(180, year=1975))
     assert host.get_item(1).tags["keyword"] == ("长片", "老电影")
     assert host.added[(1, "keyword")] == ["长片", "老电影"]
+    assert run(movie(80)).get_item(1).tags["keyword"] == ("短片",)
 
 
 def test_no_matching_rule_makes_no_calls() -> None:
@@ -67,9 +73,46 @@ def test_no_matching_rule_makes_no_calls() -> None:
     assert host.tag_calls == []
 
 
+def test_thresholds_and_tag_names_come_from_settings() -> None:
+    host = run(movie(130), settings={"long_minutes": 120, "long_tag": "大长片"})
+    assert host.get_item(1).tags["keyword"] == ("大长片",)
+
+
+def test_title_rule_adds_its_tag() -> None:
+    host = run(movie(120, title="Alien: Covenant"), settings=ALIEN)
+    assert host.get_item(1).tags["keyword"] == ("异形系列",)
+    original = movie(120, title="契约").model_copy(update={"original_title": "Alien: Covenant"})
+    assert run(original, settings=ALIEN).get_item(1).tags["keyword"] == ("异形系列",)
+    assert run(movie(120, title="铁血战士"), settings=ALIEN).tag_calls == []
+
+
+def test_disabled_rule_adds_nothing_and_retracts_its_old_tag() -> None:
+    off = {"rules": [{**ALIEN["rules"][0], "enabled": False}]}
+    assert run(movie(120, title="Alien"), settings=off).tag_calls == []
+    first = run(movie(120, title="Alien"), settings=ALIEN)
+    second = FakeHookHost(
+        writes=WRITES, items=dict(first.items), added=dict(first.added), hook=HOOK, settings=off
+    )
+    HOOK.on_event(second, EVENT)
+    assert second.get_item(1).tags["keyword"] == ()
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [{"pattern": "(未闭合", "tag": "坏"}, {"pattern": "ok", "tag": ""}],
+)
+def test_settings_reject_bad_rules(rule: dict) -> None:
+    with pytest.raises(ValidationError) as caught:
+        HOOK.Settings.model_validate({"rules": [rule]})
+    if rule["tag"]:
+        assert "不是合法的正则表达式" in str(caught.value)
+
+
 def test_is_idempotent_when_the_event_arrives_twice() -> None:
     first = run(movie(180))
-    second = FakeHookHost(writes=WRITES, items=dict(first.items), added=dict(first.added))
+    second = FakeHookHost(
+        writes=WRITES, items=dict(first.items), added=dict(first.added), hook=HOOK
+    )
     HOOK.on_event(second, EVENT)
     assert second.get_item(1).tags["keyword"] == ("长片",)
     assert second.added[(1, "keyword")] == ["长片"]  # 没有重复写入
@@ -78,7 +121,7 @@ def test_is_idempotent_when_the_event_arrives_twice() -> None:
 def test_retracts_own_tag_when_the_rule_stops_matching() -> None:
     first = run(movie(180))
     shown = first.get_item(1).model_copy(update={"fields": {"runtime": 80}})
-    second = FakeHookHost(writes=WRITES, items={1: shown}, added=dict(first.added))
+    second = FakeHookHost(writes=WRITES, items={1: shown}, added=dict(first.added), hook=HOOK)
     HOOK.on_event(second, EVENT)
     assert second.get_item(1).tags["keyword"] == ("短片",)
 
@@ -99,15 +142,15 @@ def test_skips_locked_field_and_user_removed_tags_without_error() -> None:
 
 
 def test_needs_the_declared_write_permission() -> None:
-    host = FakeHookHost(items={1: movie(180)})  # 没声明 tags:keyword
+    host = FakeHookHost(items={1: movie(180)}, hook=HOOK)  # 没声明 tags:keyword
     with pytest.raises(HookPermissionError):
         HOOK.on_event(host, EVENT)
 
 
 def test_ignores_missing_items_and_other_events() -> None:
-    missing = FakeHookHost(writes=WRITES)
+    missing = FakeHookHost(writes=WRITES, hook=HOOK)
     HOOK.on_event(missing, EVENT)
-    other = FakeHookHost(writes=WRITES, items={1: movie(180)})
+    other = FakeHookHost(writes=WRITES, items={1: movie(180)}, hook=HOOK)
     HOOK.on_event(other, ScanFinished(data_type="movie", library_id=1))
     assert missing.tag_calls == [] and other.tag_calls == []
 
