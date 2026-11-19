@@ -40,6 +40,44 @@ def work_of(session: Session, item_id: int) -> int:
     return item.id if item is not None else item_id
 
 
+def manual_ids(session: Session, items: list[Item]) -> set[int]:
+    """这些条目里的手动条目：没有任何外部编号的作品。"""
+    works = [item.id for item in items if item.kind == "work"]
+    if not works:
+        return set()
+    known = set(
+        session.scalars(
+            select(ItemExternalId.item_id).where(ItemExternalId.item_id.in_(works)).distinct()
+        )
+    )
+    return {item_id for item_id in works if item_id not in known}
+
+
+def is_manual(session: Session, item: Item) -> bool:
+    """季和集跟着所属的剧算。"""
+    work = session.get(Item, work_of(session, item.id))
+    return work is not None and bool(manual_ids(session, [work]))
+
+
+def create_manual_work(session: Session, library: Library, title: str) -> Item:
+    """不写外部编号。只 flush，调用方写字段并提交。"""
+    now = utc_now()
+    item = Item(
+        library_id=library.id,
+        data_type_id=library.data_type_id,
+        kind="work",
+        title=title,
+        fields="{}",
+        field_sources="{}",
+        locked_fields="[]",
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(item)
+    session.flush()
+    return item
+
+
 @dataclass(frozen=True)
 class ExternalRef:
     """插件类型的条目身份：来源插件的外部编号。"""

@@ -192,6 +192,7 @@ def shelf(client: TestClient, session: Session, tmp_path: Path) -> dict[str, int
     )
     heat = _item(session, movies, "movie", "work", "盗火线", original="Heat", date="1995-12-15")
     session.add(ItemExternalId(item_id=matrix, provider="tmdb", external_id="603", is_primary=1))
+    session.add(ItemExternalId(item_id=heat, provider="tmdb", external_id="949", is_primary=1))
     session.commit()
     show = _item(
         session, shows, "tv", "work", "黑客帝国动画版", original="The Animatrix", date="2003-06-03"

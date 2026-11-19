@@ -21,6 +21,7 @@ from mortis.db.models import (
     Task,
     TypeField,
 )
+from mortis.items.identity import manual_ids
 from mortis.items.missing import show_missing_episodes
 from mortis.organize.episodes import parse_episode
 from mortis.scrape.apply import level_fields
@@ -138,6 +139,7 @@ def wall_rows(
         session.scalars(select(ItemSourceRecord.item_id).where(ItemSourceRecord.item_id.in_(ids)))
     )
     latest = task_repo.latest_scrape_tasks(session, ids)
+    manual = manual_ids(session, items)
     return [
         {
             "id": item.id,
@@ -147,6 +149,7 @@ def wall_rows(
             "year": year_of(dates.get(item.id, item.release_date)),
             "poster_url": image_url(item.poster_path),
             "is_scraped": item.id in scraped,
+            "is_manual": item.id in manual,
             "issue": _issue_of(latest.get(item.id)),
         }
         for item in items
@@ -393,5 +396,6 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             {"id": f.id, "path": f.path, "file_kind": f.file_kind, "size": f.size} for f in files
         ],
         "scraped_at": scraped_at,
+        "is_manual": bool(manual_ids(session, [show or item])),
         "sections": [{"name": name, "fields": rows} for name, rows in sections.items()],
     }

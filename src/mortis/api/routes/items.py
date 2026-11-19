@@ -12,12 +12,13 @@ from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag, utc_now
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
-from mortis.items.identity import ExternalRef, MovieRef
+from mortis.items.identity import ExternalRef, MovieRef, is_manual
 from mortis.items.images import choose_image, fetch_preview, image_choices, upload_image
 from mortis.items.matching import (
     add_source,
     bind_file,
     bind_folder,
+    bind_manual,
     guess,
     guess_file,
     is_series,
@@ -53,6 +54,8 @@ class WallItem(BaseModel):
     year: int | None
     poster_url: str | None
     is_scraped: bool
+    is_manual: bool
+    """没有任何外部编号的作品。"""
     issue: str | None
 
 
@@ -138,6 +141,8 @@ class ItemDetail(BaseModel):
     show_missing_effective: bool | None = None
     files: list[FileOut]
     scraped_at: str | None
+    is_manual: bool
+    """季和集跟着所属的剧。"""
     sections: list[SectionOut]
     guess: FileGuess | None = None
     """第一个视频或游戏目录的文件名、上级目录名，和从文件名解析出的标题、年份。"""
@@ -210,6 +215,19 @@ class BindRequest(BaseModel):
 class Bound(BaseModel):
     item_id: int
     task_id: int
+
+
+class ManualRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    original_title: str | None = None
+    release_date: str | None = None
+    overview: str | None = None
+
+
+class ManualCreated(BaseModel):
+    item_id: int
 
 
 class Unregistered(BaseModel):
@@ -618,6 +636,8 @@ def scrape_work(session: Session, runner: TaskRunner, item: Item, *, force: bool
         raise ItemError("系列电影跟着其中的电影一起刮削")
     if item.kind != "work":
         raise ItemError("季和集跟着剧一起刮削")
+    if is_manual(session, item):
+        raise ItemError("手动条目没有来源编号，要刮削请先重新匹配")
     return enqueue_scrape(session, runner, item.id, force=force)
 
 
@@ -787,6 +807,18 @@ def bind_media(
     else:
         raise ItemError("要给出 TMDB 编号或来源编号")
     return Bound(item_id=item.id, task_id=enqueue_scrape(session, runner, item.id, force=False))
+
+
+@router.post("/media-files/{file_id}/manual", response_model=ManualCreated)
+def create_manual_item(
+    file_id: int, body: ManualRequest, session: SessionDep, services: ServicesDep
+) -> ManualCreated:
+    """不入队刮削。"""
+    media_file = session.get(MediaFile, file_id)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="没有这个文件")
+    item = bind_manual(session, media_file, body.model_dump(), services.locks)
+    return ManualCreated(item_id=item.id)
 
 
 def _external_id(value: str | None) -> str:

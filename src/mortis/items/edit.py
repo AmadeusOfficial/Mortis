@@ -49,28 +49,44 @@ def _coerce(field: TypeField, raw: Any) -> Any:
     return value
 
 
-def edit_fields(session: Session, item: Item, values: dict[str, Any], locks: KeyedLocks) -> None:
-    """锁顺序：catalog-write，再 item:{id}（标签服务的约定）。标签和别的字段同一事务提交。"""
-    fields = {f.field_key: f for f in level_fields(session, item.data_type_id, item.kind)}
+def prepare_values(
+    session: Session,
+    data_type_id: str,
+    kind: str,
+    values: dict[str, Any],
+    *,
+    skip_unknown: bool = False,
+) -> list[tuple[TypeField, Any]]:
+    """按类型字段目录校验并转换。skip_unknown 时目录里没有的键直接忽略。"""
+    fields = {f.field_key: f for f in level_fields(session, data_type_id, kind)}
     prepared: list[tuple[TypeField, Any]] = []
     for key, raw in values.items():
         field = fields.get(key)
         if field is None:
+            if skip_unknown:
+                continue
             raise ItemError(f"没有这个字段：{key}")
         if not is_editable(field):
             raise ItemError(f"「{field.label}」不能手动修改")
         prepared.append((field, _coerce(field, raw)))
+    return prepared
+
+
+def edit_fields(session: Session, item: Item, values: dict[str, Any], locks: KeyedLocks) -> None:
+    """锁顺序：catalog-write，再 item:{id}（标签服务的约定）。标签和别的字段同一事务提交。"""
+    prepared = prepare_values(session, item.data_type_id, item.kind, values)
     with hold_item(locks, item.id):
         try:
             session.refresh(item)  # 等锁期间刮削可能改过
-            _apply_edit(session, item, prepared)
+            apply_edit(session, item, prepared)
             session.commit()
         except BaseException:
             session.rollback()
             raise
 
 
-def _apply_edit(session: Session, item: Item, prepared: list[tuple[TypeField, Any]]) -> None:
+def apply_edit(session: Session, item: Item, prepared: list[tuple[TypeField, Any]]) -> None:
+    """写入并记为 manual，可锁的字段锁定。调用方持锁并提交。"""
     extra = json.loads(item.fields)
     sources = json.loads(item.field_sources)
     locked = json.loads(item.locked_fields)

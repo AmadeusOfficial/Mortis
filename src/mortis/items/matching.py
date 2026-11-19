@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
@@ -12,10 +13,11 @@ from mortis.db.models import (
     MediaFile,
     utc_now,
 )
-from mortis.items.edit import ItemError
+from mortis.items.edit import ItemError, apply_edit, prepare_values
 from mortis.items.identity import (
     ExternalRef,
     MovieRef,
+    create_manual_work,
     find_by_external,
     find_by_tmdb,
     find_or_create_movie,
@@ -223,6 +225,40 @@ def _siblings(session: Session, library: Library, media_file: MediaFile) -> list
         and (only_group or subtitle_belongs_to(os.path.basename(row.path), base))
     ]
     return same + subtitles
+
+
+def bind_manual(
+    session: Session, media_file: MediaFile, values: dict[str, Any], locks: KeyedLocks
+) -> Item:
+    """未识别的视频或游戏目录建一个手动条目。值为空的键不写也不锁；类型里没有的键忽略。"""
+    if media_file.file_kind not in ("video", "game"):
+        raise ItemError("只能给视频文件或游戏目录建条目")
+    if media_file.item_id is not None:
+        raise ItemError("这个文件已经匹配过了", status_code=409)
+    library = session.get(Library, media_file.library_id)
+    if library is None:
+        raise ItemError("媒体库不存在，可能已被删除", status_code=404)
+    filled = {
+        key: value
+        for key, value in values.items()
+        if value is not None and not (isinstance(value, str) and not value.strip())
+    }
+    title = str(filled.get("title") or "").strip()
+    if not title:
+        raise ItemError("片名不能为空")
+    game = media_file.file_kind == "game"
+    if not game and is_series(session, library):
+        raise ItemError("剧集库手动建条目尚未支持")
+    prepared = prepare_values(session, library.data_type_id, "work", filled, skip_unknown=True)
+    with locks.hold("catalog-write"):
+        rows = [media_file] if game else _siblings(session, library, media_file)
+        item = create_manual_work(session, library, title)
+        apply_edit(session, item, prepared)
+        for row in rows:
+            row.item_id = item.id
+            row.updated_at = utc_now()
+        session.commit()
+    return item
 
 
 def bind_file(session: Session, media_file: MediaFile, ref: MovieRef, locks: KeyedLocks) -> Item:
