@@ -1,7 +1,8 @@
 """插件数据类型的刮削：每个来源插件各出一份候选值，按字段的来源顺序择优。"""
 
 import json
-from dataclasses import dataclass, field
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy import select
@@ -13,25 +14,15 @@ from mortis.plugins.host import open_host
 from mortis.plugins.matching import best_hit
 from mortis.scrape.apply import field_orders, image_urls, level_fields, plan_values, write_plan
 from mortis.scrape.common import (
+    SourceMissing,
     download_images,
+    gather,
     missing_photos,
     save_external_ids,
     save_snapshot,
-    source_outcome,
 )
 from mortis.scrape.images import ImageStore
 from mortis.tasks.base import TaskContext, TaskError
-
-
-@dataclass
-class _Gathered:
-    candidates: dict[str, dict[str, Any]] = field(default_factory=dict)
-    fetched: dict[str, dict[str, Any]] = field(default_factory=dict)
-    found_ids: dict[str, str] = field(default_factory=dict)
-    sources: list[dict[str, Any]] = field(default_factory=list)
-
-    def record(self, source_id: str, name: str, outcome: str, detail: str | None = None) -> None:
-        self.sources.append(source_outcome(source_id, name, outcome, detail))
 
 
 def _year(date: str | None) -> int | None:
@@ -49,66 +40,73 @@ def _tag_people(values: dict[str, Any], people_keys: set[str], provider: str) ->
     return values
 
 
-def _gather(
-    ctx: TaskContext,
-    sources: list[SourcePlugin],
-    ids: dict[str, str],
-    snapshots: dict[str, dict[str, Any]],
-    titles: list[str],
-    year: int | None,
-    people_keys: set[str],
-    threshold: float,
-) -> _Gathered:
-    gathered = _Gathered()
-    for plugin in sources:
-        ctx.check_cancelled()
-        with open_host(ctx.services, plugin, ctx.log) as host:
-            if not plugin.enabled(host):
-                message = f"{plugin.name} 没有启用（缺少设置或密钥），跳过"
-                ctx.log(message)
-                detail = plugin.disabled_reason(host) or message
-                gathered.record(plugin.id, plugin.name, "skipped", detail)
-                continue
-            raw = snapshots.get(plugin.id)
-            used_snapshot = raw is not None
+class _PluginAdapter:
+    """把 SourcePlugin 接成取数循环里的 GatherSource。"""
+
+    primary = False
+
+    def __init__(
+        self,
+        plugin: SourcePlugin,
+        ids: dict[str, str],
+        titles: list[str],
+        year: int | None,
+        people_keys: set[str],
+        threshold: float,
+    ) -> None:
+        self._plugin = plugin
+        self._ids = ids
+        self._titles = titles
+        self._year = year
+        self._people_keys = people_keys
+        self._threshold = threshold
+        self._host: Any = None
+        self.id = plugin.id
+        self.name = plugin.name
+
+    @contextmanager
+    def session(self, ctx: TaskContext) -> Iterator[None]:
+        with open_host(ctx.services, self._plugin, ctx.log) as host:
+            self._host = host
             try:
-                if raw is None:
-                    external_id = ids.get(plugin.provider)
-                    if external_id is None:
-                        match = best_hit(host, plugin, titles, year)
-                        if match is None or match.score < threshold:
-                            best = (
-                                f"，最高匹配度 {match.score:.2f}，低于 {threshold:.2f}"
-                                f"（{match.hit.title}）"
-                                if match
-                                else ""
-                            )
-                            message = f"{plugin.name} 上没找到「{titles[0]}」{best}"
-                            ctx.log(message)
-                            gathered.record(plugin.id, plugin.name, "not_found", message)
-                            continue
-                        external_id = match.hit.external_id
-                        gathered.found_ids[plugin.provider] = external_id
-                        ctx.log(
-                            f"{plugin.name} 认出 {match.hit.title}（{external_id}），"
-                            f"匹配度 {match.score:.2f}"
-                        )
-                    raw = plugin.fetch(host, external_id)
-                    gathered.fetched[plugin.id] = raw
-                values = plugin.candidates(raw)
-            except SourceError as error:
-                message = f"{plugin.name} 出错，跳过：{error.message}"
-                ctx.log(message)
-                gathered.record(plugin.id, plugin.name, "failed", message)
-                continue
-            except Exception as error:  # 插件代码的缺陷不能拖垮整个刮削
-                message = f"{plugin.name} 插件出错，跳过：{type(error).__name__}: {error}"
-                ctx.log(message)
-                gathered.record(plugin.id, plugin.name, "failed", message)
-                continue
-            gathered.record(plugin.id, plugin.name, "cached" if used_snapshot else "ok")
-        gathered.candidates[plugin.id] = _tag_people(values, people_keys, plugin.provider)
-    return gathered
+                yield
+            finally:
+                self._host = None
+
+    def skip(self) -> tuple[str, str] | None:
+        if self._plugin.enabled(self._host):
+            return None
+        message = f"{self.name} 没有启用（缺少设置或密钥），跳过"
+        return message, self._plugin.disabled_reason(self._host) or message
+
+    def fetch(self, ctx: TaskContext, found_ids: dict[str, str]) -> dict[str, Any]:
+        plugin = self._plugin
+        external_id = self._ids.get(plugin.provider)
+        if external_id is None:
+            match = best_hit(self._host, plugin, self._titles, self._year)
+            if match is None or match.score < self._threshold:
+                best = (
+                    f"，最高匹配度 {match.score:.2f}，低于 {self._threshold:.2f}"
+                    f"（{match.hit.title}）"
+                    if match
+                    else ""
+                )
+                raise SourceMissing(f"{self.name} 上没找到「{self._titles[0]}」{best}")
+            external_id = match.hit.external_id
+            found_ids[plugin.provider] = external_id
+            ctx.log(
+                f"{self.name} 认出 {match.hit.title}（{external_id}），匹配度 {match.score:.2f}"
+            )
+        return plugin.fetch(self._host, external_id)
+
+    def candidates(self, raw: dict[str, Any]) -> dict[str, Any]:
+        values = self._plugin.candidates(raw)
+        return _tag_people(values, self._people_keys, self._plugin.provider)
+
+    def failure(self, error: Exception) -> str:
+        if isinstance(error, SourceError):
+            return f"{self.name} 出错，跳过：{error.message}"
+        return f"{self.name} 插件出错，跳过：{type(error).__name__}: {error}"
 
 
 def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any]:
@@ -145,9 +143,11 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         raise TaskError(f"数据类型 {data_type_id} 没有启用的来源插件")
     people_keys = {f.field_key for f in fields if f.value_type == "people"}
     settings = type_config(services.config_store.load_config(), data_type_id)
-    gathered = _gather(
-        ctx, sources, ids, snapshots, titles, year, people_keys, settings.match_threshold
-    )
+    adapters = [
+        _PluginAdapter(plugin, ids, titles, year, people_keys, settings.match_threshold)
+        for plugin in sources
+    ]
+    gathered = gather(ctx, adapters, snapshots)
     if not gathered.candidates:
         raise TaskError("所有来源都没有拿到结果")
 
@@ -167,8 +167,8 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         orders = field_orders(session, data_type_id, [plugin.id for plugin in sources])
         locked = set(json.loads(item.locked_fields))
         plan = plan_values(fields, gathered.candidates, orders, locked)
-        for source, raw in gathered.fetched.items():
-            save_snapshot(session, item.id, raw, source)
+        for source in gathered.fetched:
+            save_snapshot(session, item.id, gathered.raws[source], source)
         write_plan(session, item, fields, plan, files)
         save_external_ids(session, item.id, gathered.found_ids)
         session.commit()

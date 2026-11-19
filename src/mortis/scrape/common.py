@@ -1,10 +1,11 @@
 """电影和电视剧刮削共用的快照、图片和编号读写。"""
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import Any
+from typing import Any, Protocol
 
 import httpx2 as httpx
 from sqlalchemy import select
@@ -20,7 +21,7 @@ from mortis.db.models import (
 )
 from mortis.errors import UserError
 from mortis.scrape.images import ImageError, ImageStore
-from mortis.sources.builtin import FetchRequest, builtin_sources
+from mortis.sources.builtin import BuiltinSource, FetchRequest, builtin_sources
 from mortis.tasks.base import TaskCancelled, TaskContext, TaskError
 
 SOURCE = "tmdb"
@@ -102,15 +103,97 @@ def external_ids(session: Session, item_id: int) -> dict[str, str]:
 
 @dataclass
 class Gathered:
-    """各内置来源的结果。raws 含沿用的快照，fetched 是这次新请求、要写快照的来源。"""
+    """各来源的结果。raws 含沿用的快照，fetched 是这次新请求、要写快照的来源。"""
 
     raws: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     candidates: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     fetched: set[str] = dataclass_field(default_factory=set)
+    found_ids: dict[str, str] = dataclass_field(default_factory=dict)
+    """来源按标题认出的外部编号，键是 provider；插件来源用。"""
     sources: list[dict[str, Any]] = dataclass_field(default_factory=list)
 
     def record(self, source_id: str, name: str, outcome: str, detail: str | None = None) -> None:
         self.sources.append(source_outcome(source_id, name, outcome, detail))
+
+
+class SourceMissing(Exception):
+    """来源上没有这个条目。消息原样记进日志和来源记录。"""
+
+
+class GatherSource(Protocol):
+    """取数循环眼里的一个来源。内置来源和插件来源各有一个适配器。"""
+
+    id: str
+    name: str
+    primary: bool
+    """主源不可用、找不到或出错时整个刮削失败；其余来源只记下来。"""
+
+    def session(self, ctx: TaskContext) -> AbstractContextManager[None]:
+        """围住对这个来源的所有调用（插件来源在这里开宿主）。"""
+        ...
+
+    def skip(self) -> tuple[str, str] | None:
+        """不可用时返回（日志文案，来源记录里的原因）；可用时返回 None。"""
+        ...
+
+    def fetch(self, ctx: TaskContext, found_ids: dict[str, str]) -> dict[str, Any]:
+        """请求来源，返回要存成快照的原始结果。找不到时抛 SourceMissing。
+
+        认出的外部编号（键是 provider）一认出就写进 found_ids，之后请求失败也保留。
+        """
+        ...
+
+    def candidates(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """从原始结果（新请求的或快照）算出候选值。"""
+        ...
+
+    def failure(self, error: Exception) -> str:
+        """出错时记进日志和来源记录的整句文案。"""
+        ...
+
+
+class BuiltinAdapter:
+    """把 BuiltinSource 接成 GatherSource。"""
+
+    def __init__(
+        self, source: BuiltinSource, name: str, reason: str | None, request: FetchRequest
+    ) -> None:
+        self._source = source
+        self._reason = reason
+        self._request = request
+        self.id = source.id
+        self.name = name
+        self.primary = source.primary
+
+    def session(self, ctx: TaskContext) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    def skip(self) -> tuple[str, str] | None:
+        if self._reason is None:
+            return None
+        return f"{self.name} 不可用，跳过：{self._reason}", self._reason
+
+    def fetch(self, ctx: TaskContext, found_ids: dict[str, str]) -> dict[str, Any]:
+        assert self._source.fetcher is not None
+        raw = self._source.fetcher.fetch(self._request)
+        if raw is None:
+            raise SourceMissing(f"{self.name} 上没有这个条目")
+        return raw
+
+    def candidates(self, raw: dict[str, Any]) -> dict[str, Any]:
+        fetcher = self._source.fetcher
+        assert fetcher is not None
+        values = fetcher.candidates(raw, self._request)
+        reported = getattr(fetcher, "external_ids", None)
+        if reported is not None:
+            self._request.ids.update(reported(raw, self._request))
+        return values
+
+    def failure(self, error: Exception) -> str:
+        detail = (
+            error.message if isinstance(error, UserError) else f"{type(error).__name__}: {error}"
+        )
+        return f"{self.name} 出错，跳过：{detail}"
 
 
 def gather_sources(
@@ -121,59 +204,69 @@ def gather_sources(
 ) -> Gathered:
     """按默认顺序逐个取适用于这个类型的内置来源。已有快照的不再请求。
 
-    还没有取数函数的来源不出现在结果里。主源失败时整个刮削失败，其余来源出错只记下来。
-    labels 给结果里的来源换个名字，比如「TMDB 电影」。
+    还没有取数函数的来源不出现在结果里。labels 给结果里的来源换个名字，比如「TMDB 电影」。
     """
     config = ctx.services.config_store.load_config()
     secrets = ctx.services.config_store.load_secrets()
+    sources = [
+        BuiltinAdapter(
+            source,
+            labels.get(source.id, source.name),
+            source.disabled_reason(config, secrets, ctx.services.data_dir),
+            request,
+        )
+        for source in builtin_sources(request.data_type_id)
+        if source.fetcher is not None
+    ]
+    return gather(ctx, sources, snapshots)
+
+
+def gather(
+    ctx: TaskContext, sources: Sequence[GatherSource], snapshots: Mapping[str, dict[str, Any]]
+) -> Gathered:
+    """内置来源和插件来源共用的取数循环。已有快照的不再请求。
+
+    主源失败时整个刮削失败，其余来源出错只记下来；取消照常往外抛。
+    """
     gathered = Gathered()
-    for source in builtin_sources(request.data_type_id):
-        if source.fetcher is None:
-            continue
-        name = labels.get(source.id, source.name)
-        reason = source.disabled_reason(config, secrets, ctx.services.data_dir)
-        if reason is not None:
-            if source.primary:
-                raise TaskError(f"{name} 不可用：{reason}")
-            ctx.log(f"{name} 不可用，跳过：{reason}")
-            gathered.record(source.id, name, "skipped", reason)
-            continue
+    for source in sources:
         ctx.check_cancelled()
-        raw = snapshots.get(source.id)
-        cached = raw is not None
-        try:
-            if raw is None:
-                raw = source.fetcher.fetch(request)
-            if raw is None:
-                message = f"{name} 上没有这个条目"
+        with source.session(ctx):
+            notice = source.skip()
+            if notice is not None:
+                message, reason = notice
                 if source.primary:
-                    raise TaskError(message)
+                    raise TaskError(f"{source.name} 不可用：{reason}")
                 ctx.log(message)
-                gathered.record(source.id, name, "not_found", message)
+                gathered.record(source.id, source.name, "skipped", reason)
                 continue
-            values = source.fetcher.candidates(raw, request)
-            reported = getattr(source.fetcher, "external_ids", None)
-            if reported is not None:
-                request.ids.update(reported(raw, request))
-        except TaskCancelled:
-            raise
-        except Exception as error:
-            if source.primary:
+            raw = snapshots.get(source.id)
+            cached = raw is not None
+            try:
+                if raw is None:
+                    raw = source.fetch(ctx, gathered.found_ids)
+                values = source.candidates(raw)
+            except SourceMissing as missing:
+                message = str(missing)
+                if source.primary:
+                    raise TaskError(message) from None
+                ctx.log(message)
+                gathered.record(source.id, source.name, "not_found", message)
+                continue
+            except TaskCancelled:
                 raise
-            detail = (
-                error.message
-                if isinstance(error, UserError)
-                else f"{type(error).__name__}: {error}"
-            )
-            message = f"{name} 出错，跳过：{detail}"
-            ctx.log(message)
-            gathered.record(source.id, name, "failed", message)
-            continue
+            except Exception as error:  # 来源和插件代码的缺陷不能拖垮整个刮削
+                if source.primary:
+                    raise
+                message = source.failure(error)
+                ctx.log(message)
+                gathered.record(source.id, source.name, "failed", message)
+                continue
         gathered.raws[source.id] = raw
         gathered.candidates[source.id] = values
         if not cached:
             gathered.fetched.add(source.id)
-        gathered.record(source.id, name, "cached" if cached else "ok")
+        gathered.record(source.id, source.name, "cached" if cached else "ok")
     return gathered
 
 
