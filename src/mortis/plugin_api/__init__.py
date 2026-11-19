@@ -41,14 +41,22 @@ plugin.toml 的 `[[sources]]`、`[[players]]`、`[[hooks]]` 要和代码里的�
 （单个对象的简写除外：对象的 id 就是包 id，不再列子项）。事件钩子见 `HookPlugin`、`HookHost`
 和 `mortis.plugin_api.events`，写测试用 `mortis.plugin_api.testing` 里的假宿主。
 
-设置表单（`Settings`、`Secrets` 的 JSON Schema）只支持下面这个子集，其余写法按文本框处理：
+设置表单：来源插件的 `Settings`、`Secrets`，播放插件的 `Settings`，事件钩子的 `Settings`、
+`Secrets`，设置页都按 Pydantic 生成的 JSON Schema 自动画表单，插件不写页面。
 
-- `type: boolean`：开关；`type: integer` 或 `number`：数字框；`type: string`：文本框。
-- `format: "file-path"`（字符串字段，用 `json_schema_extra={"format": "file-path"}` 写）：
-  带文件选择的路径框。
-- `title` 当标签，`description` 当提示，`default` 当初始值。
-- `Secrets` 里的字段一律按密码框显示，只存字符串。
-- 不支持嵌套对象、数组、`enum`、`oneOf`；界面不会渲染它们。
+- `Settings` 按完整 JSON Schema 渲染：boolean 是开关，integer、number 是数字框，string 是文本框；
+  `list[...]` 是列表，带「+ 添加」、删除、上移、下移；嵌套的 `BaseModel`（包括 `list[Rule]`
+  这种列表项）展开成一组字段；`Literal[...]` 和 `Enum` 是下拉框；`ge`、`le`、`min_length`、
+  `pattern` 这类约束在页面上先校验一遍。`X | None` 按 X 显示，留空就用字段的默认值。
+- `title` 当标签，`description` 当说明，`default` 当初始值。
+- 字段上用 `json_schema_extra` 写 `ui:` 开头的键给表单提示，承诺支持这四项：
+  `ui:widget`（`"textarea"` 多行文本、`"file-path"` 带「浏览」的路径框）、`ui:placeholder`、
+  `ui:help`（输入框下方的小字）、`ui:order`（写在模型的 `model_config` 的 `json_schema_extra`
+  里，字段键的列表，决定显示顺序）。
+- `json_schema_extra={"format": "file-path"}` 的字符串字段也是路径框，和 `ui:widget` 等价。
+- 保存时以插件的 Pydantic 模型校验为准（`field_validator` 也会跑），不通过时页面列出出错的位置
+  和原因，不保存。
+- `Secrets` 不走上面的表单：只支持字符串字段，一律按密码框显示，保存后不回显，只显示填没填。
 """
 
 from abc import ABC, abstractmethod
@@ -345,8 +353,11 @@ class HookPlugin(ABC):
     钩子里不再产生事件，钩子失败也不触发 `task.failed`。事件会重复投递（比如重新刮削），
     处理函数要写成幂等的。
 
-    `Settings`、`Secrets` 和来源插件的写法一样：设置页按它们画表单，按钩子 id 存，
-    钩子运行时从 `host.settings`、`host.secrets` 读到校验过的实例。不声明就没有设置。
+    `Settings`、`Secrets` 和来源插件的写法一样：设置页在插件管理的钩子行里按它们画表单
+    （见模块开头的「设置表单」），按钩子 id 存，钩子运行时从 `host.settings`、`host.secrets`
+    读到校验过的实例；保存后下一次事件就用新值。不声明就没有设置。钩子设置是后加的，
+    更早的宿主的 `HookHost` 没有这两个属性，用到它们的插件要在 plugin.toml 里写
+    `min_mortis_version`。
     """
 
     id: ClassVar[str]

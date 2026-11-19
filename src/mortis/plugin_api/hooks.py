@@ -174,12 +174,13 @@ class HookHost(Protocol):
         """本钩子 `Settings` 的实例，值来自设置页，按钩子 id 存。
 
         没保存过、或文件里的值不合法时是模型的默认值（不合法时宿主记一条日志）。
+        每次事件重新读，设置页保存后下一次事件就是新值。
         """
         ...
 
     @property
     def secrets(self) -> BaseModel:
-        """本钩子 `Secrets` 的实例，规则同 `settings`，存在密钥文件里。"""
+        """本钩子 `Secrets` 的实例，规则同 `settings`，存在密钥文件里。字段只能是字符串。"""
         ...
 
     def get_item(self, item_id: int) -> ItemView | None:
