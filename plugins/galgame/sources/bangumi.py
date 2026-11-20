@@ -252,10 +252,12 @@ class BangumiSource(SourcePlugin):
             raise SourceError(f"Bangumi 条目 {external_id} 返回的不是对象")
         characters = host.get_json(f"{SUBJECT_URL}/{external_id}/characters", headers=headers)
         persons = host.get_json(f"{SUBJECT_URL}/{external_id}/persons", headers=headers)
+        related = host.get_json(f"{SUBJECT_URL}/{external_id}/subjects", headers=headers)
         return {
             "subject": subject,
             "characters": _as_list(characters),
             "persons": _as_list(persons),
+            "related": _as_list(related),
         }
 
     def candidates(self, raw: dict[str, Any]) -> dict[str, Any]:

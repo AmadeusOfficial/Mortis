@@ -213,6 +213,31 @@
   color: var(--mo-muted);
   font-size: 12px;
 }
+.pickBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line-2);
+}
+.pickCount {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--mo-accent-soft);
+  color: var(--mo-accent-hi);
+}
+.pickBarRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .more {
   margin-left: auto;
   font-size: 12.5px;

@@ -20,7 +20,8 @@ VN_FIELDS = (
     "developers.name, developers.original, tags.name, tags.rating, tags.spoiler, "
     "length_minutes, rating, votecount, extlinks.url, extlinks.label, "
     "va.staff.id, va.staff.name, va.staff.original, va.character.name, va.character.original, "
-    "staff.id, staff.name, staff.original, staff.role"
+    "staff.id, staff.name, staff.original, staff.role, "
+    "relations.id, relations.relation, relations.title"
 )
 
 _SPOILER = re.compile(r"\[spoiler[^\]]*\].*?\[/spoiler\]", re.DOTALL | re.IGNORECASE)

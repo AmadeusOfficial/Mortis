@@ -21,6 +21,7 @@ from mortis.db.models import (
     Task,
     TypeField,
 )
+from mortis.items.covers import covers_for, member_order
 from mortis.items.identity import manual_ids
 from mortis.items.missing import show_missing_episodes
 from mortis.organize.episodes import parse_episode
@@ -140,6 +141,7 @@ def wall_rows(
     )
     latest = task_repo.latest_scrape_tasks(session, ids)
     manual = manual_ids(session, items)
+    covers = covers_for(session, items)
     return [
         {
             "id": item.id,
@@ -151,6 +153,9 @@ def wall_rows(
             "is_scraped": item.id in scraped,
             "is_manual": item.id in manual,
             "issue": _issue_of(latest.get(item.id)),
+            "collection_id": item.parent_id if item.kind == "work" else None,
+            "cover_mode": covers.get(item.id, {}).get("cover_mode"),
+            "cover_urls": covers.get(item.id, {}).get("cover_urls", []),
         }
         for item in items
     ]
@@ -309,12 +314,13 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         .limit(1)
     )
     parts: list[dict[str, Any]] = []
+    children: list[Item] = []
     if item.kind == "collection":
         children = list(
             session.scalars(
                 select(Item)
                 .where(Item.parent_id == item.id)
-                .order_by(Item.release_date.is_(None), Item.release_date, Item.id)
+                .order_by(*member_order())
             )
         )
         parts = wall_rows(session, children)
@@ -348,7 +354,7 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             ItemSourceRecord.item_id == (show or item).id
         )
     )
-    cover = (
+    poster_path = (
         _first_images(session, [item.id], "thumb").get(item.id)
         if item.kind == "episode"
         else item.poster_path
@@ -361,14 +367,20 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
             .order_by(ItemExternalId.is_primary.desc(), ItemExternalId.provider)
         )
     }
-    files = session.scalars(
-        select(MediaFile)
-        .where(MediaFile.item_id == item.id)
-        .order_by(
-            case({"video": 0, "subtitle": 1, "nfo": 2}, value=MediaFile.file_kind, else_=3),
-            MediaFile.path,
+    file_item_ids = [child.id for child in children] if item.kind == "collection" else [item.id]
+    files = (
+        session.scalars(
+            select(MediaFile)
+            .where(MediaFile.item_id.in_(file_item_ids))
+            .order_by(
+                case({"video": 0, "subtitle": 1, "nfo": 2}, value=MediaFile.file_kind, else_=3),
+                MediaFile.path,
+            )
         )
+        if file_item_ids
+        else []
     )
+    collage = covers_for(session, [item]).get(item.id, {})
     return {
         "id": item.id,
         "library_id": item.library_id,
@@ -378,7 +390,9 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         "title": item.title,
         "subtitle": item.subtitle,
         "year": year_of(item.release_date),
-        "poster_url": image_url(cover),
+        "poster_url": image_url(poster_path),
+        "cover_mode": collage.get("cover_mode"),
+        "cover_urls": collage.get("cover_urls", []),
         "fanart_url": image_url(fanart),
         "external_ids": external_ids,
         "collection": {

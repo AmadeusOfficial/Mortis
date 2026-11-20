@@ -87,6 +87,7 @@ def host():
         f"https://api.bgm.tv/v0/subjects/{subject_id}/characters", fixture("characters.json")
     )
     made.route(f"https://api.bgm.tv/v0/subjects/{subject_id}/persons", fixture("persons.json"))
+    made.route(f"https://api.bgm.tv/v0/subjects/{subject_id}/subjects", [])
     return made
 
 
@@ -146,7 +147,7 @@ def test_禁用提示随令牌变化(plugin, host):
     assert plugin.disabled_reason(host) is None
 
 
-def test_详情请求三个地址并合并(plugin, host):
+def test_详情请求条目关联并合并(plugin, host):
     subject_id = str(fixture("subject.json")["id"])
     raw = plugin.fetch(host, subject_id)
 
@@ -155,17 +156,18 @@ def test_详情请求三个地址并合并(plugin, host):
         f"https://api.bgm.tv/v0/subjects/{subject_id}",
         f"https://api.bgm.tv/v0/subjects/{subject_id}/characters",
         f"https://api.bgm.tv/v0/subjects/{subject_id}/persons",
+        f"https://api.bgm.tv/v0/subjects/{subject_id}/subjects",
     ]
-    assert set(raw) == {"subject", "characters", "persons"}
+    assert set(raw) == {"subject", "characters", "persons", "related"}
     assert raw["subject"]["id"] == int(subject_id)
     assert len(raw["characters"]) == len(fixture("characters.json"))
     assert len(raw["persons"]) == len(fixture("persons.json"))
 
 
-def test_详情带令牌时三个请求都带认证头(plugin, host):
+def test_详情带令牌时请求都带认证头(plugin, host):
     host.token = "tk-123"
     plugin.fetch(host, str(fixture("subject.json")["id"]))
-    assert [call["headers"]["Authorization"] for call in host.calls] == ["Bearer tk-123"] * 3
+    assert [call["headers"]["Authorization"] for call in host.calls] == ["Bearer tk-123"] * 4
 
 
 @pytest.fixture

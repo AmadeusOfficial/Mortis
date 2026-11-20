@@ -241,7 +241,7 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
         <AutomationFields value={automation} onChange={setAutomation} seriesType={seriesType} />
         {groupType && (
           <Radio.Group
-            label="海报墙里的系列电影"
+            label={dataTypeId === "galgame" ? "海报墙里的合集" : "海报墙里的系列电影"}
             value={wallCollections}
             onChange={(next) => setWallCollections(next as WallCollections)}
           >
@@ -249,10 +249,17 @@ function LibraryFormModal({ library, onClose }: { library: Library | null; onClo
               <Radio
                 value="collapse"
                 label="系列收起"
-                description="同一系列有两部以上时只显示系列，点进去看系列里的电影"
+                description={
+                  dataTypeId === "galgame"
+                    ? "同一合集有两部以上时只显示合集，点进去看合集里的游戏"
+                    : "同一系列有两部以上时只显示系列，点进去看系列里的电影"
+                }
               />
-              <Radio value="both" label="系列和电影都显示" />
-              <Radio value="movies" label="只显示电影" />
+              <Radio
+                value="both"
+                label={dataTypeId === "galgame" ? "合集和游戏都显示" : "系列和电影都显示"}
+              />
+              <Radio value="movies" label={dataTypeId === "galgame" ? "只显示游戏" : "只显示电影"} />
             </Stack>
           </Radio.Group>
         )}

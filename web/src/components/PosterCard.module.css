@@ -6,10 +6,28 @@
   text-decoration: none;
   color: inherit;
   outline: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cardLink {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+  height: 100%;
 }
 
 .card:hover,
-.card:focus-visible {
+.card:focus-visible,
+.card:focus-within {
   z-index: 1;
 }
 
@@ -41,6 +59,78 @@
   aspect-ratio: 2 / 3;
   object-fit: cover;
   display: block;
+}
+
+.check {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 1.5px solid rgb(255 255 255 / 78%);
+  background: rgb(10 14 22 / 55%);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 55%),
+    0 0 0 1px rgb(0 0 0 / 25%);
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.card:hover .check {
+  border-color: #fff;
+  transform: scale(1.06);
+}
+
+.quickCheck {
+  z-index: 3;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    border-color 140ms ease;
+}
+
+.card:hover .quickCheck,
+.card:focus-within .quickCheck {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.check[data-on="1"] {
+  border-color: rgb(255 255 255 / 92%);
+  background: var(--mo-accent);
+  box-shadow:
+    0 2px 10px rgb(59 130 246 / 55%),
+    0 2px 6px rgb(0 0 0 / 45%);
+}
+
+.card[data-selected="1"] .poster {
+  box-shadow:
+    0 0 0 2.5px var(--mo-accent),
+    0 14px 30px -12px rgb(59 130 246 / 45%);
+}
+
+.card[data-disabled="1"] {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.card[data-disabled="1"]:hover .poster {
+  transform: none;
+  box-shadow: 0 0 0 1px var(--mo-line);
 }
 
 .card[data-state="unscraped"] .posterImg,

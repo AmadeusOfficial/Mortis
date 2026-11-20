@@ -12,7 +12,7 @@ import { useDebouncedValue } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   type SortOrder,
   type TaskDetail,
@@ -25,6 +25,7 @@ import {
   organizeLibrary,
   scrapeLibrary,
 } from "../api";
+import { JoinCollectionModal } from "../components/collections/JoinCollectionModal";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { automationSummary } from "../components/libraries/automation";
 import { PosterCard } from "../components/PosterCard";
@@ -38,7 +39,7 @@ import {
   saveShelfTags,
   saveView,
 } from "../components/wall/TagShelves";
-import { fileUnit, hasShelves, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
+import { fileUnit, hasShelves, isGroupType, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
 import {
   IconClose,
   IconOrganize,
@@ -60,6 +61,7 @@ const SORTS = [
 const DEFAULT_SORT = "title:asc";
 
 const sortStorageKey = (libraryId: number) => `mortis-wall-sort-${libraryId}`;
+const scrollStorageKey = (libraryId: number) => `mortis-wall-scroll-${libraryId}`;
 
 function readSort(libraryId: number): string {
   const saved = window.localStorage.getItem(sortStorageKey(libraryId));
@@ -67,7 +69,7 @@ function readSort(libraryId: number): string {
 }
 
 type ActionKind = "organize" | "scrape" | "arrange";
-type StatusFilter = "all" | "scraped" | "unscraped" | "manual" | "issue";
+type StatusFilter = "all" | "scraped" | "unscraped" | "manual" | "issue" | "collection";
 
 const START_MESSAGES: Record<ActionKind, string> = {
   organize: "已开始扫描",
@@ -107,6 +109,7 @@ function taskSummary(task: TaskDetail, pluginType: boolean): string {
 
 export function LibraryWallPage() {
   const id = Number(useParams().libraryId);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const library = useQuery({ queryKey: ["library", id], queryFn: () => fetchLibrary(id) });
   const dataTypes = useDataTypes();
@@ -124,6 +127,38 @@ export function LibraryWallPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const libData = library.data;
+  const galgame = libData?.data_type_id === "galgame";
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [joining, setJoining] = useState(false);
+  const selectAnchor = useRef<number | null>(null);
+  const restoredScrollId = useRef<number | null>(null);
+  useEffect(() => {
+    setSelecting(false);
+    setSelectedIds([]);
+    setJoining(false);
+    setStatusFilter("all");
+    selectAnchor.current = null;
+  }, [id]);
+  useEffect(() => {
+    if (!selecting) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !joining) {
+        stopSelecting();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selecting, joining]);
+
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds([]);
+    setJoining(false);
+    selectAnchor.current = null;
+  };
   const shelvesOn = libData !== undefined && hasShelves(libData.data_type_id);
   const [savedView, setSavedView] = useState(() => ({ id, value: readView(id) }));
   const storedView = savedView.id === id ? savedView.value : readView(id);
@@ -245,7 +280,12 @@ export function LibraryWallPage() {
     let unscraped = 0;
     let manual = 0;
     let issue = 0;
+    let collection = 0;
     for (const item of items) {
+      if (item.kind === "collection") {
+        collection += 1;
+        continue;
+      }
       if (item.is_scraped) {
         scraped += 1;
       } else if (item.is_manual) {
@@ -257,23 +297,54 @@ export function LibraryWallPage() {
         issue += 1;
       }
     }
-    return { all: items.length, scraped, unscraped, manual, issue };
+    return { all: items.length, scraped, unscraped, manual, issue, collection };
   }, [items]);
 
   const filteredItems = useMemo(() => {
     switch (statusFilter) {
       case "scraped":
-        return items.filter((item) => item.is_scraped);
+        return items.filter((item) => item.kind !== "collection" && item.is_scraped);
       case "unscraped":
-        return items.filter((item) => !item.is_scraped && !item.is_manual);
+        return items.filter((item) => item.kind !== "collection" && !item.is_scraped && !item.is_manual);
       case "manual":
-        return items.filter((item) => item.is_manual);
+        return items.filter((item) => item.kind !== "collection" && item.is_manual);
       case "issue":
         return items.filter((item) => typeof item.issue === "string" && item.issue !== "");
+      case "collection":
+        return items.filter((item) => item.kind === "collection");
       default:
         return items;
     }
   }, [items, statusFilter]);
+
+  useEffect(() => {
+    if (view !== "wall" || !wall.isSuccess || restoredScrollId.current === id) {
+      return;
+    }
+    const raw = window.sessionStorage.getItem(scrollStorageKey(id));
+    const saved = raw === null ? 0 : Number(raw);
+    const frame = window.requestAnimationFrame(() => {
+      if (Number.isFinite(saved) && saved > 0) {
+        window.scrollTo(0, saved);
+      }
+      restoredScrollId.current = id;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [id, view, wall.isSuccess]);
+
+  useEffect(() => {
+    if (view !== "wall") {
+      return;
+    }
+    const onScroll = () => {
+      if (restoredScrollId.current !== id) {
+        return;
+      }
+      window.sessionStorage.setItem(scrollStorageKey(id), String(Math.round(window.scrollY)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [id, view]);
 
   if (library.isError) {
     return (
@@ -464,6 +535,18 @@ export function LibraryWallPage() {
                 >
                   有问题
                 </FilterChip>
+                {libData !== undefined &&
+                  (isGroupType(dataTypes.data, libData.data_type_id) ||
+                    counts.collection > 0 ||
+                    statusFilter === "collection") && (
+                    <FilterChip
+                      active={statusFilter === "collection"}
+                      count={counts.collection}
+                      onClick={() => setStatusFilter("collection")}
+                    >
+                      {galgame ? "合集" : "系列"}
+                    </FilterChip>
+                  )}
                 {tagFilter !== null && (
                   <FilterChip active onClick={() => setTagFilter(null)}>
                     按类型：{tagFilter.name}
@@ -491,17 +574,54 @@ export function LibraryWallPage() {
           {view === "shelves" && (
             <ShelfPicker tags={genres.data ?? []} selected={shownTags ?? []} onChange={setShelfIds} />
           )}
-          <Select
-            data={SORTS}
-            value={sortKey}
-            onChange={(value) => setSortKey(value ?? DEFAULT_SORT)}
-            allowDeselect={false}
-            leftSection={<IconSort size={14} />}
-            classNames={{ input: styles.sortInput }}
-            size="sm"
-            w={195}
-            aria-label="排序"
-          />
+          {selecting ? (
+            <>
+              <Pill tone="accent">已选 {selectedIds.length} 部</Pill>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  const visible = filteredItems
+                    .filter((item) => item.kind === "work")
+                    .map((item) => item.id);
+                  const allOn = visible.length > 0 && visible.every((itemId) => selectedIds.includes(itemId));
+                  setSelectedIds(allOn ? selectedIds.filter((itemId) => !visible.includes(itemId)) : [...new Set([...selectedIds, ...visible])]);
+                }}
+              >
+                {(() => {
+                  const visible = filteredItems.filter((item) => item.kind === "work");
+                  return visible.length > 0 && visible.every((item) => selectedIds.includes(item.id))
+                    ? "取消全选"
+                    : "全选";
+                })()}
+              </Button>
+              <Button size="sm" disabled={selectedIds.length === 0} onClick={() => setJoining(true)}>
+                加入合集
+              </Button>
+              <Button size="sm" variant="default" onClick={stopSelecting}>
+                取消
+              </Button>
+            </>
+          ) : (
+            <>
+              {galgame && view === "wall" && (
+                <Button size="sm" variant="default" onClick={() => setSelecting(true)}>
+                  多选
+                </Button>
+              )}
+              <Select
+                data={SORTS}
+                value={sortKey}
+                onChange={(value) => setSortKey(value ?? DEFAULT_SORT)}
+                allowDeselect={false}
+                leftSection={<IconSort size={14} />}
+                classNames={{ input: styles.sortInput }}
+                size="sm"
+                w={195}
+                aria-label="排序"
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -560,12 +680,101 @@ export function LibraryWallPage() {
 
       {view === "wall" && wall.isSuccess && filteredItems.length > 0 && (
         <section className={styles.wallGrid} aria-label="海报墙">
-          {filteredItems.map((item) => (
+          {filteredItems.map((item, index) => (
             <div key={item.id} className={styles.wallItem}>
-              <PosterCard item={item} />
+              <PosterCard
+                item={item}
+                selecting={selecting}
+                selectable={item.kind === "work"}
+                selected={selectedIds.includes(item.id)}
+                onQuickSelect={
+                  galgame && item.kind === "work"
+                    ? () => {
+                        setSelecting(true);
+                        setSelectedIds([item.id]);
+                        selectAnchor.current = index;
+                      }
+                    : undefined
+                }
+                onToggle={(event) => {
+                  if (item.kind !== "work") {
+                    return;
+                  }
+                  const anchor = selectAnchor.current;
+                  if (event.shiftKey && anchor !== null) {
+                    const [start, end] = anchor < index ? [anchor, index] : [index, anchor];
+                    const range = filteredItems
+                      .slice(start, end + 1)
+                      .filter((row) => row.kind === "work")
+                      .map((row) => row.id);
+                    setSelectedIds((current) => [...new Set([...current, ...range])]);
+                  } else {
+                    setSelectedIds((current) =>
+                      current.includes(item.id)
+                        ? current.filter((itemId) => itemId !== item.id)
+                        : [...current, item.id],
+                    );
+                  }
+                  selectAnchor.current = index;
+                }}
+              />
             </div>
           ))}
         </section>
+      )}
+
+      {selecting && view === "wall" && (
+        <div className={styles.floatBar} role="region" aria-label="多选操作栏">
+          <Pill tone="accent">已选 {selectedIds.length} 部</Pill>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={() => {
+              const visible = filteredItems
+                .filter((item) => item.kind === "work")
+                .map((item) => item.id);
+              const allOn = visible.length > 0 && visible.every((itemId) => selectedIds.includes(itemId));
+              setSelectedIds(
+                allOn
+                  ? selectedIds.filter((itemId) => !visible.includes(itemId))
+                  : [...new Set([...selectedIds, ...visible])],
+              );
+            }}
+          >
+            {(() => {
+              const visible = filteredItems.filter((item) => item.kind === "work");
+              return visible.length > 0 && visible.every((item) => selectedIds.includes(item.id))
+                ? "取消全选"
+                : "全选";
+            })()}
+          </Button>
+          <Button size="xs" disabled={selectedIds.length === 0} onClick={() => setJoining(true)}>
+            加入合集
+          </Button>
+          <Button size="xs" variant="default" onClick={stopSelecting}>
+            取消
+          </Button>
+        </div>
+      )}
+
+      {joining && (
+        <JoinCollectionModal
+          libraryId={id}
+          selected={(wall.data ?? []).filter((item) => selectedIds.includes(item.id))}
+          onClose={() => setJoining(false)}
+          onJoined={(result) => {
+            setJoining(false);
+            stopSelecting();
+            void queryClient.invalidateQueries({ queryKey: ["wall", id] });
+            void queryClient.invalidateQueries({ queryKey: ["collections", id] });
+            notifications.show({
+              color: "green",
+              message: `已收入「${result.title}」`,
+            });
+            navigate(`/items/${result.id}`);
+          }}
+        />
       )}
 
       {libData !== undefined && canArrange && (

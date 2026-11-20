@@ -3,15 +3,18 @@ import {
   Alert,
   Avatar,
   Button,
+  Group,
   Loader,
   Menu,
+  Modal,
   SimpleGrid,
   Text,
+  TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
-import { Link, useParams } from "react-router";
+import { type ReactNode, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   type FieldOut,
   type ImageValue,
@@ -20,6 +23,9 @@ import {
   type PersonValue,
   type RatingValue,
   addItemSource,
+  dissolveCollection,
+  removeCollectionMembers,
+  renameCollection,
   arrangeItem,
   fetchItem,
   fetchItemArrangePreview,
@@ -45,6 +51,8 @@ import {
 import { useAgent } from "../components/agent/AgentContext";
 import { rematchDraft } from "../components/agent/drafts";
 import { usePlayItem } from "../components/PlayItem";
+import { CoverModeModal } from "../components/collections/CoverModeModal";
+import { CoverCollage } from "../components/CoverCollage";
 import { PosterCard } from "../components/PosterCard";
 import { SeasonDetailView } from "../components/episodes/SeasonDetailView";
 import {
@@ -59,6 +67,7 @@ import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize, formatTime } from "../format";
 import {
   IconBack,
+  IconEdit,
   IconExternal,
   IconFile,
   IconFolder,
@@ -70,6 +79,7 @@ import {
   IconOrganize,
   IconPlay,
   IconRefresh,
+  IconRemove,
   IconScrape,
   IconSparkle,
   IconStar,
@@ -174,7 +184,11 @@ function textValue(fields: Map<string, FieldOut>, key: string): string | null {
 
 export function ItemDetailPage() {
   const id = Number(useParams().itemId);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
   const item = useQuery({
     queryKey: ["item", id],
     queryFn: () => fetchItem(id),
@@ -186,6 +200,12 @@ export function ItemDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [covering, setCovering] = useState(false);
+  const [dissolving, setDissolving] = useState(false);
+  const [pickingRemove, setPickingRemove] = useState(false);
+  const [removeIds, setRemoveIds] = useState<number[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
   const [tab, setTab] = useState<string | null>("overview");
   const setDetail = (detail: ItemDetail) => {
@@ -275,6 +295,36 @@ export function ItemDetailPage() {
       notifications.show({ message: "已补充来源，正在刮削" });
     },
   });
+  const rename = useMutation({
+    mutationFn: () => renameCollection(id, nameDraft),
+    onSuccess: (saved) => {
+      setDetail(saved);
+      setRenaming(false);
+      notifications.show({ color: "green", message: "已改名" });
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+  const dropMembers = useMutation({
+    mutationFn: (workIds: number[]) => removeCollectionMembers(id, workIds),
+    onSuccess: (saved) => {
+      setPickingRemove(false);
+      setRemoveIds([]);
+      if (saved === null) {
+        const libraryId = item.data?.library_id;
+        if (libraryId !== undefined) {
+          navigate(`/libraries/${libraryId}`);
+        }
+        return;
+      }
+      setDetail(saved);
+    },
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
+  const dissolve = useMutation({
+    mutationFn: () => dissolveCollection(id),
+    onSuccess: ({ library_id }) => navigate(`/libraries/${library_id}`),
+    onError: (error) => notifications.show({ color: "red", message: error.message }),
+  });
   const agent = useAgent();
   const dataTypeId = item.data?.data_type_id ?? "";
   const pluginType = isPluginType(dataTypes.data, dataTypeId);
@@ -358,6 +408,7 @@ export function ItemDetailPage() {
   );
   // 刮削、重新匹配和整理只对剧或电影（work）显示，季和集不显示。
   const isWork = detail.kind === "work";
+  const galgameCollection = detail.data_type_id === "galgame" && detail.kind === "collection";
   // 手动条目没有来源编号，不能刮削，但可以整理；插件类型不整理。
   const canScrape = isWork && !detail.is_manual;
   const canArrange =
@@ -367,7 +418,7 @@ export function ItemDetailPage() {
     (detail.kind === "episode" || (isWork && !series)) &&
     detail.files.some((file) => file.file_kind === "video");
   // 本地文件是游戏文件夹的条目（Galgame）按钮叫「启动」，启动的是文件夹里选定的程序。
-  const canLaunch = detail.files.some((file) => file.file_kind === "game");
+  const canLaunch = isWork && detail.files.some((file) => file.file_kind === "game");
   // 作品都能删，季、集和系列不能。剧会连同季和集一起删。
   const canDelete = dataTypes.data !== undefined && isWork;
   const landscape = detail.kind === "episode";
@@ -460,7 +511,7 @@ export function ItemDetailPage() {
         to={`/items/${detail.collection.id}`}
         className={classes.ext}
       >
-        系列 <b>{detail.collection.title}</b>
+        {detail.data_type_id === "galgame" ? "合集" : "系列"} <b>{detail.collection.title}</b>
       </Link>,
     );
   }
@@ -477,18 +528,22 @@ export function ItemDetailPage() {
 
   const hero = (
     <div className={classes.hero}>
-      <span className={classes.scrapedAt}>
-        {detail.is_manual
-          ? "手动条目"
-          : detail.scraped_at !== null
-            ? `上次刮削 ${formatTime(detail.scraped_at)}`
-            : "还没刮削"}
-      </span>
+      {!galgameCollection && (
+        <span className={classes.scrapedAt}>
+          {detail.is_manual
+            ? "手动条目"
+            : detail.scraped_at !== null
+              ? `上次刮削 ${formatTime(detail.scraped_at)}`
+              : "还没刮削"}
+        </span>
+      )}
       <div className={classes.heroInner}>
         <div
           className={`${classes.poster} ${landscape ? classes.landscape : ""}`}
         >
-          {detail.poster_url !== null ? (
+          {detail.cover_mode === "auto" || detail.cover_mode === "grid" ? (
+            <CoverCollage urls={detail.cover_urls ?? []} />
+          ) : detail.poster_url !== null ? (
             <img src={detail.poster_url} alt={detail.title} />
           ) : (
             <div
@@ -532,7 +587,7 @@ export function ItemDetailPage() {
           {tagline !== null && (
             <div className={classes.tagline}>「{tagline}」</div>
           )}
-          {(isWork || canPlay || canLaunch) && (
+          {(isWork || canPlay || canLaunch || galgameCollection) && (
             <div className={classes.actions}>
               {canLaunch ? (
                 <>
@@ -608,6 +663,50 @@ export function ItemDetailPage() {
                 >
                   补充来源
                 </Button>
+              )}
+              {galgameCollection && (
+                <>
+                  <Button
+                    variant="default"
+                    leftSection={<IconEdit size={16} />}
+                    onClick={() => {
+                      setNameDraft(detail.title);
+                      setRenaming(true);
+                    }}
+                  >
+                    改名
+                  </Button>
+                  <Button
+                    variant="default"
+                    leftSection={<IconImage size={16} />}
+                    onClick={() => setCovering(true)}
+                  >
+                    封面
+                  </Button>
+                  <Button
+                    variant={pickingRemove ? "light" : "default"}
+                    color={pickingRemove ? "red" : undefined}
+                    leftSection={<IconRemove size={16} />}
+                    onClick={() => {
+                      if (pickingRemove) {
+                        setPickingRemove(false);
+                        setRemoveIds([]);
+                      } else {
+                        setPickingRemove(true);
+                      }
+                    }}
+                  >
+                    {pickingRemove ? "取消移除" : "移除"}
+                  </Button>
+                  <Button
+                    variant="default"
+                    color="red"
+                    leftSection={<IconTrash size={16} />}
+                    onClick={() => setDissolving(true)}
+                  >
+                    解散
+                  </Button>
+                </>
               )}
               {canArrange && (
                 <Button
@@ -837,10 +936,69 @@ export function ItemDetailPage() {
       ))}
       {detail.parts.length > 0 && (
         <div className={classes.section}>
-          {sectionHead("系列里的电影", <small>{detail.parts.length} 部</small>)}
-          <SimpleGrid cols={{ base: 2, sm: 4, lg: 5 }}>
-            {detail.parts.map((part) => (
-              <PosterCard key={part.id} item={part} />
+          {sectionHead(
+            galgameCollection ? "合集里的游戏" : "系列里的电影",
+            <small>{detail.parts.length} 部</small>,
+          )}
+          {galgameCollection && pickingRemove && (
+            <div className={classes.pickBar}>
+              <span className={classes.pickCount}>已选 {removeIds.length} 部</span>
+              <Button
+                size="xs"
+                variant="subtle"
+                color="gray"
+                onClick={() => {
+                  const all = detail.parts.map((row) => row.id);
+                  setRemoveIds(removeIds.length === all.length ? [] : all);
+                }}
+              >
+                {removeIds.length === detail.parts.length ? "取消全选" : "全选"}
+              </Button>
+              <div className={classes.pickBarRight}>
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => {
+                    setPickingRemove(false);
+                    setRemoveIds([]);
+                  }}
+                >
+                  取消
+                </Button>
+                <Button
+                  size="xs"
+                  color="red"
+                  disabled={removeIds.length === 0}
+                  loading={dropMembers.isPending}
+                  onClick={() => dropMembers.mutate(removeIds)}
+                >
+                  移出合集{removeIds.length > 0 ? `（${removeIds.length}）` : ""}
+                </Button>
+              </div>
+            </div>
+          )}
+          <SimpleGrid cols={{ base: 3, sm: 5, md: 6, lg: 7 }}>
+            {detail.parts.map((part, index) => (
+              <PosterCard
+                key={part.id}
+                item={part}
+                selecting={galgameCollection && pickingRemove}
+                selected={removeIds.includes(part.id)}
+                onToggle={(event) => {
+                  if (event.shiftKey && removeIds.length > 0) {
+                    const anchor = detail.parts.findIndex((row) => row.id === removeIds[removeIds.length - 1]);
+                    const [start, end] = anchor < index ? [anchor, index] : [index, anchor];
+                    const range = detail.parts.slice(start, end + 1).map((row) => row.id);
+                    setRemoveIds((current) => [...new Set([...current, ...range])]);
+                    return;
+                  }
+                  setRemoveIds((current) =>
+                    current.includes(part.id)
+                      ? current.filter((itemId) => itemId !== part.id)
+                      : [...current, part.id],
+                  );
+                }}
+              />
             ))}
           </SimpleGrid>
         </div>
@@ -1160,6 +1318,46 @@ export function ItemDetailPage() {
           onClose={() => setDeleting(false)}
         />
       )}
+      {renaming && (
+        <Modal opened onClose={() => setRenaming(false)} title="改名">
+          <TextInput
+            label="合集名"
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.currentTarget.value)}
+          />
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setRenaming(false)}>
+              取消
+            </Button>
+            <Button
+              loading={rename.isPending}
+              disabled={nameDraft.trim() === ""}
+              onClick={() => rename.mutate()}
+            >
+              保存
+            </Button>
+          </Group>
+        </Modal>
+      )}
+      {covering && (
+        <CoverModeModal detail={detail} onClose={() => setCovering(false)} onSaved={(saved) => {
+          setDetail(saved);
+          setCovering(false);
+        }} />
+      )}
+      {dissolving && (
+        <Modal opened onClose={() => setDissolving(false)} title="解散合集">
+          <Text size="sm">解散后游戏还在库里，只是不再属于这个合集。</Text>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setDissolving(false)}>
+              取消
+            </Button>
+            <Button color="red" loading={dissolve.isPending} onClick={() => dissolve.mutate()}>
+              解散
+            </Button>
+          </Group>
+        </Modal>
+      )}
       <ArrangePreviewModal
         opened={previewing}
         onClose={() => setPreviewing(false)}
@@ -1260,22 +1458,24 @@ export function ItemDetailPage() {
               {filledFieldsCount}/{allFields.length}
             </span>
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "people"}
-            className={`${classes.tabBtn} ${
-              activeTab === "people" ? classes.tabBtnActive : ""
-            }`}
-            onClick={() => setTab("people")}
-          >
-            演职员{" "}
-            {peopleCount > 0 && (
-              <span className={`${classes.tabCount} mo-mono`}>
-                {peopleCount}
-              </span>
-            )}
-          </button>
+          {detail.kind !== "collection" && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "people"}
+              className={`${classes.tabBtn} ${
+                activeTab === "people" ? classes.tabBtnActive : ""
+              }`}
+              onClick={() => setTab("people")}
+            >
+              演职员{" "}
+              {peopleCount > 0 && (
+                <span className={`${classes.tabCount} mo-mono`}>
+                  {peopleCount}
+                </span>
+              )}
+            </button>
+          )}
           <button
             type="button"
             role="tab"

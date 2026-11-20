@@ -57,9 +57,40 @@ def _people(key: str, label: str, role: str, **extra: bool) -> FieldSpec:
 GALGAME = DataTypeSpec(
     id="galgame",
     name="Galgame",
-    structure="item",
+    structure="item_group",
     subtitle_field="brands",
     fields=[
+        FieldSpec(
+            field_key="title",
+            label="合集名",
+            value_type="text",
+            stored_in="items_column",
+            column_name="title",
+            applies_to="collection",
+            detail_section=BASIC,
+            is_sortable=True,
+        ),
+        FieldSpec(
+            field_key="poster",
+            label="封面",
+            value_type="images",
+            stored_in="items_column",
+            column_name="poster_path",
+            applies_to="collection",
+            detail_section=IMAGES,
+        ),
+        *[
+            FieldSpec(
+                field_key=f"cover_{index}",
+                label=f"封面第{index}格",
+                value_type="images",
+                stored_in="images",
+                image_kind=f"cover_{index}",
+                applies_to="collection",
+                detail_section=IMAGES,
+            )
+            for index in range(1, 5)
+        ],
         _column("title", "游戏名", "text", "title", is_sortable=True),
         _column("original_title", "原名", "text", "original_title"),
         _column("overview", "简介", "longtext", "overview"),

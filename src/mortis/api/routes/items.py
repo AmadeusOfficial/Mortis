@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from mortis import libraries
 from mortis.api.deps import RunnerDep, ServicesDep, SessionDep
 from mortis.db.models import Item, ItemTag, Library, MediaFile, Tag, utc_now
+from mortis.items import collections as collection_service
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
@@ -57,6 +58,11 @@ class WallItem(BaseModel):
     is_manual: bool
     """没有任何外部编号的作品。"""
     issue: str | None
+    collection_id: int | None = None
+    """作品所属合集。合集卡片本身为空。"""
+    cover_mode: Literal["auto", "single", "grid"] | None = None
+    """Galgame 合集的封面方式。电影系列为空，继续用 poster_url。"""
+    cover_urls: list[str | None] = []
 
 
 class FieldOut(BaseModel):
@@ -139,6 +145,8 @@ class ItemDetail(BaseModel):
     subtitle: str | None
     year: int | None
     poster_url: str | None
+    cover_mode: Literal["auto", "single", "grid"] | None = None
+    cover_urls: list[str | None] = []
     fanart_url: str | None
     external_ids: dict[str, str]
     collection: CollectionRef | None
@@ -351,12 +359,159 @@ def list_items(
     sort: WallSort = "title",
     order: WallOrder = "asc",
     tag: Annotated[list[int] | None, Query()] = None,
+    flat: bool = False,
 ) -> list[dict[str, Any]]:
-    """tag 是类型（genre）标签的 id，可以给多个，取交集。"""
+    """tag 是类型（genre）标签的 id，可以给多个，取交集。flat 时只列作品，多选用。"""
     library = libraries.get_library(session, library_id)
     tags = shelf_tags(session, library, tag or [])
     term = q.strip() if q else ""
-    return wall_rows(session, *wall_items(session, library, term, sort, order, tags))
+    return wall_rows(session, *wall_items(session, library, term, sort, order, tags, flat))
+
+
+class CollectionName(BaseModel):
+    id: int
+    title: str
+
+
+class AssignBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    work_ids: list[int] = Field(min_length=1)
+    title: str | None = None
+    collection_id: int | None = None
+
+
+class Assigned(BaseModel):
+    id: int
+    title: str
+    moved: int
+
+
+class SuggestionOut(BaseModel):
+    id: int
+    title: str
+    relation: str
+
+
+class MembersBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    work_ids: list[int] = Field(min_length=1)
+
+
+class TitleBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1)
+
+
+class CoverBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["auto", "single", "grid"]
+
+
+class Dissolved(BaseModel):
+    library_id: int
+
+
+@router.get("/libraries/{library_id}/collections", response_model=list[CollectionName])
+def list_library_collections(library_id: int, session: SessionDep) -> list[CollectionName]:
+    library = libraries.get_library(session, library_id)
+    return [
+        CollectionName(id=item.id, title=item.title)
+        for item in collection_service.list_collections(session, library)
+    ]
+
+
+@router.get(
+    "/libraries/{library_id}/collection-suggestions", response_model=list[SuggestionOut]
+)
+def collection_suggestions(
+    library_id: int,
+    session: SessionDep,
+    work_id: Annotated[list[int] | None, Query()] = None,
+) -> list[dict[str, object]]:
+    library = libraries.get_library(session, library_id)
+    return collection_service.suggestions(session, library, work_id or [])
+
+
+@router.post("/libraries/{library_id}/collections", response_model=Assigned)
+def assign_collection(library_id: int, body: AssignBody, session: SessionDep) -> Assigned:
+    library = libraries.get_library(session, library_id)
+    collection, moved = collection_service.assign(
+        session,
+        library,
+        body.work_ids,
+        title=body.title,
+        collection_id=body.collection_id,
+    )
+    return Assigned(id=collection.id, title=collection.title, moved=moved)
+
+
+def galgame_collection(session: Session, item_id: int) -> Item:
+    item = get_item(session, item_id)
+    if item.kind != "collection" or item.data_type_id != "galgame":
+        raise ItemError("只有 Galgame 合集能这样改")
+    return item
+
+
+@router.post("/items/{item_id}/members", response_model=ItemDetail)
+def add_collection_members(item_id: int, body: MembersBody, session: SessionDep) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.add_members(session, collection, body.work_ids)
+    return detail_of(session, collection)
+
+
+@router.post("/items/{item_id}/members/remove", response_model=ItemDetail)
+def remove_collection_members(
+    item_id: int, body: MembersBody, session: SessionDep
+) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.remove_members(session, collection, body.work_ids)
+    fresh = session.get(Item, item_id)
+    if fresh is None:
+        return Response(status_code=204)
+    return detail_of(session, fresh)
+
+
+@router.delete("/items/{item_id}/members/{work_id}", response_model=ItemDetail)
+def remove_collection_member(item_id: int, work_id: int, session: SessionDep) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.remove_member(session, collection, work_id)
+    fresh = session.get(Item, item_id)
+    if fresh is None:
+        return Response(status_code=204)
+    return detail_of(session, fresh)
+
+
+@router.put("/items/{item_id}/members", response_model=ItemDetail)
+def reorder_collection_members(
+    item_id: int, body: MembersBody, session: SessionDep
+) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.reorder(session, collection, body.work_ids)
+    return detail_of(session, collection)
+
+
+@router.post("/items/{item_id}/dissolve", response_model=Dissolved)
+def dissolve_collection(item_id: int, session: SessionDep) -> Dissolved:
+    collection = galgame_collection(session, item_id)
+    return Dissolved(library_id=collection_service.dissolve(session, collection))
+
+
+@router.patch("/items/{item_id}/title", response_model=ItemDetail)
+def rename_collection(item_id: int, body: TitleBody, session: SessionDep) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.rename(session, collection, body.title)
+    return detail_of(session, collection)
+
+
+@router.put("/items/{item_id}/cover", response_model=ItemDetail)
+def update_cover(item_id: int, body: CoverBody, session: SessionDep) -> dict[str, Any]:
+    collection = galgame_collection(session, item_id)
+    collection_service.set_cover_mode(session, collection, body.mode)
+    return detail_of(session, collection)
 
 
 GENRE = "genre"
@@ -443,10 +598,11 @@ def wall_items(
     sort: WallSort,
     order: WallOrder,
     tags: list[Tag],
+    flat: bool = False,
 ) -> tuple[list[Item], dict[int, str | None]]:
     """海报墙上的条目和系列算年份用的日期。搜索或按标签筛选时，折叠的系列和其中的作品都列出。"""
     library_id = library.id
-    if library.data_type.structure != "item_group":
+    if flat or library.data_type.structure != "item_group":
         mode = libraries.WALL_MOVIES
     elif (term or tags) and library.wall_collections == libraries.WALL_COLLAPSE:
         mode = libraries.WALL_BOTH
