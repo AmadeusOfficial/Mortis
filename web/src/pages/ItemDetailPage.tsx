@@ -378,8 +378,10 @@ export function ItemDetailPage() {
   const imageFields = allFields.filter(
     (field) => field.value_type === "images",
   );
-  // 集的剧照每个来源只有一张；额外同人画一个字段存多张，都不在这里换。
-  const pickableFields = ["work", "collection", "season"].includes(detail.kind)
+  // 额外同人画一个字段存多张，不在这里换。集的剧照可以上传或从季快照里选。
+  const pickableFields = ["work", "collection", "season", "episode"].includes(
+    detail.kind,
+  )
     ? imageFields.filter((field) => field.key !== "extrafanart")
     : [];
   const overviewFields = allFields.filter((field) =>
@@ -1214,12 +1216,20 @@ export function ItemDetailPage() {
   }
 
   const activeTab = tab ?? "overview";
+  const backTo =
+    detail.kind === "episode" && detail.season !== null
+      ? `/items/${detail.season.id}`
+      : `/libraries/${detail.library_id}`;
+  const backLabel =
+    detail.kind === "episode" && detail.season !== null
+      ? detail.season.title
+      : detail.library_name;
 
   return (
     <div className={classes.pageRoot}>
       <PageBackdrop url={backdropUrl} />
-      <Link to={`/libraries/${detail.library_id}`} className={classes.crumb}>
-        <IconBack size={14} /> {detail.library_name}
+      <Link to={backTo} className={classes.crumb}>
+        <IconBack size={14} /> {backLabel}
       </Link>
       {hero}
       {player.chooser}

@@ -301,8 +301,20 @@ def test_manual_show_builds_seasons_and_episodes_from_numbers(
     episode_id = detail["seasons"][0]["episodes"][0]["id"]
     episode = client.get(f"/api/items/{episode_id}").json()
     assert episode["position"] == "第 1 季 第 1 集"
+    assert episode["season"] == {"id": detail["seasons"][0]["id"], "title": "第 1 季"}
     title = _field(episode, "title")
     assert (title["source"], title["locked"]) == (None, False)
+    assert client.get(f"/api/items/{episode_id}/images/thumb/choices").json() == []
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    uploaded = client.put(
+        f"/api/items/{episode_id}/images/thumb/file",
+        content=png,
+        headers={"content-type": "image/png"},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    thumb = _field(uploaded.json(), "thumb")
+    assert (thumb["source"], thumb["locked"]) == ("manual", True)
+    assert uploaded.json()["poster_url"] is not None
 
 
 def test_manual_show_without_numbers_counts_by_path(

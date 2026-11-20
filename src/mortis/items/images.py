@@ -22,9 +22,9 @@ from mortis.scrape.tv import season_extras
 from mortis.services import Services
 from mortis.sources.builtin import FetchRequest, builtin_ids, builtin_sources, is_builtin_type
 from mortis.sources.tmdb.movie import collection_candidates
-from mortis.sources.tmdb.tv import season_candidates
+from mortis.sources.tmdb.tv import episode_candidates, season_candidates
 
-SINGLE_LEVELS = frozenset({"work", "collection", "season"})
+SINGLE_LEVELS = frozenset({"work", "collection", "season", "episode"})
 MULTI_IMAGE_KEYS = frozenset({"extrafanart"})
 """一个字段存多张的图，换一张没有意义。"""
 MAX_UPLOAD = 20 * 1024 * 1024
@@ -36,7 +36,7 @@ _TMDB_IMAGE = re.compile(
 
 def image_field(session: Session, item: Item, key: str) -> TypeField:
     if item.kind not in SINGLE_LEVELS:
-        raise ItemError("集的图片不能在这里换")
+        raise ItemError("这个条目的图片不能在这里换")
     field = next(
         (f for f in level_fields(session, item.data_type_id, item.kind) if f.field_key == key),
         None,
@@ -55,6 +55,8 @@ def _builtin_candidates(
         if raw is None or not isinstance(section, MovieScrapeConfig):
             return {}
         return {"tmdb": collection_candidates(raw, section)}
+    if item.kind == "episode":
+        return _episode_builtin(session, item, section)
     if item.kind == "season":
         if not isinstance(section, TvScrapeConfig):
             return {}
@@ -79,6 +81,26 @@ def _builtin_candidates(
                 found[source.id] = source.fetcher.candidates(raw, request)
             except Exception:  # 旧快照结构不对时，这个来源不给候选，别的照常列
                 continue
+    return found
+
+
+def _episode_builtin(session: Session, item: Item, section: object) -> dict[str, Mapping[str, Any]]:
+    """集没有自己的快照。剧照从季的 TMDB 快照里按集号取，没有快照时候选为空，仍可上传。"""
+    if not isinstance(section, TvScrapeConfig) or item.parent_id is None or item.index_number is None:
+        return {}
+    found: dict[str, Mapping[str, Any]] = {}
+    raw = load_snapshot(session, item.parent_id, False)
+    if raw is not None:
+        entry = next(
+            (
+                episode
+                for episode in raw.get("episodes") or []
+                if episode.get("episode_number") == item.index_number
+            ),
+            None,
+        )
+        if entry is not None:
+            found["tmdb"] = episode_candidates(entry, section)
     return found
 
 

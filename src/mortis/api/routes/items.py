@@ -122,6 +122,13 @@ class FileGuess(BaseModel):
     year: int | None
 
 
+class SeasonLink(BaseModel):
+    """集所属的季，给详情页返回用。"""
+
+    id: int
+    title: str
+
+
 class ItemDetail(BaseModel):
     id: int
     library_id: int
@@ -138,6 +145,8 @@ class ItemDetail(BaseModel):
     parts: list[WallItem]
     show: CollectionRef | None
     position: str | None
+    season: SeasonLink | None = None
+    """集所属的季。电影、剧和季本身为空。"""
     seasons: list[SeasonOut]
     show_missing_episodes: bool | None = None
     show_missing_effective: bool | None = None

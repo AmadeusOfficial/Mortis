@@ -248,6 +248,7 @@ def test_detail_lists_seasons_and_missing_episodes(app: FastAPI, show_id: int) -
         ] == [1, 2, 3]
         episode = client.get(f"/api/items/{first['id']}").json()
         assert (episode["title"], episode["position"]) == ("卡美洛", "第 1 季 第 1 集")
+        assert episode["season"]["id"] == season["id"]
         assert episode["show"]["title"] == "毒枭：墨西哥"
         assert [f["file_kind"] for f in episode["files"]] == ["video", "subtitle"]
         assert {s["name"] for s in episode["sections"]} >= {"基本信息", "演职员"}
@@ -357,7 +358,8 @@ def test_season_and_show_image_choices(app: FastAPI, show_id: int) -> None:
         assert detail["poster_url"] is not None
         logos = client.get(f"/api/items/{show_id}/images/clearlogo/choices").json()
         assert logos[0]["language"] == "zh" and logos[0]["region"] == "CN"
-        assert client.get(f"/api/items/{episode_id}/images/thumb/choices").status_code == 422
+        thumbs = client.get(f"/api/items/{episode_id}/images/thumb/choices").json()
+        assert thumbs and thumbs[0]["source"] == "tmdb"
     _scrape(app, show_id)
     with app.state.session_factory() as session:
         season = session.get(Item, season_id)

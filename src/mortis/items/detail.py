@@ -319,6 +319,8 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         )
         parts = wall_rows(session, children)
     show, position = _show_of(session, item)
+    # 集的父级是季。show 有值时 parent 让给系列电影，季单独记下来给返回。
+    season_row = parent if item.kind == "episode" else None
     if show is not None:
         parent = None
     if fanart is None and item.kind in ("season", "episode") and show is not None:
@@ -396,6 +398,9 @@ def item_detail(session: Session, item: Item) -> dict[str, Any]:
         if show
         else None,
         "position": position,
+        "season": (
+            {"id": season_row.id, "title": season_row.title} if season_row is not None else None
+        ),
         "seasons": seasons,
         "show_missing_episodes": (
             None if item.show_missing_episodes is None else bool(item.show_missing_episodes)

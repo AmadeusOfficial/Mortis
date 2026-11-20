@@ -624,6 +624,8 @@ export interface ItemDetail {
   } | null;
   // 季「第 1 季」，集「第 1 季 第 2 集」；其他条目为 null。
   position: string | null;
+  // 集所属的季；其他条目为 null。
+  season: { id: number; title: string } | null;
   // 只有电视剧的剧才非空。
   seasons: SeasonInfo[];
   // 剧自己的选择。null 是跟随媒体库。电影和季集为 null。
