@@ -327,7 +327,7 @@ class TvImages(BaseModel):
     season_banner: bool = True
     season_thumb: bool = True
     episode_thumb: bool = True
-    actor_images: bool = False
+    actor_images: bool = True
 
 
 class TvOutputConfig(BaseModel):

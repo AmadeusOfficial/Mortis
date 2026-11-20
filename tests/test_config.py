@@ -147,9 +147,9 @@ def test_tv_defaults() -> None:
         clearlogo=True,
         keyart=True,
         season_poster=True,
-        episode_thumb=True,
-        actor_images=False,
-    )
+            episode_thumb=True,
+            actor_images=True,
+        )
     assert tv.output == TvOutputConfig(
         organize_after_scrape=True,
         organize_rename=True,
