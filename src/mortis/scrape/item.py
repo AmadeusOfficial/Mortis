@@ -3,6 +3,7 @@
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -40,6 +41,13 @@ def _tag_people(values: dict[str, Any], people_keys: set[str], provider: str) ->
     return values
 
 
+@dataclass
+class _SearchHint:
+    titles: list[str]
+    year: int | None
+    from_primary: bool = False
+
+
 class _PluginAdapter:
     """把 SourcePlugin 接成取数循环里的 GatherSource。"""
 
@@ -49,17 +57,17 @@ class _PluginAdapter:
         self,
         plugin: SourcePlugin,
         ids: dict[str, str],
-        titles: list[str],
-        year: int | None,
+        hint: _SearchHint,
         people_keys: set[str],
         threshold: float,
+        is_primary: bool,
     ) -> None:
         self._plugin = plugin
         self._ids = ids
-        self._titles = titles
-        self._year = year
+        self._hint = hint
         self._people_keys = people_keys
         self._threshold = threshold
+        self._is_primary = is_primary
         self._host: Any = None
         self.id = plugin.id
         self.name = plugin.name
@@ -83,7 +91,9 @@ class _PluginAdapter:
         plugin = self._plugin
         external_id = self._ids.get(plugin.provider)
         if external_id is None:
-            match = best_hit(self._host, plugin, self._titles, self._year)
+            titles = self._hint.titles
+            year = self._hint.year
+            match = best_hit(self._host, plugin, titles, year)
             if match is None or match.score < self._threshold:
                 best = (
                     f"，最高匹配度 {match.score:.2f}，低于 {self._threshold:.2f}"
@@ -91,7 +101,7 @@ class _PluginAdapter:
                     if match
                     else ""
                 )
-                raise SourceMissing(f"{self.name} 上没找到「{self._titles[0]}」{best}")
+                raise SourceMissing(f"{self.name} 上没找到「{titles[0]}」{best}")
             external_id = match.hit.external_id
             found_ids[plugin.provider] = external_id
             ctx.log(
@@ -101,6 +111,19 @@ class _PluginAdapter:
 
     def candidates(self, raw: dict[str, Any]) -> dict[str, Any]:
         values = self._plugin.candidates(raw)
+        if self._plugin.provider in self._ids and (self._is_primary or not self._hint.from_primary):
+            found_titles = [
+                str(values[key]).strip()
+                for key in ("title", "original_title")
+                if isinstance(values.get(key), str) and values[key].strip()
+            ]
+            if found_titles:
+                self._hint.titles = list(dict.fromkeys(found_titles))
+            found_year = _year(values.get("release_date"))
+            if found_year is not None:
+                self._hint.year = found_year
+            if self._is_primary:
+                self._hint.from_primary = True
         return _tag_people(values, self._people_keys, self._plugin.provider)
 
     def failure(self, error: Exception) -> str:
@@ -122,12 +145,14 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
             raise TaskError(f"数据类型 {item.data_type_id} 的插件没有启用，不能刮削")
         data_type_id = item.data_type_id
         fields = level_fields(session, data_type_id, "work")
-        ids = dict(
-            session.execute(
-                select(ItemExternalId.provider, ItemExternalId.external_id).where(
-                    ItemExternalId.item_id == item.id
-                )
-            ).all()
+        rows = session.execute(
+            select(
+                ItemExternalId.provider, ItemExternalId.external_id, ItemExternalId.is_primary
+            ).where(ItemExternalId.item_id == item.id)
+        ).all()
+        ids = {provider: external_id for provider, external_id, _ in rows}
+        primary_provider = next(
+            (provider for provider, _, is_primary in rows if is_primary), None
         )
         snapshots: dict[str, dict[str, Any]] = {}
         if not force:
@@ -143,9 +168,23 @@ def scrape_item(ctx: TaskContext, item_id: int, *, force: bool) -> dict[str, Any
         raise TaskError(f"数据类型 {data_type_id} 没有启用的来源插件")
     people_keys = {f.field_key for f in fields if f.value_type == "people"}
     settings = type_config(services.config_store.load_config(), data_type_id)
+    hint = _SearchHint(titles=titles, year=year)
+    ordered_sources = sorted(
+        sources,
+        key=lambda plugin: (
+            0 if plugin.provider == primary_provider else (1 if plugin.provider in ids else 2)
+        ),
+    )
     adapters = [
-        _PluginAdapter(plugin, ids, titles, year, people_keys, settings.match_threshold)
-        for plugin in sources
+        _PluginAdapter(
+            plugin,
+            ids,
+            hint,
+            people_keys,
+            settings.match_threshold,
+            plugin.provider == primary_provider,
+        )
+        for plugin in ordered_sources
     ]
     gathered = gather(ctx, adapters, snapshots)
     if not gathered.candidates:

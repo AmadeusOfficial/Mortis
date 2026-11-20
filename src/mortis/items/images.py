@@ -86,7 +86,11 @@ def _builtin_candidates(
 
 def _episode_builtin(session: Session, item: Item, section: object) -> dict[str, Mapping[str, Any]]:
     """集没有自己的快照。剧照从季的 TMDB 快照里按集号取，没有快照时候选为空，仍可上传。"""
-    if not isinstance(section, TvScrapeConfig) or item.parent_id is None or item.index_number is None:
+    if (
+        not isinstance(section, TvScrapeConfig)
+        or item.parent_id is None
+        or item.index_number is None
+    ):
         return {}
     found: dict[str, Mapping[str, Any]] = {}
     raw = load_snapshot(session, item.parent_id, False)

@@ -423,3 +423,43 @@ def test_result_records_not_found_and_failed(app: FastAPI, item_id: int, sites: 
     failed = _sources(_scrape(app, item_id, force=True))[1]
     assert (failed["id"], failed["outcome"]) == ("beta", "failed")
     assert failed["detail"] == "Beta 出错，跳过：Beta 返回 HTTP 500"
+
+
+def test_secondary_source_skips_same_title_from_different_year(
+    app: FastAPI, item_id: int, sites: FakeSites
+) -> None:
+    with app.state.session_factory() as session:
+        session.query(ItemExternalId).filter_by(item_id=item_id, provider="beta").delete()
+        item = session.get(Item, item_id)
+        assert item is not None
+        item.title = "青鸟"
+        item.original_title = None
+        item.release_date = None
+        session.commit()
+    sites.items["alpha/item/a1"] = {
+        "values": {
+            "title": "青鸟",
+            "original_title": "アオイトリ",
+            "overview": "2017 版",
+            "release_date": "2017-11-24",
+        }
+    }
+    sites.hits["beta"] = [
+        {"external_id": "b2026", "title": "青鸟", "original_title": "Qing Niao", "year": 2026}
+    ]
+    sites.items["beta/item/b2026"] = {
+        "values": {
+            "title": "青鸟",
+            "overview": "2026 同名另一部",
+            "release_date": "2026-05-12",
+        }
+    }
+
+    task = _scrape(app, item_id, force=True)
+    assert task.status == "succeeded"
+
+    with app.state.session_factory() as session:
+        rows = session.scalars(select(ItemExternalId).where(ItemExternalId.item_id == item_id))
+        assert {row.provider: row.external_id for row in rows} == {"alpha": "a1"}
+        item = session.get(Item, item_id)
+        assert item is not None and item.overview == "2017 版"

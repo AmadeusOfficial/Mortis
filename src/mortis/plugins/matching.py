@@ -26,7 +26,11 @@ def hit_score(hit: Hit, title: str, year: int | None) -> float:
     diff = abs(year - hit.year)
     if diff == 0:
         return min(1.0, base + 0.05)
-    return base if diff == 1 else base - 0.15
+    if diff == 1:
+        return base
+    if diff == 2:
+        return base - 0.15
+    return base - 0.45
 
 
 def best_hit(
