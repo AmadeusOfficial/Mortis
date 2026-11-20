@@ -73,7 +73,7 @@ function ConfirmDelete({
 }
 
 function CountPills({ task, depth }: { task: TaskRow; depth: number }) {
-  const showSubtree = depth === 0;
+  const showSubtree = task.child_count > 0;
   const failed = showSubtree ? (task.tree_status.failed ?? 0) : 0;
   const running = showSubtree ? (task.tree_status.running ?? 0) : 0;
   const queued = showSubtree ? (task.tree_status.queued ?? 0) : 0;
