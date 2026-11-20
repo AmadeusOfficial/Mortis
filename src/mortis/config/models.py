@@ -404,12 +404,14 @@ class TasksConfig(BaseModel):
 
 
 class PluginTypeConfig(BaseModel):
-    """插件数据类型的类型级设置：识别阈值和扫描时跳过的目录。"""
+    """插件数据类型的类型级设置：识别阈值、扫描时跳过的目录、要不要递归找游戏。"""
 
     model_config = ConfigDict(extra="ignore")
 
     match_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     skip_folders: list[str] = Field(default_factory=list)
+    # 关掉时库目录下每个一级文件夹是一款游戏。打开后继续往下找含程序和资源的文件夹。
+    recursive_scan: bool = False
 
     @field_validator("skip_folders")
     @classmethod

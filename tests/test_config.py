@@ -235,6 +235,7 @@ def test_type_config_defaults_for_plugin_type() -> None:
     assert isinstance(plugin_type, PluginTypeConfig)
     assert plugin_type.match_threshold == 0.75
     assert plugin_type.skip_folders == []
+    assert plugin_type.recursive_scan is False
 
 
 def test_type_config_reads_plugin_type_section(tmp_path: Path) -> None:
@@ -249,6 +250,10 @@ def test_plugin_type_section_is_flat_in_toml(tmp_path: Path) -> None:
     store = ConfigStore(tmp_path / "data")
     store.save_section("types.galgame", PluginTypeConfig(match_threshold=0.5))
     raw = tomllib.loads(store.config_path.read_text(encoding="utf-8"))
-    assert raw["types"]["galgame"] == {"match_threshold": 0.5, "skip_folders": []}
+    assert raw["types"]["galgame"] == {
+        "match_threshold": 0.5,
+        "skip_folders": [],
+        "recursive_scan": False,
+    }
     assert store.load_config().types.plugin("galgame").match_threshold == 0.5
     assert store.load_config().types.plugin("nope") == PluginTypeConfig()

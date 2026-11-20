@@ -158,7 +158,8 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
     save.reset();
   };
 
-  const setDraftValues = (patch: Partial<TypeSection>) => setDraft({ ...draft, ...patch });
+  const setDraftValues = (patch: Partial<TypeSection>) =>
+    setDraft((current) => (current === null ? current : ({ ...current, ...patch } as TypeSection)));
 
   return (
     <Stack gap="md">
@@ -178,6 +179,12 @@ export function TypeSettings({ dataTypeId }: { dataTypeId: string }) {
           onThresholdText={setThresholdText}
           skipText={skipText}
           onSkipText={setSkipText}
+          recursiveScan={"recursive_scan" in draft ? draft.recursive_scan : undefined}
+          onRecursiveScan={
+            "recursive_scan" in draft
+              ? (value) => setDraft({ ...draft, recursive_scan: value })
+              : undefined
+          }
         />
       </SettingCard>
 

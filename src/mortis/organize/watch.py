@@ -21,10 +21,11 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from mortis.config.models import PluginTypeConfig
 from mortis.config.store import ConfigStore
 from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, Library, MediaFile, Task
-from mortis.organize.scan import SKIP_DIR_NAMES
+from mortis.organize.scan import MAX_GAME_SCAN_DEPTH, SKIP_DIR_NAMES, directory_is_game
 from mortis.tasks import repo
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,73 @@ def _has_unknown_file(
     return False
 
 
+def _depth_under_root(path: str, roots: Iterable[str]) -> int | None:
+    norm = _norm(path)
+    for root in roots:
+        base = _norm(root)
+        if norm == base:
+            return 0
+        prefix = base + os.sep
+        if norm.startswith(prefix):
+            return norm[len(prefix) :].count(os.sep) + 1
+    return None
+
+
+def _inside_known_game(path: str, known: set[str]) -> bool:
+    norm = _norm(path)
+    return any(norm == game or norm.startswith(game + os.sep) for game in known)
+
+
+def _has_new_game(folder: str, known: set[str], skip: frozenset[str], depth: int) -> bool:
+    if depth > MAX_GAME_SCAN_DEPTH or _norm(folder) in known:
+        return False
+    if directory_is_game(folder):
+        return True
+    try:
+        with os.scandir(folder) as handle:
+            entries = []
+            for entry in handle:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        entries.append(entry)
+                except OSError:
+                    continue
+    except OSError:
+        return False
+    for entry in entries:
+        name = entry.name
+        if name.casefold() in skip or name.startswith((".", "$")):
+            continue
+        if _has_new_game(entry.path, known, skip, depth + 1):
+            return True
+    return False
+
+
+def _recursive_game_change(
+    changed: set[str], roots: list[str], known: set[str], skip: frozenset[str]
+) -> bool:
+    """递归打开时，更深的新游戏要扫；已经入库的游戏里写存档不算。"""
+    for path in changed:
+        norm = _norm(path)
+        if norm in known and not os.path.isdir(path):
+            return True
+        if _inside_known_game(path, known):
+            continue
+        if _skipped(path, roots, skip):
+            continue
+        depth = _depth_under_root(path, roots)
+        if depth is None or depth == 0:
+            continue
+        if os.path.isdir(path):
+            if _has_new_game(path, known, skip, depth):
+                return True
+        elif os.path.isfile(path):
+            parent = os.path.dirname(path)
+            if depth - 1 >= 1 and _norm(parent) not in known and directory_is_game(parent):
+                return True
+    return False
+
+
 def needs_scan(
     session: Session, config_store: ConfigStore, library_id: int, changed: set[str]
 ) -> bool:
@@ -320,6 +388,9 @@ def needs_scan(
         )
     }
     if data_type is not None and data_type.plugin_id is not None:
+        recursive = isinstance(section, PluginTypeConfig) and section.recursive_scan
+        if recursive:
+            return _recursive_game_change(changed, roots, known, skip)
         # 游戏库一个子目录一款游戏，游戏自己写存档不算。
         top = {_norm(root) for root in roots}
         for path in changed:

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from mortis.api.app import create_app
+from mortis.config.models import PluginTypeConfig
 from mortis.db.models import MediaFile, Task, utc_now
 from mortis.libraries import create_library, delete_library, update_library
 from mortis.organize.watch import PathWatch, WatchManager, needs_scan
@@ -314,3 +315,50 @@ def test_needs_scan_rules(app: FastAPI, folder: Path, library_id: int) -> None:
         known.unlink()
         assert check(known) is True
         assert check(known.parent) is False
+
+
+def test_recursive_game_library_notices_nested_games(app: FastAPI, tmp_path: Path) -> None:
+    root = tmp_path / "adv"
+    root.mkdir()
+    with app.state.session_factory() as session:
+        library = create_library(
+            session, name="游戏", data_type_id="galgame", paths=[str(root)]
+        )
+        library_id = library.id
+    store = app.state.config_store
+    series = root / "炎孕系列"
+    game = series / "炎孕"
+    game.mkdir(parents=True)
+    (game / "炎孕.exe").write_bytes(b"x")
+    (game / "data.xp3").write_bytes(b"x")
+    save = game / "save.dat"
+
+    def check(*paths: Path) -> bool:
+        with app.state.session_factory() as session:
+            return needs_scan(session, store, library_id, {str(path) for path in paths})
+
+    store.save_section("types.galgame", PluginTypeConfig(recursive_scan=False))
+    assert check(game) is False
+    store.save_section("types.galgame", PluginTypeConfig(recursive_scan=True))
+    assert check(series) is True
+    assert check(game / "炎孕.exe") is True
+
+    with app.state.session_factory() as session:
+        now = utc_now()
+        session.add(
+            MediaFile(
+                library_id=library_id,
+                path=str(game),
+                file_kind="game",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+    save.write_bytes(b"x")
+    assert check(save) is False
+    assert check(game) is False
+    for child in game.iterdir():
+        child.unlink()
+    game.rmdir()
+    assert check(game) is True

@@ -55,3 +55,40 @@ def test_missing_root_is_an_error_not_a_crash(tmp_path: Path) -> None:
     result = scan_folders([str(tmp_path / "没有")], skip_folders=[])
     assert result.movies == []
     assert len(result.errors) == 1 and "没有" in result.errors[0]
+
+
+def _game(folder: Path, *files: str) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in files:
+        (folder / name).write_bytes(b"x")
+
+
+def test_recursive_finds_games_under_a_series_folder(tmp_path: Path) -> None:
+    game = tmp_path / "炎孕系列" / "[KOMMIT] 炎孕 v1.0"
+    _game(game, "炎孕.exe", "data.xp3")
+    (game / "data").mkdir()
+    (game / "data" / "extra.dat").write_bytes(b"x")
+    result = scan_folders([str(tmp_path)], skip_folders=[], recursive=True)
+    assert [movie.name for movie in result.movies] == ["[KOMMIT] 炎孕 v1.0"]
+    found = result.movies[0]
+    assert found.folder == str(game)
+    assert found.parsed.title == "炎孕"
+    assert found.videos == [str(game)]
+    assert result.errors == []
+
+
+def test_recursive_requires_exe_and_a_resource(tmp_path: Path) -> None:
+    _game(tmp_path / "千恋万花", "千恋万花.exe", "readme.txt")
+    _game(tmp_path / "只有程序", "a.exe")
+    _game(tmp_path / "只有资源", "a.xp3")
+    (tmp_path / "空文件夹").mkdir()
+    result = scan_folders([str(tmp_path)], skip_folders=[], recursive=True)
+    assert [movie.name for movie in result.movies] == ["千恋万花"]
+
+
+def test_recursive_matches_extension_case_and_skips_hidden(tmp_path: Path) -> None:
+    _game(tmp_path / "系列" / "作品", "RUN.EXE", "DATA.ARC")
+    _game(tmp_path / ".hidden" / "隐藏游戏", "a.exe", "a.dat")
+    _game(tmp_path / "Saved Games" / "跳过", "a.exe", "a.dat")
+    result = scan_folders([str(tmp_path)], skip_folders=["saved games"], recursive=True)
+    assert [movie.name for movie in result.movies] == ["作品"]

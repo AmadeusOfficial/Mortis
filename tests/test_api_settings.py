@@ -263,7 +263,7 @@ def test_broken_config_file_reports_path(data_dir: Path) -> None:
 def test_data_types_lists_movie(client: TestClient) -> None:
     assert client.get("/api/data-types").json() == [
         {"id": "anime", "name": "动漫", "structure": "series", "plugin_id": None},
-        {"id": "galgame", "name": "Galgame", "structure": "item", "plugin_id": "galgame"},
+        {"id": "galgame", "name": "Galgame", "structure": "item_group", "plugin_id": "galgame"},
         {"id": "movie", "name": "电影", "structure": "item_group", "plugin_id": None},
         {"id": "tv", "name": "电视剧", "structure": "series", "plugin_id": None},
     ]
@@ -323,7 +323,13 @@ def test_plugin_type_settings_save_flat(client: TestClient, data_dir: Path) -> N
     assert "galgame" not in types or types["galgame"] == {}
     saved = client.put("/api/settings/types/galgame", json={"match_threshold": 0.5}).json()
     assert saved["types"]["galgame"]["match_threshold"] == 0.5
-    assert client.get("/api/settings").json()["types"]["galgame"]["match_threshold"] == 0.5
+    assert saved["types"]["galgame"]["recursive_scan"] is False
+    turned_on = client.put(
+        "/api/settings/types/galgame",
+        json={"match_threshold": 0.5, "recursive_scan": True},
+    ).json()
+    assert turned_on["types"]["galgame"]["recursive_scan"] is True
+    assert client.get("/api/settings").json()["types"]["galgame"]["recursive_scan"] is True
     text = (data_dir / "config.toml").read_text(encoding="utf-8")
     assert "[types.galgame]" in text
     assert "match_threshold = 0.5" in text

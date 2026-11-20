@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
+from mortis.config.models import PluginTypeConfig
 from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, ItemExternalId, ItemSourceRecord, Library
 from mortis.hooks.dispatch import hook_followups
@@ -239,9 +240,11 @@ def organize_plugin_library(
     if not data_type.is_enabled:
         raise TaskError(f"{data_type.name} 插件没有启用，不能扫描")
     settings = type_config(services.config_store.load_config(), data_type.id)
+    recursive = isinstance(settings, PluginTypeConfig) and settings.recursive_scan
     roots = [row.path for row in library.paths]
-    ctx.log(f"扫描「{library.name}」的 {len(roots)} 个目录")
-    scanned = scan_folders(roots, skip_folders=settings.skip_folders)
+    how = "，递归搜索子目录" if recursive else ""
+    ctx.log(f"扫描「{library.name}」的 {len(roots)} 个目录{how}")
+    scanned = scan_folders(roots, skip_folders=settings.skip_folders, recursive=recursive)
     for error in scanned.errors:
         ctx.log(error)
     ctx.check_cancelled()

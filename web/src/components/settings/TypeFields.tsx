@@ -122,16 +122,22 @@ export function ScanFields({
   onThresholdText,
   skipText,
   onSkipText,
+  recursiveScan,
+  onRecursiveScan,
 }: {
   thresholdText: string;
   onThresholdText: (value: string) => void;
   skipText: string;
   onSkipText: (value: string) => void;
+  recursiveScan?: boolean;
+  onRecursiveScan?: (value: boolean) => void;
 }) {
   const thresholdId = useId();
   const thresholdHintId = useId();
   const skipId = useId();
   const skipHintId = useId();
+  const recursiveId = useId();
+  const recursiveHintId = useId();
 
   return (
     <div className={styles.fieldList}>
@@ -171,6 +177,21 @@ export function ScanFields({
           onChange={(event) => onSkipText(event.currentTarget.value)}
         />
       </SettingRow>
+      {onRecursiveScan !== undefined && (
+        <SettingRow
+          label="递归搜索子目录"
+          hint="打开后继续往下找游戏。文件夹里要同时有 exe，以及 xp3、arc、dat、ini、dll、txt、pac、noa、sh、bin、pck 中的一种，才算一款游戏；系列文件夹本身不会被收进来。关掉则只把游戏库下的一级文件夹当作游戏。"
+          htmlFor={recursiveId}
+          hintId={recursiveHintId}
+        >
+          <Switch
+            id={recursiveId}
+            aria-describedby={recursiveHintId}
+            checked={recursiveScan === true}
+            onChange={(event) => onRecursiveScan(event.currentTarget.checked)}
+          />
+        </SettingRow>
+      )}
     </div>
   );
 }

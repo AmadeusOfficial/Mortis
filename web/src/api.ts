@@ -187,6 +187,7 @@ export interface TasksConfig {
 export interface PluginTypeConfig {
   match_threshold: number;
   skip_folders: string[];
+  recursive_scan: boolean;
 }
 
 export type TypeSection = MovieScrapeConfig | TvScrapeConfig | PluginTypeConfig;
@@ -229,7 +230,7 @@ export function isBuiltinSection(
 }
 
 export function defaultPluginTypeConfig(): PluginTypeConfig {
-  return { match_threshold: 0.75, skip_folders: [] };
+  return { match_threshold: 0.75, skip_folders: [], recursive_scan: false };
 }
 
 // 取一个类型的设置；后端没写过这一节时用默认值补齐。
@@ -541,6 +542,11 @@ export interface WallItem {
   // 没有任何外部编号的作品，由人在未识别页建的。
   is_manual: boolean;
   issue: string | null;
+  // 作品所属合集。合集卡片本身为空。
+  collection_id?: number | null;
+  // Galgame 合集的封面方式。电影系列为空，继续用 poster_url。
+  cover_mode?: "auto" | "single" | "grid" | null;
+  cover_urls?: (string | null)[];
 }
 
 export interface PersonValue {
@@ -611,6 +617,8 @@ export interface ItemDetail {
   subtitle: string | null;
   year: number | null;
   poster_url: string | null;
+  cover_mode?: "auto" | "single" | "grid" | null;
+  cover_urls?: (string | null)[];
   fanart_url: string | null;
   external_ids: Record<string, string>;
   collection: { id: number; title: string; poster_url: string | null } | null;
@@ -886,16 +894,86 @@ export const fetchWall = (
   sort: WallSort,
   order: SortOrder,
   tagIds: number[] = [],
+  flat = false,
 ) => {
   const params = new URLSearchParams({ sort, order });
   if (q.trim() !== "") {
     params.set("q", q.trim());
+  }
+  if (flat) {
+    params.set("flat", "true");
   }
   for (const tagId of tagIds) {
     params.append("tag", String(tagId));
   }
   return request<WallItem[]>("GET", `/api/libraries/${libraryId}/items?${params}`);
 };
+
+export interface CollectionName {
+  id: number;
+  title: string;
+}
+
+export interface AssignedCollection {
+  id: number;
+  title: string;
+  moved: number;
+}
+
+export interface CollectionSuggestion {
+  id: number;
+  title: string;
+  relation: string;
+}
+
+export const fetchCollections = (libraryId: number) =>
+  request<CollectionName[]>("GET", `/api/libraries/${libraryId}/collections`);
+
+export const fetchCollectionSuggestions = (libraryId: number, workIds: number[]) => {
+  const params = new URLSearchParams();
+  for (const workId of workIds) {
+    params.append("work_id", String(workId));
+  }
+  return request<CollectionSuggestion[]>(
+    "GET",
+    `/api/libraries/${libraryId}/collection-suggestions?${params}`,
+  );
+};
+
+export const assignCollection = (
+  libraryId: number,
+  body: { work_ids: number[]; title?: string; collection_id?: number },
+) => request<AssignedCollection>("POST", `/api/libraries/${libraryId}/collections`, body);
+
+export const addCollectionMembers = (id: number, workIds: number[]) =>
+  request<ItemDetail>("POST", `/api/items/${id}/members`, { work_ids: workIds });
+
+export const removeCollectionMembers = async (id: number, workIds: number[]) => {
+  const detail = await request<ItemDetail | undefined>("POST", `/api/items/${id}/members/remove`, {
+    work_ids: workIds,
+  });
+  return detail ?? null;
+};
+
+export const removeCollectionMember = async (id: number, workId: number) => {
+  const detail = await request<ItemDetail | undefined>(
+    "DELETE",
+    `/api/items/${id}/members/${workId}`,
+  );
+  return detail ?? null;
+};
+
+export const reorderCollection = (id: number, workIds: number[]) =>
+  request<ItemDetail>("PUT", `/api/items/${id}/members`, { work_ids: workIds });
+
+export const dissolveCollection = (id: number) =>
+  request<{ library_id: number }>("POST", `/api/items/${id}/dissolve`);
+
+export const renameCollection = (id: number, title: string) =>
+  request<ItemDetail>("PATCH", `/api/items/${id}/title`, { title });
+
+export const setCoverMode = (id: number, mode: "auto" | "single" | "grid") =>
+  request<ItemDetail>("PUT", `/api/items/${id}/cover`, { mode });
 
 export interface Shelf {
   tag_id: number;

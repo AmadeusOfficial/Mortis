@@ -35,6 +35,11 @@ SKIP_DIR_NAMES = frozenset(
 SUBTITLE_DIR_NAMES = frozenset({"subs", "subtitles", "sub", "字幕"})
 DISC_DIR_NAMES = frozenset({"video_ts", "bdmv", "hvdvd_ts"})
 DISC_MAIN_FILES = ("video_ts.ifo", "index.bdmv")
+# 和 PotatoVN 的默认识别规则一样：文件夹里要有 exe，还要有其中一种资源。
+GAME_RESOURCE_EXTENSIONS = frozenset(
+    {".xp3", ".arc", ".dat", ".ini", ".dll", ".txt", ".pac", ".noa", ".sh", ".bin", ".pck"}
+)
+MAX_GAME_SCAN_DEPTH = 8
 _SAMPLE = re.compile(r"(?i)(^|[-_ .\[(])sample([-_ .\])]|$)")
 _TRAILER = re.compile(r"(?i)(^|[-_ .\[(])trailer([-_ .\])]|$)")
 
@@ -250,22 +255,86 @@ def scan_shows(
     return walk.result
 
 
-def scan_folders(roots: Iterable[str], *, skip_folders: Iterable[str]) -> ScanResult:
-    """库目录下每个子目录是一款游戏，不往下钻。"""
+def directory_is_game(folder: str) -> bool:
+    """这一层同时有 exe 和一种游戏资源。子目录里的文件不算。"""
+    try:
+        with os.scandir(folder) as handle:
+            names: list[str] = []
+            for entry in handle:
+                try:
+                    if entry.is_file():
+                        names.append(entry.name)
+                except OSError:
+                    continue
+    except OSError:
+        return False
+    has_exe = False
+    has_resource = False
+    for name in names:
+        ext = _split(name)[1]
+        if ext == ".exe":
+            has_exe = True
+        elif ext in GAME_RESOURCE_EXTENSIONS:
+            has_resource = True
+        if has_exe and has_resource:
+            return True
+    return False
+
+
+def _append_game(walk: _Walk, path: str, name: str) -> None:
+    title = clean_game_name(name)
+    parsed = ParsedName(title=title, year=None, search_titles=(title,))
+    walk.result.movies.append(FoundMovie(path, name, parsed, [path], []))
+
+
+def _descend_games(folder: str, walk: _Walk, depth: int) -> None:
+    if depth > MAX_GAME_SCAN_DEPTH:
+        walk.result.errors.append(f"目录层级超过 {MAX_GAME_SCAN_DEPTH}，不再往下看：{folder}")
+        return
+    listed = _list(folder, walk)
+    if listed is None:
+        return
+    dirs, _files = listed
+    for entry in dirs:
+        lowered = entry.name.casefold()
+        if lowered in walk.skip or entry.name.startswith((".", "$")):
+            continue
+        try:
+            is_dir = entry.is_dir(follow_symlinks=False)
+        except OSError:
+            continue
+        if not is_dir:
+            continue
+        if directory_is_game(entry.path):
+            _append_game(walk, entry.path, entry.name)
+            continue
+        _descend_games(entry.path, walk, depth + 1)
+
+
+def scan_folders(
+    roots: Iterable[str], *, skip_folders: Iterable[str], recursive: bool = False
+) -> ScanResult:
+    """库目录下每个子目录是一款游戏。
+
+    recursive 为假时不往下钻，一级文件夹都算游戏。
+    为真时继续往下找：同时有 exe 和资源文件的文件夹才算，认到就不再进它的子目录。
+    """
     # 游戏目录不按扩展名找文件，只借用 _new_walk 的跳过目录集合。
     walk = _new_walk((), (), skip_folders)
     for root in roots:
-        listed = _list(root, walk) if os.path.isdir(root) else None
+        if not os.path.isdir(root):
+            walk.result.errors.append(f"目录不存在或无法访问：{root}")
+            continue
+        if recursive:
+            _descend_games(root, walk, 1)
+            continue
+        listed = _list(root, walk)
         if listed is None:
-            if not os.path.isdir(root):
-                walk.result.errors.append(f"目录不存在或无法访问：{root}")
             continue
         dirs, _files = listed
         for entry in dirs:
             lowered = entry.name.casefold()
             if lowered in walk.skip or entry.name.startswith((".", "$")):
                 continue
-            title = clean_game_name(entry.name)
-            parsed = ParsedName(title=title, year=None, search_titles=(title,))
-            walk.result.movies.append(FoundMovie(entry.path, entry.name, parsed, [entry.path], []))
+            _append_game(walk, entry.path, entry.name)
     return walk.result
