@@ -5,19 +5,19 @@
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text.Json;
 
 namespace Mortis.Tray;
 
 internal sealed class UpdateException(string message) : Exception(message);
 
-internal sealed record Release(Version Version, string PageUrl, string ZipName, string? ZipUrl, string? SumsUrl);
+internal sealed record Release(Version Version, string PageUrl, string ZipName, string ZipUrl, string SumsUrl);
 
 internal static class Updater
 {
-    private const string ReleaseApi = "https://api.github.com/repos/AmadeusOfficial/Mortis/releases/latest";
+    private const string LatestPage = "https://github.com/AmadeusOfficial/Mortis/releases/latest";
     private const string PagePrefix = "https://github.com/AmadeusOfficial/Mortis/releases/";
     private const string DownloadPrefix = "https://github.com/AmadeusOfficial/Mortis/releases/download/";
+    private const string TagPathPrefix = "/AmadeusOfficial/Mortis/releases/tag/";
     private const string OldSuffix = ".old";
 
     /// 更新时不碰的顶层条目：用户数据、托盘设置、更新的临时目录。
@@ -30,70 +30,67 @@ internal static class Updater
 
     private static string UpdateDir => Path.Combine(DesktopSettings.AppRoot, "update");
 
-    /// 还没发布过版本时返回 null。
-    internal static async Task<Release?> FetchLatest(HttpClient web)
+    /// 按顺序用这几个客户端试，前一个连不上或被拒绝就换下一个（比如先走系统代理，再直连）。
+    /// 还没发布过版本时返回 null。客户端不要自动跟随跳转。
+    internal static async Task<Release?> FetchLatest(params HttpClient[] clients)
     {
-        using var resp = await web.GetAsync(ReleaseApi);
+        Exception? last = null;
+        foreach (var web in clients)
+        {
+            try
+            {
+                return await FetchLatestWith(web);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UpdateException)
+            {
+                last = ex;
+            }
+        }
+
+        throw last ?? new UpdateException("暂时连不上 GitHub，请稍后再试。");
+    }
+
+    private static async Task<Release?> FetchLatestWith(HttpClient web)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Head, LatestPage);
+        using var resp = await web.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         if (resp.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
 
-        if (!resp.IsSuccessStatusCode)
+        if (!IsRedirect(resp.StatusCode))
         {
-            throw new UpdateException($"GitHub 返回 {(int)resp.StatusCode}，请稍后再试。");
+            throw new UpdateException(FailureText(resp));
         }
 
-        await using var stream = await resp.Content.ReadAsStreamAsync();
-        using var doc = await JsonDocument.ParseAsync(stream);
-        var root = doc.RootElement;
-        var tag = Text(root, "tag_name");
+        var tag = TagFrom(AbsoluteLocation(resp.Headers.Location))
+            ?? throw new UpdateException("GitHub 没有给出这个仓库的最新版本地址。");
         var version = ParseVersion(tag) ?? throw new UpdateException($"看不懂最新版本号「{tag}」。");
-        // 这些地址会交给系统打开或拿来下载，只认这个仓库的发布地址。
-        var page = Text(root, "html_url");
-        if (!page.StartsWith(PagePrefix, StringComparison.Ordinal))
-        {
-            page = PagePrefix + "latest";
-        }
-
-        string zipName = "", zipUrl = "", sumsUrl = "";
-        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = Text(asset, "name");
-                var url = Text(asset, "browser_download_url");
-                if (!url.StartsWith(DownloadPrefix, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (name.StartsWith("Mortis-", StringComparison.Ordinal)
-                    && name.EndsWith("-windows-x64.zip", StringComparison.Ordinal))
-                {
-                    zipName = name;
-                    zipUrl = url;
-                }
-                else if (name == "SHA256SUMS")
-                {
-                    sumsUrl = url;
-                }
-            }
-        }
-
-        return new Release(version, page, zipName, NullIfEmpty(zipUrl), NullIfEmpty(sumsUrl));
+        var zipName = $"Mortis-{tag}-windows-x64.zip";
+        return new Release(
+            version,
+            PagePrefix + "tag/" + tag,
+            zipName,
+            DownloadPrefix + tag + "/" + zipName,
+            DownloadPrefix + tag + "/SHA256SUMS");
     }
 
     /// 下载、校验、解压，返回新版本的根目录（里面有 Mortis.exe）。
     internal static async Task<string> Prepare(HttpClient download, Release release)
     {
-        if (release.ZipUrl is null || release.SumsUrl is null)
+        Directory.CreateDirectory(UpdateDir);
+        string sums;
+        using (var resp = await download.GetAsync(release.SumsUrl))
         {
-            throw new UpdateException("这个版本的发布页上没有 Windows 压缩包或 SHA256SUMS。");
+            if (!resp.IsSuccessStatusCode)
+            {
+                throw new UpdateException(FailureText(resp));
+            }
+
+            sums = await resp.Content.ReadAsStringAsync();
         }
 
-        Directory.CreateDirectory(UpdateDir);
-        var sums = await download.GetStringAsync(release.SumsUrl);
         var expected = ExpectedHash(sums, release.ZipName)
             ?? throw new UpdateException($"SHA256SUMS 里没有 {release.ZipName}。");
 
@@ -102,7 +99,7 @@ internal static class Updater
         {
             if (!resp.IsSuccessStatusCode)
             {
-                throw new UpdateException($"下载失败，GitHub 返回 {(int)resp.StatusCode}。");
+                throw new UpdateException(FailureText(resp));
             }
 
             await using var source = await resp.Content.ReadAsStreamAsync();
@@ -271,10 +268,45 @@ internal static class Updater
         return dirs.Length == 1 && File.Exists(Path.Combine(dirs[0], "Mortis.exe")) ? dirs[0] : null;
     }
 
-    private static string Text(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+    private static bool IsRedirect(HttpStatusCode status) =>
+        status is HttpStatusCode.MovedPermanently
+            or HttpStatusCode.Redirect
+            or HttpStatusCode.RedirectMethod
+            or HttpStatusCode.TemporaryRedirect
+            or HttpStatusCode.PermanentRedirect;
 
-    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
+    private static Uri? AbsoluteLocation(Uri? location) =>
+        location is null || location.IsAbsoluteUri ? location : new Uri(new Uri(LatestPage), location);
+
+    /// 只认这个仓库发布页的跳转，避免跟到别的地址。
+    private static string? TagFrom(Uri? location)
+    {
+        if (location is null
+            || !string.Equals(location.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+            || !location.AbsolutePath.StartsWith(TagPathPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var tag = Uri.UnescapeDataString(location.AbsolutePath[TagPathPrefix.Length..]);
+        return tag.Length == 0 || tag.Contains('/') || tag.Contains('\\') ? null : tag;
+    }
+
+    private static string FailureText(HttpResponseMessage resp)
+    {
+        var code = (int)resp.StatusCode;
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+        {
+            return "这个版本的发布页上还没有 Windows 压缩包或 SHA256SUMS，可能还在上传，过一会儿再试。";
+        }
+
+        if (resp.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+        {
+            return $"GitHub 拒绝了这次访问（HTTP {code}）。当前网络或代理被拒绝时，换一个节点再试。";
+        }
+
+        return $"GitHub 返回 {code}，请稍后再试。";
+    }
 
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 

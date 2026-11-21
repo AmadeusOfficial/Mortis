@@ -91,7 +91,8 @@ internal sealed class App
     private readonly ConcurrentQueue<Action> _ui = new();
     private readonly AutoResetEvent _wake = new(false);
     private readonly HttpClient _local = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
-    private readonly HttpClient _web = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private readonly HttpClient _web = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient _webDirect = new(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
     private readonly HttpClient _download = new() { Timeout = TimeSpan.FromMinutes(15) };
     private readonly Version _version;
     private readonly bool _afterUpdate;
@@ -128,7 +129,7 @@ internal sealed class App
         _settingsCreated = DesktopSettings.CreateIfMissing();
         _config = DesktopSettings.Load();
         _web.DefaultRequestHeaders.UserAgent.ParseAdd($"Mortis/{VersionText}");
-        _web.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        _webDirect.DefaultRequestHeaders.UserAgent.ParseAdd($"Mortis/{VersionText}");
         _download.DefaultRequestHeaders.UserAgent.ParseAdd($"Mortis/{VersionText}");
     }
 
@@ -868,7 +869,7 @@ internal sealed class App
             Release? release;
             try
             {
-                release = await Updater.FetchLatest(_web);
+                release = await Updater.FetchLatest(_web, _webDirect);
             }
             catch (Exception ex)
             {
@@ -1033,6 +1034,7 @@ internal sealed class App
 
         _local.Dispose();
         _web.Dispose();
+        _webDirect.Dispose();
         _download.Dispose();
         GC.KeepAlive(_wndProc);
     }
