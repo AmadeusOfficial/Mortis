@@ -114,8 +114,7 @@ clearlogo = true
 keyart = true
 season_poster = true
 episode_thumb = true
-# 演员头像不写
-actor_images = false
+actor_images = true
 
 [types.tv.output]
 # 刮削后自动整理
@@ -174,8 +173,7 @@ clearlogo = true
 keyart = true
 season_poster = true
 episode_thumb = true
-# 演员头像不写
-actor_images = false
+actor_images = true
 
 [types.anime.output]
 # 刮削后自动整理
