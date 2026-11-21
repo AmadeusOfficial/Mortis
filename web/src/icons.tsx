@@ -325,6 +325,13 @@ export const IconRemove = makeIcon(
   </>
 );
 
+export const IconExclude = makeIcon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m5.6 5.6 12.8 12.8" />
+  </>
+);
+
 // 莫提斯几何 Logo：底色跟随主题主色，保持简洁几何 M
 export function Logo({ size = 28 }: { size?: number }) {
   const shadeId = useId();

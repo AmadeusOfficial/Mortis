@@ -1118,6 +1118,29 @@ export const deleteItem = (id: number, confirmTitle: string, expected: DeleteExp
     expected,
   });
 
+// 排除识别：entries 是要加进这种数据类型「跳过的目录」的完整路径，磁盘文件不动。
+export interface ExcludePreview {
+  library_id: number;
+  data_type_id: string;
+  type_name: string;
+  title: string | null;
+  entries: string[];
+  file_count: number;
+  reasons: string[];
+}
+
+export type ExcludeTarget = { kind: "item" | "file"; id: number };
+
+const excludeUrl = (target: ExcludeTarget) =>
+  target.kind === "item"
+    ? `/api/items/${target.id}/exclude`
+    : `/api/media-files/${target.id}/exclude`;
+
+export const fetchExcludePreview = (target: ExcludeTarget) =>
+  request<ExcludePreview>("GET", excludeUrl(target));
+export const excludeTarget = (target: ExcludeTarget, entries: string[]) =>
+  request<{ excluded: boolean; library_id: number }>("POST", excludeUrl(target), { entries });
+
 export const fetchItemArrangePreview = (id: number) =>
   request<ArrangePreview>("GET", `/api/items/${id}/arrange-preview`);
 export const arrangeItem = (id: number) => request<Enqueued>("POST", `/api/items/${id}/arrange`);

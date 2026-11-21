@@ -21,6 +21,7 @@ import {
   fetchUnmatched,
   typeSection,
 } from "../api";
+import { ExcludeModal } from "../components/ExcludeModal";
 import { ManualItemModal } from "../components/ManualItemModal";
 import { useAgent } from "../components/agent/AgentContext";
 import { bindDraft } from "../components/agent/drafts";
@@ -29,7 +30,14 @@ import { TmdbSearchPanel } from "../components/match/TmdbSearchPanel";
 import { PageHeader, Pill } from "../components/ui";
 import { isPluginType, isSeriesType, useDataTypes } from "../dataTypes";
 import { formatSize } from "../format";
-import { DataTypeIcon, IconCheck, IconEdit, IconSearch, IconSparkle } from "../icons";
+import {
+  DataTypeIcon,
+  IconCheck,
+  IconEdit,
+  IconExclude,
+  IconSearch,
+  IconSparkle,
+} from "../icons";
 import classes from "./UnmatchedPage.module.css";
 
 function splitPath(path: string): [string, string] {
@@ -51,6 +59,7 @@ export function UnmatchedPage() {
   });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [manualId, setManualId] = useState<number | null>(null);
+  const [excludeId, setExcludeId] = useState<number | null>(null);
 
   const bind = useMutation({
     mutationFn: ({
@@ -94,6 +103,7 @@ export function UnmatchedPage() {
   const selectedIsPlugin =
     selectedFile !== null && isPluginType(dataTypes.data, selectedFile.data_type_id);
   const manualFile = rows.find((file) => file.id === manualId) ?? null;
+  const excludeFile = rows.find((file) => file.id === excludeId) ?? null;
   const manualNote =
     manualFile === null
       ? ""
@@ -235,6 +245,19 @@ export function UnmatchedPage() {
                     </Button>
                     <Button
                       size="xs"
+                      variant="subtle"
+                      color="gray"
+                      leftSection={<IconExclude size={12} />}
+                      aria-label={`排除识别${name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExcludeId(file.id);
+                      }}
+                    >
+                      排除识别
+                    </Button>
+                    <Button
+                      size="xs"
                       variant={isSelected ? "filled" : "default"}
                       leftSection={<IconSearch size={12} />}
                       aria-label={`匹配${name}`}
@@ -302,6 +325,16 @@ export function UnmatchedPage() {
               </>
             )}
           </Modal>
+
+          {excludeFile !== null && (
+            <ExcludeModal
+              key={excludeFile.id}
+              target={{ kind: "file", id: excludeFile.id }}
+              name={splitPath(excludeFile.path)[1]}
+              onClose={() => setExcludeId(null)}
+              onDone={() => setExcludeId(null)}
+            />
+          )}
 
           {manualFile !== null && (
             <ManualItemModal

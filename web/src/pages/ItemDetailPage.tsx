@@ -40,6 +40,7 @@ import {
 } from "../api";
 import { ArrangePreviewModal } from "../components/ArrangePreviewModal";
 import { DeleteItemModal } from "../components/DeleteItemModal";
+import { ExcludeModal } from "../components/ExcludeModal";
 import { FieldActions } from "../components/detail/FieldActions";
 import { PageBackdrop } from "../components/detail/PageBackdrop";
 import { FieldEditModal } from "../components/FieldEditModal";
@@ -72,6 +73,7 @@ import {
   IconFile,
   IconFolder,
   IconGame,
+  IconExclude,
   IconImage,
   IconInfo,
   IconLink,
@@ -200,6 +202,7 @@ export function ItemDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [arranging, setArranging] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [excluding, setExcluding] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [covering, setCovering] = useState(false);
@@ -764,6 +767,13 @@ export function ItemDetailPage() {
                     >
                       让 AI 重新识别
                     </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconExclude size={14} />}
+                      disabled={busy}
+                      onClick={() => setExcluding(true)}
+                    >
+                      排除识别
+                    </Menu.Item>
                     {canDelete && (
                       <Menu.Item
                         color="red"
@@ -1316,6 +1326,18 @@ export function ItemDetailPage() {
           itemId={detail.id}
           title={detail.title}
           onClose={() => setDeleting(false)}
+        />
+      )}
+      {excluding && (
+        <ExcludeModal
+          target={{ kind: "item", id: detail.id }}
+          name={detail.title}
+          onClose={() => setExcluding(false)}
+          onDone={(libraryId) => {
+            setExcluding(false);
+            navigate(`/libraries/${libraryId}`);
+            queryClient.removeQueries({ queryKey: ["item", detail.id] });
+          }}
         />
       )}
       {renaming && (
