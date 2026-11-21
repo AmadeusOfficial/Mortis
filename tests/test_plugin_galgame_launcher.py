@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from mortis.api.app import create_app
 from mortis.config.store import ConfigStore
@@ -111,6 +111,24 @@ def test_settings_schema(plugin: PlayerPlugin) -> None:
     assert properties["ensure_magpie"]["title"] == "启动游戏时确保 Magpie 在运行"
     assert properties["magpie_path"]["description"]
     assert properties["magpie_path"]["format"] == "file-path"
+    assert settings.use_sandbox is False
+    assert settings.sandboxie_path == ""
+    assert settings.sandbox_name == "DefaultBox"
+    assert properties["use_sandbox"]["title"] == "在 Sandboxie 沙箱里启动游戏"
+    assert properties["sandboxie_path"]["title"] == "Sandboxie Start.exe 路径"
+    assert properties["sandboxie_path"]["format"] == "file-path"
+    assert properties["sandboxie_path"]["description"]
+    assert properties["sandbox_name"]["title"] == "沙箱名"
+
+
+@pytest.mark.parametrize("name", ["", "我的沙箱", "Gal game", "a/b", "x" * 33])
+def test_sandbox_name_rejects_bad_names(plugin: PlayerPlugin, name: str) -> None:
+    with pytest.raises(ValidationError):
+        plugin.Settings(sandbox_name=name)
+
+
+def test_sandbox_name_is_stripped(plugin: PlayerPlugin) -> None:
+    assert plugin.Settings(sandbox_name="  Galgame_2 ").sandbox_name == "Galgame_2"
 
 
 def test_always_available(plugin: PlayerPlugin, tmp_path: Path) -> None:
@@ -357,6 +375,93 @@ def test_play_game_failure_propagates(plugin: PlayerPlugin, tmp_path: Path) -> N
         plugin.play(host, str(exe))
 
 
+# 在 Sandboxie 沙箱里启动
+
+
+def _module(plugin: PlayerPlugin) -> dict[str, Any]:
+    # 别的测试会重新加载插件，sys.modules 里的模块不一定是这个对象用的那个。
+    return type(plugin).play.__globals__
+
+
+def test_play_in_sandbox(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    start = _touch(tmp_path / "Sandboxie-Plus" / "Start.exe")
+    host = _host(plugin, use_sandbox=True, sandboxie_path=str(start), sandbox_name="Galgame")
+    plugin.play(host, str(exe))
+    assert host.launched == [(str(start), ["/box:Galgame", str(exe)], str(exe.parent))]
+
+
+def test_play_in_sandbox_with_magpie_outside(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    start = _touch(tmp_path / "Sandboxie-Plus" / "Start.exe")
+    magpie = _touch(tmp_path / "Magpie" / "Magpie.exe")
+    host = _host(
+        plugin,
+        use_sandbox=True,
+        sandboxie_path=str(start),
+        sandbox_name="Galgame",
+        magpie_path=str(magpie),
+        ensure_magpie=True,
+    )
+    plugin.play(host, str(exe))
+    assert host.launched == [
+        (str(magpie), ["-t"], str(magpie.parent)),
+        (str(start), ["/box:Galgame", str(exe)], str(exe.parent)),
+    ]
+
+
+def test_play_in_sandbox_refuses_bad_path(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    for path in (str(tmp_path / "没有" / "Start.exe"), str(tmp_path)):
+        host = _host(plugin, use_sandbox=True, sandboxie_path=path)
+        with pytest.raises(PlayerError, match="Sandboxie"):
+            plugin.play(host, str(exe))
+        assert host.launched == [], path
+
+
+def test_play_in_sandbox_finds_start_exe(
+    plugin: PlayerPlugin, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    start = _touch(tmp_path / "Sandboxie-Plus" / "Start.exe")
+    monkeypatch.setitem(_module(plugin), "find_start_exe", lambda: start)
+    host = _host(plugin, use_sandbox=True, sandboxie_path="  ")
+    plugin.play(host, str(exe))
+    assert host.launched == [(str(start), ["/box:DefaultBox", str(exe)], str(exe.parent))]
+
+
+def test_play_in_sandbox_without_sandboxie(
+    plugin: PlayerPlugin, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    monkeypatch.setitem(_module(plugin), "find_start_exe", lambda: None)
+    host = _host(plugin, use_sandbox=True)
+    with pytest.raises(PlayerError, match="Sandboxie"):
+        plugin.play(host, str(exe))
+    assert host.launched == []
+
+
+def test_sandbox_off_ignores_sandboxie_path(plugin: PlayerPlugin, tmp_path: Path) -> None:
+    exe = _touch(tmp_path / "游戏" / "game.exe")
+    host = _host(plugin, use_sandbox=False, sandboxie_path=str(tmp_path / "没有.exe"))
+    plugin.play(host, str(exe))
+    assert host.launched == [(str(exe), [], str(exe.parent))]
+
+
+def test_find_start_exe_reads_service(
+    plugin: PlayerPlugin, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module(plugin)
+    start = _touch(tmp_path / "Sandboxie-Plus" / "Start.exe")
+    service = f'"{tmp_path / "Sandboxie-Plus" / "SbieSvc.exe"}"'
+    monkeypatch.setitem(module, "_service_image_path", lambda: service)
+    assert module["find_start_exe"]() == start
+    monkeypatch.setitem(module, "_service_image_path", lambda: None)
+    assert module["find_start_exe"]() is None
+    monkeypatch.setitem(module, "_service_image_path", lambda: str(tmp_path / "x" / "SbieSvc.exe"))
+    assert module["find_start_exe"]() is None
+
+
 # 经宿主的 /api/items/{id}/play
 
 
@@ -430,7 +535,13 @@ def test_api_launches_game_and_magpie(
     entry = plugins[PLAYER_ID]
     assert entry["parent"] == "galgame" and entry["file_kinds"] == ["game"]
     assert entry["available"] is True and entry["notice"] is None
-    assert set(entry["settings_schema"]["properties"]) == {"magpie_path", "ensure_magpie"}
+    assert set(entry["settings_schema"]["properties"]) == {
+        "magpie_path",
+        "ensure_magpie",
+        "use_sandbox",
+        "sandboxie_path",
+        "sandbox_name",
+    }
     saved = client.put(
         f"/api/plugins/{PLAYER_ID}",
         json={"settings": {"magpie_path": str(magpie), "ensure_magpie": True}},

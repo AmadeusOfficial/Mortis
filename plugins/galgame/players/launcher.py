@@ -4,7 +4,7 @@ from collections import deque
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mortis.plugin_api import PlayerError, PlayerHost, PlayerPlugin
 
@@ -48,6 +48,9 @@ CHINESE_PARTS = {"sc"}
 MIN_MATCH = 3
 # Magpie 自启动用的参数：只在托盘里运行，不弹主窗口。
 MAGPIE_ARGS = ["-t"]
+SANDBOXIE_SERVICE = r"SYSTEM\CurrentControlSet\Services\SbieSvc"
+# Sandboxie 的沙箱名只能是字母、数字和下划线，最长 32 个字符。
+SANDBOX_NAME = re.compile(r"[A-Za-z0-9_]{1,32}")
 
 
 class LauncherSettings(BaseModel):
@@ -64,7 +67,59 @@ class LauncherSettings(BaseModel):
         title="启动游戏时确保 Magpie 在运行",
         description="先启动 Magpie 再启动游戏；Magpie 已在运行时不会多开",
     )
+    use_sandbox: bool = Field(
+        default=False,
+        title="在 Sandboxie 沙箱里启动游戏",
+        description="经 Sandboxie-Plus 在下面的沙箱里启动游戏，Magpie 仍在沙箱外运行；"
+        "游戏存档会写进沙箱目录",
+    )
+    sandboxie_path: str = Field(
+        default="",
+        title="Sandboxie Start.exe 路径",
+        description="Sandboxie-Plus 安装目录里的 Start.exe，留空时从 Sandboxie 服务自动查找",
+        json_schema_extra={"format": "file-path"},
+    )
+    sandbox_name: str = Field(
+        default="DefaultBox",
+        title="沙箱名",
+        description="在 Sandboxie-Plus 里建好的沙箱名，只能用字母、数字和下划线",
+    )
     executables: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("sandbox_name")
+    @classmethod
+    def _check_sandbox_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not SANDBOX_NAME.fullmatch(cleaned):
+            raise ValueError("沙箱名只能用字母、数字和下划线，最长 32 个字符")
+        return cleaned
+
+
+def _service_image_path() -> str | None:
+    try:
+        import winreg
+    except ImportError:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, SANDBOXIE_SERVICE) as key:
+            value, _kind = winreg.QueryValueEx(key, "ImagePath")
+    except OSError:
+        return None
+    return value if isinstance(value, str) else None
+
+
+def find_start_exe() -> Path | None:
+    """从 Sandboxie 服务登记的 SbieSvc.exe 找同目录的 Start.exe。"""
+    raw = (_service_image_path() or "").strip()
+    if raw.startswith('"'):
+        raw = raw[1:].split('"', 1)[0]
+    else:
+        end = raw.lower().find(".exe")
+        raw = raw[: end + 4] if end >= 0 else raw
+    if not raw:
+        return None
+    start = Path(os.path.expandvars(raw)).parent / "Start.exe"
+    return start if start.is_file() else None
 
 
 def _normalized(name: str) -> str:
@@ -153,4 +208,23 @@ class GalgameLauncher(PlayerPlugin):
                     host.launch(str(magpie), MAGPIE_ARGS, cwd=str(magpie.parent))
                 except PlayerError as error:
                     host.log(f"Magpie 没能启动，照常启动游戏：{error.message}")
-        host.launch(path, [], cwd=str(Path(path).parent))
+        cwd = str(Path(path).parent)
+        if isinstance(settings, LauncherSettings) and settings.use_sandbox:
+            start = _start_exe(settings)
+            host.launch(str(start), [f"/box:{settings.sandbox_name}", path], cwd=cwd)
+            return
+        host.launch(path, [], cwd=cwd)
+
+
+def _start_exe(settings: LauncherSettings) -> Path:
+    """沙箱开着时找不到 Start.exe 就报错，不退回到沙箱外启动。"""
+    raw = settings.sandboxie_path.strip()
+    if raw:
+        start = Path(raw)
+        if not start.is_file():
+            raise PlayerError(f"Sandboxie 的 Start.exe 路径无效，没有启动游戏：{raw}")
+        return start
+    found = find_start_exe()
+    if found is None:
+        raise PlayerError("没找到 Sandboxie 的 Start.exe，没有启动游戏；请在设置里填写路径")
+    return found
