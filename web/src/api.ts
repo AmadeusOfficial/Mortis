@@ -723,6 +723,24 @@ export const organizeLibrary = (id: number, scrape: boolean | null = null) =>
   request<Enqueued>("POST", `/api/libraries/${id}/organize`, { scrape });
 export const scrapeLibrary = (id: number, force = false) =>
   request<Enqueued>("POST", `/api/libraries/${id}/scrape`, { force });
+// 整个子树一个文件都没有的目录，删之前先列出来给用户看。
+export interface EmptyFolder {
+  path: string;
+  // 这个目录下还有多少个空子目录（含自己）。
+  nested: number;
+}
+export interface EmptyFolderList {
+  folders: EmptyFolder[];
+  total: number;
+}
+export const fetchEmptyFolders = (id: number) =>
+  request<EmptyFolderList>("GET", `/api/libraries/${id}/empty-folders`);
+export const deleteEmptyFolders = (id: number, paths: string[] = []) =>
+  request<{ removed: number; failed: string[] }>(
+    "POST",
+    `/api/libraries/${id}/empty-folders`,
+    { paths },
+  );
 export const revealMediaFile = (id: number) =>
   request<void>("POST", `/api/media-files/${id}/reveal`);
 export const previewCron = (cron: string) =>

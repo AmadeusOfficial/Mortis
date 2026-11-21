@@ -14,6 +14,7 @@ from mortis.agent.client import make_chat_client
 from mortis.agent.loop import ApprovalStore
 from mortis.api.routes import agent as agent_routes
 from mortis.api.routes import data_types as data_type_routes
+from mortis.api.routes import empty_folders as empty_folder_routes
 from mortis.api.routes import files as file_routes
 from mortis.api.routes import images as image_routes
 from mortis.api.routes import items as item_routes
@@ -168,6 +169,7 @@ def create_app(
     app.include_router(settings_routes.router)
     app.include_router(data_type_routes.router)
     app.include_router(library_routes.router)
+    app.include_router(empty_folder_routes.router)
     app.include_router(schedule_routes.router)
     app.include_router(task_routes.router)
     app.include_router(item_routes.router)

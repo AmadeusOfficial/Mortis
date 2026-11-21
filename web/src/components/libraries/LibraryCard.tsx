@@ -13,6 +13,7 @@ import {
   updateLibrary,
 } from "../../api";
 import { ArrangePreviewModal } from "../ArrangePreviewModal";
+import { EmptyFolderModal } from "./EmptyFolderModal";
 import { automationSummary } from "./automation";
 import {
   DataTypeIcon,
@@ -89,6 +90,7 @@ export function LibraryCard({
   const [running, setRunning] = useState<ActionKind | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirmingRescrape, setConfirmingRescrape] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   const toggle = useMutation({
     mutationFn: (isAutoScrape: boolean) =>
@@ -342,6 +344,13 @@ export function LibraryCard({
                   编辑
                 </Menu.Item>
                 <Menu.Item
+                  leftSection={<IconFolder size={14} />}
+                  disabled={running !== null}
+                  onClick={() => setCleaning(true)}
+                >
+                  清理空文件夹
+                </Menu.Item>
+                <Menu.Item
                   leftSection={<IconRefresh size={14} />}
                   disabled={running !== null}
                   onClick={() => setConfirmingRescrape(true)}
@@ -385,6 +394,12 @@ export function LibraryCard({
         }
         onConfirm={() => start.mutate("arrange")}
         confirming={start.isPending}
+      />
+
+      <EmptyFolderModal
+        libraryId={library.id}
+        opened={cleaning}
+        onClose={() => setCleaning(false)}
       />
 
       <Modal
