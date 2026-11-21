@@ -16,6 +16,7 @@ import { useNavigate, useParams } from "react-router";
 import {
   type SortOrder,
   type TaskDetail,
+  type WallItem,
   type WallSort,
   arrangeLibrary,
   fetchLibrary,
@@ -42,6 +43,7 @@ import {
 import { fileUnit, hasShelves, isGroupType, isPluginType, itemUnit, useDataTypes } from "../dataTypes";
 import {
   IconClose,
+  IconFolder,
   IconOrganize,
   IconScan,
   IconScrape,
@@ -62,10 +64,85 @@ const DEFAULT_SORT = "title:asc";
 
 const sortStorageKey = (libraryId: number) => `mortis-wall-sort-${libraryId}`;
 const scrollStorageKey = (libraryId: number) => `mortis-wall-scroll-${libraryId}`;
+const rootStorageKey = (libraryId: number) => `mortis-wall-root-${libraryId}`;
 
 function readSort(libraryId: number): string {
   const saved = window.localStorage.getItem(sortStorageKey(libraryId));
   return SORTS.some((option) => option.value === saved) ? (saved as string) : DEFAULT_SORT;
+}
+
+function readRoot(libraryId: number): string | null {
+  const saved = window.sessionStorage.getItem(rootStorageKey(libraryId));
+  return saved !== null && saved !== "" ? saved : null;
+}
+
+function saveRoot(libraryId: number, root: string | null) {
+  if (root === null) {
+    window.sessionStorage.removeItem(rootStorageKey(libraryId));
+  } else {
+    window.sessionStorage.setItem(rootStorageKey(libraryId), root);
+  }
+}
+
+function pathSegments(path: string): { parts: string[]; sep: string } {
+  const sep = path.includes("\\") ? "\\" : "/";
+  const trimmed = path.replace(/[\\/]+$/, "");
+  if (trimmed === "") {
+    return { parts: [path], sep };
+  }
+  const parts = trimmed.split(/[\\/]+/).filter(Boolean);
+  if (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0])) {
+    return { parts: [`${parts[0]}\\`], sep: "\\" };
+  }
+  return { parts: parts.length > 0 ? parts : [path], sep };
+}
+
+function formatRootLabels(paths: readonly string[]): string[] {
+  const parsed = paths.map(pathSegments);
+  // 先用最后一级文件夹名；重名时先补盘符/首段，再逐步补上级目录消歧义。
+  const labels = parsed.map(({ parts }) => parts[parts.length - 1]);
+  const hasDuplicates = (list: string[]) => new Set(list).size < list.length;
+
+  if (!hasDuplicates(labels)) {
+    return labels;
+  }
+
+  const leafCounts = new Map<string, number>();
+  for (const label of labels) {
+    leafCounts.set(label, (leafCounts.get(label) ?? 0) + 1);
+  }
+
+  const withRoot = parsed.map(({ parts, sep }, index) => {
+    const leaf = labels[index];
+    if ((leafCounts.get(leaf) ?? 0) <= 1 || parts.length <= 1) {
+      return leaf;
+    }
+    return parts.length === 2
+      ? `${parts[0]}${sep}${leaf}`
+      : `${parts[0]}${sep}…${sep}${leaf}`;
+  });
+  if (!hasDuplicates(withRoot)) {
+    return withRoot;
+  }
+
+  let current = [...withRoot];
+  const maxDepth = Math.max(...parsed.map(({ parts }) => parts.length));
+  for (let depth = 2; depth <= maxDepth && hasDuplicates(current); depth += 1) {
+    const counts = new Map<string, number>();
+    for (const label of current) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    current = parsed.map(({ parts, sep }, index) => {
+      if ((counts.get(current[index]) ?? 0) <= 1) {
+        return current[index];
+      }
+      if (depth >= parts.length) {
+        return paths[index];
+      }
+      return parts.slice(-depth).join(sep);
+    });
+  }
+  return current;
 }
 
 type ActionKind = "organize" | "scrape" | "arrange";
@@ -167,6 +244,18 @@ export function LibraryWallPage() {
     saveView(id, value);
     setSavedView({ id, value });
   };
+  const [savedRoot, setSavedRoot] = useState(() => ({ id, value: readRoot(id) }));
+  const storedRoot = savedRoot.id === id ? savedRoot.value : readRoot(id);
+  const setRootFilter = (value: string | null) => {
+    saveRoot(id, value);
+    setSavedRoot({ id, value });
+  };
+  const paths = libData?.paths ?? [];
+  const hasMultiRoots = paths.length > 1;
+  const activeRoot =
+    view === "wall" && hasMultiRoots && storedRoot !== null && paths.includes(storedRoot)
+      ? storedRoot
+      : null;
   const [savedShelves, setSavedShelves] = useState(() => ({ id, value: readShelfTags(id) }));
   const shelfIds = savedShelves.id === id ? savedShelves.value : readShelfTags(id);
   const setShelfIds = (value: number[]) => {
@@ -274,7 +363,35 @@ export function LibraryWallPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const items = wall.data ?? [];
+  const allItems = useMemo<WallItem[]>(() => wall.data ?? [], [wall.data]);
+  const rootOptions = useMemo(() => {
+    if (!hasMultiRoots) {
+      return [];
+    }
+    const labels = formatRootLabels(paths);
+    const countByPath = new Map<string, number>(paths.map((path) => [path, 0]));
+    for (const item of allItems) {
+      for (const root of new Set(item.roots)) {
+        const prev = countByPath.get(root);
+        if (prev !== undefined) {
+          countByPath.set(root, prev + 1);
+        }
+      }
+    }
+    return paths.map((path, index) => ({
+      path,
+      label: labels[index],
+      count: countByPath.get(path) ?? 0,
+    }));
+  }, [hasMultiRoots, paths, allItems]);
+
+  const items = useMemo(
+    () =>
+      activeRoot === null
+        ? allItems
+        : allItems.filter((item) => item.roots.includes(activeRoot)),
+    [allItems, activeRoot],
+  );
   const counts = useMemo(() => {
     let scraped = 0;
     let unscraped = 0;
@@ -318,7 +435,7 @@ export function LibraryWallPage() {
   }, [items, statusFilter]);
 
   useEffect(() => {
-    if (view !== "wall" || !wall.isSuccess || restoredScrollId.current === id) {
+    if (view !== "wall" || libData === undefined || !wall.isSuccess || restoredScrollId.current === id) {
       return;
     }
     const raw = window.sessionStorage.getItem(scrollStorageKey(id));
@@ -330,7 +447,7 @@ export function LibraryWallPage() {
       restoredScrollId.current = id;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [id, view, wall.isSuccess]);
+  }, [id, view, libData, wall.isSuccess]);
 
   useEffect(() => {
     if (view !== "wall") {
@@ -359,13 +476,13 @@ export function LibraryWallPage() {
   const scrapedTotal =
     typeof libData?.scraped_count === "number"
       ? libData.scraped_count
-      : query === "" && wall.isSuccess
+      : query === "" && activeRoot === null && tagFilter === null && wall.isSuccess
         ? counts.scraped
         : null;
   const issueTotal =
     typeof libData?.issue_count === "number"
       ? libData.issue_count
-      : query === "" && wall.isSuccess
+      : query === "" && activeRoot === null && tagFilter === null && wall.isSuccess
         ? counts.issue
         : 0;
   const pendingCount =
@@ -623,6 +740,46 @@ export function LibraryWallPage() {
             </>
           )}
         </div>
+
+        {view === "wall" && hasMultiRoots && (
+          <div className={styles.rootBar} role="group" aria-label="按目录筛选">
+            <span className={styles.rootBarLabel}>
+              <IconFolder size={13} />
+              目录
+            </span>
+            <div className={styles.chips}>
+              <FilterChip
+                active={activeRoot === null}
+                count={allItems.length}
+                onClick={() => {
+                  selectAnchor.current = null;
+                  setRootFilter(null);
+                }}
+              >
+                全部目录
+              </FilterChip>
+              {rootOptions.map((option) => (
+                <FilterChip
+                  key={option.path}
+                  active={activeRoot === option.path}
+                  count={option.count}
+                  tooltip={<span className="mo-mono">{option.path}</span>}
+                  onClick={() => {
+                    selectAnchor.current = null;
+                    setRootFilter(option.path);
+                  }}
+                >
+                  <span className={styles.rootChipLabel}>{option.label}</span>
+                </FilterChip>
+              ))}
+            </div>
+            {activeRoot !== null && (
+              <code className={`${styles.activeRootPath} mo-mono`} title={activeRoot}>
+                {activeRoot}
+              </code>
+            )}
+          </div>
+        )}
       </div>
 
       {view === "shelves" && genres.isPending && <Loader size="sm" />}
@@ -642,6 +799,7 @@ export function LibraryWallPage() {
           unit={unit}
           onViewAll={(tag) => {
             setStatusFilter("all");
+            setRootFilter(null);
             setSearch("");
             setTagFilter(tag);
             setView("wall");
@@ -670,10 +828,21 @@ export function LibraryWallPage() {
       {view === "wall" && wall.isSuccess && wall.data.length > 0 && filteredItems.length === 0 && (
         <div className={styles.emptyBox}>
           <Text c="var(--mo-dim)" size="sm">
-            当前筛选下没有条目。
+            {items.length === 0 && activeRoot !== null && query === "" && tagFilter === null
+              ? "这个目录下还没有条目。"
+              : "当前筛选下没有条目。"}
           </Text>
-          <Button size="xs" variant="default" onClick={() => setStatusFilter("all")}>
-            查看全部
+          <Button
+            size="xs"
+            variant="default"
+            onClick={() => {
+              if (items.length === 0 && activeRoot !== null) {
+                setRootFilter(null);
+              }
+              setStatusFilter("all");
+            }}
+          >
+            {items.length === 0 && activeRoot !== null ? "查看全部目录" : "查看全部"}
           </Button>
         </div>
       )}

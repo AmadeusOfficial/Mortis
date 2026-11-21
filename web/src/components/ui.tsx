@@ -1,4 +1,4 @@
-import { Group, Stack, Text, Title } from "@mantine/core";
+import { Group, Stack, Text, Title, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export type Tone = "neutral" | "accent" | "ok" | "warn" | "bad";
@@ -53,20 +53,36 @@ export function SourceBadge({ source, label }: { source: string; label?: string 
 export function FilterChip({
   active,
   count,
+  tooltip,
   onClick,
   children,
 }: {
   active: boolean;
   count?: number;
+  tooltip?: ReactNode;
   onClick: () => void;
   children: ReactNode;
 }) {
-  return (
-    <button type="button" className="mo-filter" data-active={active} aria-pressed={active} onClick={onClick}>
+  const button = (
+    <button
+      type="button"
+      className="mo-filter"
+      data-active={active}
+      aria-pressed={active}
+      onClick={onClick}
+    >
       {children}
       {count !== undefined && <span className="mo-mono">{count}</span>}
     </button>
   );
+  if (tooltip !== undefined) {
+    return (
+      <Tooltip label={tooltip} withArrow openDelay={200}>
+        {button}
+      </Tooltip>
+    );
+  }
+  return button;
 }
 
 export function PageHeader({

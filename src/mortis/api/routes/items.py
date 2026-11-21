@@ -63,6 +63,8 @@ class WallItem(BaseModel):
     cover_mode: Literal["auto", "single", "grid"] | None = None
     """Galgame 合集的封面方式。电影系列为空，继续用 poster_url。"""
     cover_urls: list[str | None] = []
+    roots: list[str] = []
+    """文件所在的库目录，按库里登记的顺序；合集和剧集算上里面每一部、每一集的文件。"""
 
 
 class FieldOut(BaseModel):

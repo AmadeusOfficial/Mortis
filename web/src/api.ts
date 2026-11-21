@@ -547,6 +547,7 @@ export interface WallItem {
   // Galgame 合集的封面方式。电影系列为空，继续用 poster_url。
   cover_mode?: "auto" | "single" | "grid" | null;
   cover_urls?: (string | null)[];
+  roots: string[];
 }
 
 export interface PersonValue {

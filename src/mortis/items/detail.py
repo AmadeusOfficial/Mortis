@@ -15,6 +15,7 @@ from mortis.db.models import (
     ItemSourceRecord,
     ItemTag,
     Library,
+    LibraryPath,
     MediaFile,
     Person,
     Tag,
@@ -142,6 +143,7 @@ def wall_rows(
     latest = task_repo.latest_scrape_tasks(session, ids)
     manual = manual_ids(session, items)
     covers = covers_for(session, items)
+    roots = roots_for(session, items)
     return [
         {
             "id": item.id,
@@ -156,9 +158,64 @@ def wall_rows(
             "collection_id": item.parent_id if item.kind == "work" else None,
             "cover_mode": covers.get(item.id, {}).get("cover_mode"),
             "cover_urls": covers.get(item.id, {}).get("cover_urls", []),
+            "roots": roots.get(item.id, []),
         }
         for item in items
     ]
+
+
+def roots_for(session: Session, items: list[Item]) -> dict[int, list[str]]:
+    """每个条目的视频、字幕或游戏文件夹落在哪些库目录下，含合集、季和集里的文件。
+
+    目录按库里登记的顺序排列；不在任何库目录下的文件不算。
+    """
+    if not items:
+        return {}
+    library_ids = {item.library_id for item in items}
+    roots = list(
+        session.scalars(
+            select(LibraryPath.path)
+            .where(LibraryPath.library_id.in_(library_ids))
+            .order_by(LibraryPath.id)
+        )
+    )
+    keys = sorted(((_folder_key(root), root) for root in roots), key=lambda pair: -len(pair[0]))
+    parents: dict[int, int | None] = {
+        item_id: parent_id
+        for item_id, parent_id in session.execute(
+            select(Item.id, Item.parent_id).where(Item.library_id.in_(library_ids))
+        )
+    }
+    wanted = {item.id for item in items}
+    found: dict[int, set[str]] = {}
+    files = session.execute(
+        select(MediaFile.item_id, MediaFile.path).where(
+            MediaFile.library_id.in_(library_ids),
+            MediaFile.item_id.is_not(None),
+            MediaFile.file_kind.in_(("video", "subtitle", "game")),
+        )
+    )
+    for item_id, path in files:
+        target = _folder_key(path)
+        root = next((root for key, root in keys if target.startswith(key)), None)
+        if root is None:
+            continue
+        current: int | None = item_id
+        # 合集或剧、季、集最多三层，多走一步防止坏数据成环。
+        for _ in range(4):
+            if current is None:
+                break
+            if current in wanted:
+                found.setdefault(current, set()).add(root)
+            current = parents.get(current)
+    order = {root: index for index, root in enumerate(roots)}
+    return {item_id: sorted(hit, key=order.__getitem__) for item_id, hit in found.items()}
+
+
+def _folder_key(path: str) -> str:
+    """比较用的路径，末尾带分隔符，免得「游戏」匹配到「游戏2」。"""
+    key = os.path.normcase(os.path.normpath(path))
+    return key if key.endswith(os.sep) else key + os.sep
 
 
 def _issue_of(task: Task | None) -> str | None:
