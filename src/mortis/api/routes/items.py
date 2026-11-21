@@ -13,6 +13,13 @@ from mortis.items import collections as collection_service
 from mortis.items.delete import Expected, check_deletable, delete_item, plan_delete
 from mortis.items.detail import item_detail, wall_rows
 from mortis.items.edit import ItemError, edit_fields, set_locks
+from mortis.items.exclude import (
+    ExcludePlan,
+    exclude_item,
+    exclude_media_file,
+    plan_item,
+    plan_media_file,
+)
 from mortis.items.identity import ExternalRef, MovieRef, is_manual
 from mortis.items.images import choose_image, fetch_preview, image_choices, upload_image
 from mortis.items.matching import (
@@ -426,9 +433,7 @@ def list_library_collections(library_id: int, session: SessionDep) -> list[Colle
     ]
 
 
-@router.get(
-    "/libraries/{library_id}/collection-suggestions", response_model=list[SuggestionOut]
-)
+@router.get("/libraries/{library_id}/collection-suggestions", response_model=list[SuggestionOut])
 def collection_suggestions(
     library_id: int,
     session: SessionDep,
@@ -706,6 +711,62 @@ def remove_item(
     return Deleted(deleted=True, library_id=library_id)
 
 
+class ExcludePreview(BaseModel):
+    library_id: int
+    data_type_id: str
+    type_name: str
+    title: str | None
+    entries: list[str]
+    """要加进这种数据类型「跳过的目录」的完整路径。"""
+    file_count: int
+    """会从库里去掉的文件记录数，磁盘上的文件不动。"""
+    reasons: list[str]
+
+
+class ExcludeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[str]
+    """预览里确认过的路径，执行时重新算出来的必须一样。"""
+
+
+class Excluded(BaseModel):
+    excluded: bool
+    library_id: int
+
+
+def _exclude_preview(plan: ExcludePlan) -> ExcludePreview:
+    return ExcludePreview(
+        library_id=plan.library_id,
+        data_type_id=plan.data_type_id,
+        type_name=plan.type_name,
+        title=plan.title,
+        entries=plan.entries,
+        file_count=len(plan.file_ids),
+        reasons=plan.reasons,
+    )
+
+
+@router.get("/items/{item_id}/exclude", response_model=ExcludePreview)
+def preview_exclude_item(item_id: int, session: SessionDep) -> ExcludePreview:
+    return _exclude_preview(plan_item(session, get_item(session, item_id)))
+
+
+@router.post("/items/{item_id}/exclude", response_model=Excluded)
+def exclude_work(
+    item_id: int, body: ExcludeRequest, session: SessionDep, services: ServicesDep
+) -> Excluded:
+    library_id = exclude_item(
+        session,
+        get_item(session, item_id),
+        body.entries,
+        config_store=services.config_store,
+        locks=services.locks,
+        data_dir=services.data_dir,
+    )
+    return Excluded(excluded=True, library_id=library_id)
+
+
 def _video_extensions(services: Services) -> frozenset[str]:
     config = services.config_store.load_config()
     return frozenset(ext.lower() for ext in config.files.video_extensions)
@@ -976,6 +1037,32 @@ def bind_media(
     else:
         raise ItemError("要给出 TMDB 编号或来源编号")
     return Bound(item_id=item.id, task_id=enqueue_scrape(session, runner, item.id, force=False))
+
+
+def _media_file(session: Session, file_id: int) -> MediaFile:
+    media_file = session.get(MediaFile, file_id)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="没有这个文件")
+    return media_file
+
+
+@router.get("/media-files/{file_id}/exclude", response_model=ExcludePreview)
+def preview_exclude_media_file(file_id: int, session: SessionDep) -> ExcludePreview:
+    return _exclude_preview(plan_media_file(session, _media_file(session, file_id)))
+
+
+@router.post("/media-files/{file_id}/exclude", response_model=Excluded)
+def exclude_unmatched(
+    file_id: int, body: ExcludeRequest, session: SessionDep, services: ServicesDep
+) -> Excluded:
+    library_id = exclude_media_file(
+        session,
+        _media_file(session, file_id),
+        body.entries,
+        config_store=services.config_store,
+        locks=services.locks,
+    )
+    return Excluded(excluded=True, library_id=library_id)
 
 
 @router.post("/media-files/{file_id}/manual", response_model=ManualCreated)
