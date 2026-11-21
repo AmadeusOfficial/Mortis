@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from mortis.config.models import DEFAULT_SUBTITLE_EXTENSIONS, DEFAULT_VIDEO_EXTENSIONS
-from mortis.organize.scan import ScanResult, scan_paths
+from mortis.organize.scan import ScanResult, scan_paths, scan_shows
 
 
 def _touch(root: Path, *relative: str) -> None:
@@ -96,6 +96,30 @@ def test_skipped_folders(tmp_path: Path) -> None:
     )
     names = set(_by_name(_scan(tmp_path, skip=["MAKEMKV", "custom"])))
     assert names == {"makemkv2", "Movie (2000)"}
+
+
+def test_full_path_skips_one_folder_or_file(tmp_path: Path) -> None:
+    _touch(
+        tmp_path,
+        "A/Same/a.mkv",
+        "B/Same/b.mkv",
+        "Loose.2001.mkv",
+        "Kept.2002.mkv",
+    )
+    skip = [str(tmp_path / "A" / "Same").lower(), str(tmp_path / "Loose.2001.mkv")]
+    assert set(_by_name(_scan(tmp_path, skip=skip))) == {"Same", "Kept.2002"}
+    assert _scan(tmp_path, skip=skip).movies[1].folder == str(tmp_path / "B" / "Same")
+
+
+def test_shows_skip_full_paths(tmp_path: Path) -> None:
+    _touch(tmp_path, "剧A/S01E01.mkv", "剧B/S01E01.mkv", "剧B/Season 1/S01E02.mkv")
+    result = scan_shows(
+        [str(tmp_path)],
+        video_extensions=DEFAULT_VIDEO_EXTENSIONS,
+        subtitle_extensions=DEFAULT_SUBTITLE_EXTENSIONS,
+        skip_folders=[str(tmp_path / "剧A"), str(tmp_path / "剧B" / "Season 1" / "S01E02.mkv")],
+    )
+    assert _by_name(result) == {"剧B": ["S01E01.mkv"]}
 
 
 def test_missing_root_is_an_error_not_a_crash(tmp_path: Path) -> None:

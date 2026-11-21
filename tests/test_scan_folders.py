@@ -51,6 +51,19 @@ def test_skips_configured_and_hidden_folders(tmp_path: Path) -> None:
     assert names == ["游戏A", "游戏B"]
 
 
+def test_full_path_skips_only_that_folder(tmp_path: Path) -> None:
+    _mkdir(tmp_path, "A/同名", "B/同名", "游戏C")
+    skip = [str(tmp_path / "游戏C").upper()]
+    assert [movie.name for movie in _scan(tmp_path, skip=skip).movies] == ["A", "B"]
+
+    _game(tmp_path / "A" / "同名", "a.exe", "a.dat")
+    _game(tmp_path / "B" / "同名", "a.exe", "a.dat")
+    result = scan_folders(
+        [str(tmp_path)], skip_folders=[str(tmp_path / "A" / "同名") + "\\"], recursive=True
+    )
+    assert [movie.folder for movie in result.movies] == [str(tmp_path / "B" / "同名")]
+
+
 def test_missing_root_is_an_error_not_a_crash(tmp_path: Path) -> None:
     result = scan_folders([str(tmp_path / "没有")], skip_folders=[])
     assert result.movies == []

@@ -25,7 +25,7 @@ from mortis.config.models import PluginTypeConfig
 from mortis.config.store import ConfigStore
 from mortis.config.types import type_config
 from mortis.db.models import DataType, Item, Library, MediaFile, Task
-from mortis.organize.scan import MAX_GAME_SCAN_DEPTH, SKIP_DIR_NAMES, directory_is_game
+from mortis.organize.scan import MAX_GAME_SCAN_DEPTH, SkipRules, directory_is_game
 from mortis.tasks import repo
 
 logger = logging.getLogger(__name__)
@@ -282,22 +282,25 @@ def _norm(path: str) -> str:
     return os.path.normcase(os.path.normpath(path))
 
 
-def _skipped(path: str, roots: Iterable[str], skip: frozenset[str]) -> bool:
+def _skipped(path: str, roots: Iterable[str], skip: SkipRules) -> bool:
+    if skip.covers(path):
+        return True
     for root in roots:
         if _norm(path).startswith(_norm(root) + os.sep):
             relative = os.path.relpath(path, root)
-            return any(part.casefold() in skip for part in relative.split(os.sep)[:-1])
+            return any(part.casefold() in skip.names for part in relative.split(os.sep)[:-1])
     return False
 
 
 def _has_unknown_file(
-    folder: str, known: set[str], extensions: frozenset[str], skip: frozenset[str]
+    folder: str, known: set[str], extensions: frozenset[str], skip: SkipRules
 ) -> bool:
     for current, dirs, files in os.walk(folder):
-        dirs[:] = [name for name in dirs if name.casefold() not in skip]
+        dirs[:] = [name for name in dirs if not skip.folder(os.path.join(current, name))]
         for name in files:
-            if os.path.splitext(name)[1].lower() in extensions:
-                if _norm(os.path.join(current, name)) not in known:
+            path = os.path.join(current, name)
+            if os.path.splitext(name)[1].lower() in extensions and not skip.path(path):
+                if _norm(path) not in known:
                     return True
     return False
 
@@ -319,7 +322,7 @@ def _inside_known_game(path: str, known: set[str]) -> bool:
     return any(norm == game or norm.startswith(game + os.sep) for game in known)
 
 
-def _has_new_game(folder: str, known: set[str], skip: frozenset[str], depth: int) -> bool:
+def _has_new_game(folder: str, known: set[str], skip: SkipRules, depth: int) -> bool:
     if depth > MAX_GAME_SCAN_DEPTH or _norm(folder) in known:
         return False
     if directory_is_game(folder):
@@ -336,8 +339,7 @@ def _has_new_game(folder: str, known: set[str], skip: frozenset[str], depth: int
     except OSError:
         return False
     for entry in entries:
-        name = entry.name
-        if name.casefold() in skip or name.startswith((".", "$")):
+        if skip.folder(entry.path) or entry.name.startswith((".", "$")):
             continue
         if _has_new_game(entry.path, known, skip, depth + 1):
             return True
@@ -345,7 +347,7 @@ def _has_new_game(folder: str, known: set[str], skip: frozenset[str], depth: int
 
 
 def _recursive_game_change(
-    changed: set[str], roots: list[str], known: set[str], skip: frozenset[str]
+    changed: set[str], roots: list[str], known: set[str], skip: SkipRules
 ) -> bool:
     """递归打开时，更深的新游戏要扫；已经入库的游戏里写存档不算。"""
     for path in changed:
@@ -380,7 +382,7 @@ def needs_scan(
     config = config_store.load_config()
     roots = [row.path for row in library.paths]
     section = type_config(config, library.data_type_id)
-    skip = SKIP_DIR_NAMES | frozenset(name.casefold() for name in section.skip_folders)
+    skip = SkipRules.build(section.skip_folders)
     known = {
         _norm(path)
         for path in session.scalars(
@@ -396,7 +398,7 @@ def needs_scan(
         for path in changed:
             if os.path.dirname(_norm(path)) not in top:
                 continue
-            exists = os.path.isdir(path)
+            exists = os.path.isdir(path) and not skip.folder(path)
             if exists != (_norm(path) in known):
                 return True
         return False
@@ -411,9 +413,7 @@ def needs_scan(
             if os.path.splitext(path)[1].lower() in extensions and key not in known:
                 return True
         elif os.path.isdir(path):
-            if os.path.basename(path).casefold() not in skip and _has_unknown_file(
-                path, known, extensions, skip
-            ):
+            if not skip.folder(path) and _has_unknown_file(path, known, extensions, skip):
                 return True
         elif key in known or any(other.startswith(key + os.sep) for other in known):
             return True

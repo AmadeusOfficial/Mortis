@@ -162,7 +162,7 @@ export function ScanFields({
       </SettingRow>
       <SettingRow
         label="跳过的目录"
-        hint="一行一个目录名，扫描时整个目录不看"
+        hint="一行一个目录名，扫描时整个目录不看；也可以填完整路径，只跳过那一个目录或文件"
         htmlFor={skipId}
         hintId={skipHintId}
         align="start"

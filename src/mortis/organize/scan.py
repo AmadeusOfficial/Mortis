@@ -59,11 +59,57 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
 
 
+def norm_path(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path))
+
+
+def is_path_entry(entry: str) -> bool:
+    """跳过列表里含盘符或分隔符的一项是完整路径，其余是文件夹名。"""
+    return "/" in entry or "\\" in entry or (len(entry) >= 2 and entry[1] == ":")
+
+
+@dataclass(frozen=True)
+class SkipRules:
+    """扫描跳过什么：按名字跳过的文件夹，和按完整路径跳过的单个目录或文件。"""
+
+    names: frozenset[str]
+    paths: frozenset[str] = frozenset()
+
+    @classmethod
+    def build(cls, entries: Iterable[str]) -> SkipRules:
+        names = set(SKIP_DIR_NAMES)
+        paths: set[str] = set()
+        for raw in entries:
+            entry = raw.strip()
+            if not entry:
+                continue
+            if is_path_entry(entry):
+                paths.add(norm_path(entry))
+            else:
+                names.add(entry.casefold())
+        return cls(frozenset(names), frozenset(paths))
+
+    def path(self, path: str) -> bool:
+        return bool(self.paths) and norm_path(path) in self.paths
+
+    def folder(self, path: str) -> bool:
+        return os.path.basename(path).casefold() in self.names or self.path(path)
+
+    def covers(self, path: str) -> bool:
+        """这个路径就是某个按路径跳过的项，或者在它下面。"""
+        if not self.paths:
+            return False
+        key = norm_path(path)
+        return any(
+            key == item or key.startswith(item.rstrip(os.sep) + os.sep) for item in self.paths
+        )
+
+
 @dataclass
 class _Walk:
     videos: frozenset[str]
     subtitles: frozenset[str]
-    skip: frozenset[str]
+    skip: SkipRules
     result: ScanResult
 
 
@@ -132,6 +178,8 @@ def _walk(folder: str, is_root: bool, walk: _Walk) -> None:
     bases: dict[str, str] = {}
     subtitles: list[str] = []
     for entry in files:
+        if walk.skip.path(entry.path):
+            continue
         stem, ext = _split(entry.name)
         if ext in walk.videos and not _SAMPLE.search(stem) and not _TRAILER.search(stem):
             key = stack_key(stem)
@@ -140,11 +188,13 @@ def _walk(folder: str, is_root: bool, walk: _Walk) -> None:
         elif ext in walk.subtitles:
             subtitles.append(entry.path)
     for entry in dirs:
-        if entry.name.casefold() in SUBTITLE_DIR_NAMES:
+        if entry.name.casefold() in SUBTITLE_DIR_NAMES and not walk.skip.path(entry.path):
             listed_subs = _list(entry.path, walk)
             if listed_subs is not None:
                 subtitles += [
-                    sub.path for sub in listed_subs[1] if _split(sub.name)[1] in walk.subtitles
+                    sub.path
+                    for sub in listed_subs[1]
+                    if _split(sub.name)[1] in walk.subtitles and not walk.skip.path(sub.path)
                 ]
 
     if groups and not is_root and len(groups) == 1:
@@ -167,10 +217,9 @@ def _walk(folder: str, is_root: bool, walk: _Walk) -> None:
             )
 
     for entry in dirs:
-        lowered = entry.name.casefold()
         if (
-            lowered in walk.skip
-            or lowered in SUBTITLE_DIR_NAMES
+            walk.skip.folder(entry.path)
+            or entry.name.casefold() in SUBTITLE_DIR_NAMES
             or entry.name.startswith((".", "$"))
         ):
             continue
@@ -183,7 +232,7 @@ def _new_walk(
     return _Walk(
         videos=frozenset(ext.lower() for ext in video_extensions),
         subtitles=frozenset(ext.lower() for ext in subtitle_extensions),
-        skip=SKIP_DIR_NAMES | {name.casefold() for name in skip_folders},
+        skip=SkipRules.build(skip_folders),
         result=ScanResult(),
     )
 
@@ -210,14 +259,15 @@ def _collect(folder: str, walk: _Walk, videos: list[str], subtitles: list[str]) 
         return
     dirs, files = listed
     for entry in files:
+        if walk.skip.path(entry.path):
+            continue
         stem, ext = _split(entry.name)
         if ext in walk.videos and not _SAMPLE.search(stem) and not _TRAILER.search(stem):
             videos.append(entry.path)
         elif ext in walk.subtitles:
             subtitles.append(entry.path)
     for entry in dirs:
-        lowered = entry.name.casefold()
-        if lowered in walk.skip or entry.name.startswith((".", "$")):
+        if walk.skip.folder(entry.path) or entry.name.startswith((".", "$")):
             continue
         _collect(entry.path, walk, videos, subtitles)
 
@@ -238,12 +288,15 @@ def scan_shows(
                 walk.result.errors.append(f"目录不存在或无法访问：{root}")
             continue
         dirs, files = listed
-        loose = [entry.name for entry in files if _split(entry.name)[1] in walk.videos]
+        loose = [
+            entry.name
+            for entry in files
+            if _split(entry.name)[1] in walk.videos and not walk.skip.path(entry.path)
+        ]
         if loose:
             walk.result.errors.append(f"库目录 {root} 下有 {len(loose)} 个视频没放在剧目录里，跳过")
         for entry in dirs:
-            lowered = entry.name.casefold()
-            if lowered in walk.skip or entry.name.startswith((".", "$")):
+            if walk.skip.folder(entry.path) or entry.name.startswith((".", "$")):
                 continue
             videos: list[str] = []
             subtitles: list[str] = []
@@ -296,8 +349,7 @@ def _descend_games(folder: str, walk: _Walk, depth: int) -> None:
         return
     dirs, _files = listed
     for entry in dirs:
-        lowered = entry.name.casefold()
-        if lowered in walk.skip or entry.name.startswith((".", "$")):
+        if walk.skip.folder(entry.path) or entry.name.startswith((".", "$")):
             continue
         try:
             is_dir = entry.is_dir(follow_symlinks=False)
@@ -333,8 +385,7 @@ def scan_folders(
             continue
         dirs, _files = listed
         for entry in dirs:
-            lowered = entry.name.casefold()
-            if lowered in walk.skip or entry.name.startswith((".", "$")):
+            if walk.skip.folder(entry.path) or entry.name.startswith((".", "$")):
                 continue
             _append_game(walk, entry.path, entry.name)
     return walk.result

@@ -317,13 +317,48 @@ def test_needs_scan_rules(app: FastAPI, folder: Path, library_id: int) -> None:
         assert check(known.parent) is False
 
 
+def test_needs_scan_ignores_full_path_skips(app: FastAPI, folder: Path, library_id: int) -> None:
+    excluded = folder / "排除的"
+    other = folder / "别处" / "排除的"
+    for path in (excluded, other):
+        path.mkdir(parents=True)
+        (path / "a.mkv").write_bytes(b"x")
+    (folder / "单个.mkv").write_bytes(b"x")
+    store = app.state.config_store
+    movie = store.load_config().types.movie
+    store.save_section(
+        "types.movie",
+        movie.model_copy(update={"skip_folders": [str(excluded), str(folder / "单个.mkv")]}),
+    )
+    with app.state.session_factory() as session:
+
+        def check(*paths: Path) -> bool:
+            return needs_scan(session, store, library_id, {str(path) for path in paths})
+
+        assert check(excluded) is False
+        assert check(excluded / "a.mkv") is False
+        assert check(folder / "单个.mkv") is False
+        assert check(other / "a.mkv") is True
+
+
+def test_game_library_ignores_full_path_skips(app: FastAPI, tmp_path: Path) -> None:
+    root = tmp_path / "游戏"
+    (root / "排除的游戏").mkdir(parents=True)
+    with app.state.session_factory() as session:
+        library_id = create_library(
+            session, name="游戏", data_type_id="galgame", paths=[str(root)]
+        ).id
+    store = app.state.config_store
+    store.save_section("types.galgame", PluginTypeConfig(skip_folders=[str(root / "排除的游戏")]))
+    with app.state.session_factory() as session:
+        assert needs_scan(session, store, library_id, {str(root / "排除的游戏")}) is False
+
+
 def test_recursive_game_library_notices_nested_games(app: FastAPI, tmp_path: Path) -> None:
     root = tmp_path / "adv"
     root.mkdir()
     with app.state.session_factory() as session:
-        library = create_library(
-            session, name="游戏", data_type_id="galgame", paths=[str(root)]
-        )
+        library = create_library(session, name="游戏", data_type_id="galgame", paths=[str(root)])
         library_id = library.id
     store = app.state.config_store
     series = root / "炎孕系列"
