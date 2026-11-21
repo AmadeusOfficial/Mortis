@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 SVG = ROOT / "web" / "public" / "favicon.svg"
 ICO = ROOT / "assets" / "app.ico"
-SIZES = (16, 24, 32, 48, 64, 256)
+SIZES = (16, 20, 24, 32, 40, 48, 64, 72, 96, 128, 256)
 
 
 def render(svg: str, sizes: tuple[int, ...]) -> dict[int, bytes]:
