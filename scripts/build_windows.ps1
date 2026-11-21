@@ -37,7 +37,17 @@ if ($Code -ne 0) { throw "冒烟检查失败" }
 
 $Zip = Join-Path $Dist "Mortis-v$Version-windows-x64.zip"
 Remove-Item -Force $Zip, (Join-Path $Dist "SHA256SUMS") -ErrorAction SilentlyContinue
-Compress-Archive -Path $App -DestinationPath $Zip
+# 冒烟检查的后端刚退出时，杀毒软件或进程收尾可能还占着文件，隔一会儿再试。
+for ($attempt = 1; ; $attempt++) {
+    try {
+        Compress-Archive -Path $App -DestinationPath $Zip -Force
+        break
+    } catch {
+        if ($attempt -ge 5) { throw }
+        Write-Output "压缩时文件被占用，3 秒后重试（第 $attempt 次）"
+        Start-Sleep -Seconds 3
+    }
+}
 $Hash = (Get-FileHash -Algorithm SHA256 $Zip).Hash.ToLower()
 [IO.File]::WriteAllText((Join-Path $Dist "SHA256SUMS"), "$Hash  $(Split-Path -Leaf $Zip)`n")
 
