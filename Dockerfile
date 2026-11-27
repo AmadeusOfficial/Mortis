@@ -24,10 +24,7 @@ RUN pip install . && rm -rf /app/src /app/build /app/*.egg-info
 
 # --- 最终镜像 ---
 FROM base
-# tzdata：定时扫描的 cron 按本地时间算，slim 镜像默认没有时区数据。
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata \
-    && rm -rf /var/lib/apt/lists/*
+# 不再 apt-get：python:3.14-slim 自带 tzdata，Asia/Shanghai 靠 TZ 环境变量直接生效。
 COPY plugins ./plugins
 COPY --from=web-builder /app/web/dist ./web/dist
 

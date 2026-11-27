@@ -7,8 +7,10 @@ services:
     # Windows 的 Docker Desktop 上文件属主不按这一项走，可以整行删掉。
     user: "${UID:-1000}:${GID:-1000}"
     # 只绑宿主机回环，和「只服务这台电脑」一致。要给局域网里的其他设备用，改成 "8100:8100"。
+    # 宿主机的 8100 被别的程序占着（Windows 上有时会被系统保留）时，用环境变量换一个：
+    #   MORTIS_PUBLISH=127.0.0.1:8200 docker compose up -d
     ports:
-      - "127.0.0.1:8100:8100"
+      - "${MORTIS_PUBLISH:-127.0.0.1:8100}:8100"
     volumes:
       # 数据库、图片、日志、设置、插件都在这里，备份就备份这个目录。
       - ./data:/data
@@ -23,7 +25,8 @@ services:
       MORTIS_PLUGINS_DIR: /app/plugins
       # NFS/CIFS 网络盘、Docker Desktop 的绑定挂载收不到系统目录通知时打开，
       # 改成按间隔比对文件：「发现新文件就整理」的延迟会变成几十秒。
-      # MORTIS_WATCH_POLLING: "1"
+      # 用环境变量打开：MORTIS_WATCH_POLLING=1 docker compose up -d
+      MORTIS_WATCH_POLLING: "${MORTIS_WATCH_POLLING:-0}"
     restart: unless-stopped
     healthcheck:
       test:

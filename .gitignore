@@ -224,6 +224,8 @@ __marimo__/
 /docs-internal/
 .superpowers/
 .dev-data/
+# Docker 版的数据目录（compose 里 bind 到容器的 /data）
+/data/
 web/node_modules/
 web/dist/
 *.local.toml
