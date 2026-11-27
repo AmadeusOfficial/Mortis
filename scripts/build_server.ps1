@@ -37,6 +37,7 @@ $ErrorActionPreference = "Continue"
     --collect-submodules mortis `
     --collect-submodules uvicorn `
     --collect-submodules alembic `
+    --collect-submodules watchdog `
     --copy-metadata mortis `
     --exclude-module playwright `
     --exclude-module pytest `

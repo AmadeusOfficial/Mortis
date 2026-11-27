@@ -114,7 +114,12 @@ def create_app(
     )
     scheduler = schedule.Scheduler(session_factory, runner.wake, interval=schedule_interval)
     watcher = watch.WatchManager(
-        session_factory, config_store, runner.wake, debounce=watch_debounce, retry=watch_retry
+        session_factory,
+        config_store,
+        runner.wake,
+        debounce=watch_debounce,
+        retry=watch_retry,
+        polling=resolved.watch_polling,
     )
     automation = start_worker if start_automation is None else start_automation
 

@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     web_dist: Path | None = Field(default_factory=default_web_dist)
     plugins_dir: Path | None = Field(default_factory=default_plugins_dir)
     """程序自带的插件目录。数据目录下的 plugins 另外加载，同 id 时覆盖这里的。"""
+    watch_polling: bool = False
+    """收不到系统目录通知时按间隔比对文件。NFS/CIFS 网络盘、Docker Desktop 的绑定挂载要打开。"""
 
     @field_validator("data_dir", mode="before")
     @classmethod

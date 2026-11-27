@@ -1,25 +1,29 @@
-"""发现新文件就整理：用 ReadDirectoryChangesW 等目录变动通知，不轮询文件。
+"""发现新文件就整理：用 watchdog 监听目录变动，网络盘和收不到系统通知的挂载改轮询。
 
 莫提斯自己整理、重命名、写 NFO 和图片也会让目录变动。这里不按时间窗口忽略，而是对账：
 防抖到点后把变动过的路径和库里记的文件比，只有出现库里没有的视频或字幕、
 或者库里记的文件不见了，才排扫描。整理把文件改名后会同时改库里的路径，所以不会再触发；
 库里还有相关任务在排队或在跑时先不判断，等它们结束再对账，免得读到改了一半的库。
+
+Windows 走 ReadDirectoryChangesW，Linux 走 inotify，macOS 走 FSEvents，都是 watchdog 里现成的；
+NFS/CIFS 网络盘和 Docker Desktop 的绑定挂载收不到系统通知，这时用 PollingObserver 按间隔比对。
 """
 
-import ctypes
 import json
 import logging
 import os
-import struct
-import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
+from watchdog.events import FileSystemEvent, FileSystemEventHandler, FileSystemMovedEvent
+from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
+from watchdog.observers.polling import PollingObserver
 
 from mortis.config.models import PluginTypeConfig
 from mortis.config.store import ConfigStore
@@ -32,7 +36,12 @@ logger = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 30.0
 RETRY_SECONDS = 600.0
-_BUFFER_SIZE = 64 * 1024  # 网络盘上 ReadDirectoryChangesW 的缓冲不能超过 64 KB
+_WAIT_SECONDS = 1.0
+"""等停止信号时的一次等待长度；用事件等待，停止能立刻打断。"""
+OBSERVER_TIMEOUT_SECONDS = 0.5
+"""系统通知这一路的读超时，也是停止时要等的上限。"""
+POLL_SECONDS = 5.0
+"""轮询这一路的比对间隔。网络盘上目录多时打开它，别调得太小。"""
 
 ChangeCallback = Callable[[list[str] | None], None]
 StateCallback = Callable[[str | None], None]
@@ -41,116 +50,54 @@ _ITEM_TASKS = ("scrape", "arrange")
 _LIBRARY_TASKS = ("organize", "scrape_library", "arrange_library", "refresh_running_shows")
 
 
-if sys.platform == "win32":
-    from ctypes import wintypes
-
-    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-
-    class _Overlapped(ctypes.Structure):
-        _fields_ = [
-            ("Internal", ctypes.c_void_p),
-            ("InternalHigh", ctypes.c_void_p),
-            ("Offset", wintypes.DWORD),
-            ("OffsetHigh", wintypes.DWORD),
-            ("hEvent", wintypes.HANDLE),
-        ]
-
-    _CreateFileW = _kernel32.CreateFileW
-    _CreateFileW.argtypes = [
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
-    ]
-    _CreateFileW.restype = wintypes.HANDLE
-    _ReadDirectoryChangesW = _kernel32.ReadDirectoryChangesW
-    _ReadDirectoryChangesW.argtypes = [
-        wintypes.HANDLE,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.BOOL,
-        wintypes.DWORD,
-        ctypes.POINTER(wintypes.DWORD),
-        ctypes.POINTER(_Overlapped),
-        wintypes.LPVOID,
-    ]
-    _ReadDirectoryChangesW.restype = wintypes.BOOL
-    _GetOverlappedResult = _kernel32.GetOverlappedResult
-    _GetOverlappedResult.argtypes = [
-        wintypes.HANDLE,
-        ctypes.POINTER(_Overlapped),
-        ctypes.POINTER(wintypes.DWORD),
-        wintypes.BOOL,
-    ]
-    _GetOverlappedResult.restype = wintypes.BOOL
-    _CancelIoEx = _kernel32.CancelIoEx
-    _CancelIoEx.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Overlapped)]
-    _CancelIoEx.restype = wintypes.BOOL
-    _CreateEventW = _kernel32.CreateEventW
-    _CreateEventW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
-    _CreateEventW.restype = wintypes.HANDLE
-    _SetEvent = _kernel32.SetEvent
-    _SetEvent.argtypes = [wintypes.HANDLE]
-    _SetEvent.restype = wintypes.BOOL
-    _ResetEvent = _kernel32.ResetEvent
-    _ResetEvent.argtypes = [wintypes.HANDLE]
-    _ResetEvent.restype = wintypes.BOOL
-    _WaitForMultipleObjects = _kernel32.WaitForMultipleObjects
-    _WaitForMultipleObjects.argtypes = [
-        wintypes.DWORD,
-        ctypes.POINTER(wintypes.HANDLE),
-        wintypes.BOOL,
-        wintypes.DWORD,
-    ]
-    _WaitForMultipleObjects.restype = wintypes.DWORD
-    _WaitForSingleObject = _kernel32.WaitForSingleObject
-    _WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-    _WaitForSingleObject.restype = wintypes.DWORD
-    _CloseHandle = _kernel32.CloseHandle
-    _CloseHandle.argtypes = [wintypes.HANDLE]
-    _CloseHandle.restype = wintypes.BOOL
-
-    _INVALID_HANDLE = wintypes.HANDLE(-1).value
-
-_FILE_LIST_DIRECTORY = 0x0001
-_FILE_SHARE_ALL = 0x0001 | 0x0002 | 0x0004
-_OPEN_EXISTING = 3
-_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
-_FILE_FLAG_OVERLAPPED = 0x40000000
-_NOTIFY_FILTER = 0x0001 | 0x0002 | 0x0008 | 0x0010  # 文件名、目录名、大小、写入时间
-_WAIT_OBJECT_0 = 0
-_WAIT_TIMEOUT = 0x102
-_INFINITE = 0xFFFFFFFF
-_ERROR_NOTIFY_ENUM_DIR = 1022
-
-
-def _win_error(code: int | None = None) -> OSError:
-    number = ctypes.get_last_error() if code is None else code
-    return OSError(number, ctypes.FormatError(number).strip())
-
-
 def _reason(error: OSError) -> str:
     return error.strerror or str(error)
 
 
-def _parse_notifications(raw: bytes, size: int, root: str) -> list[str]:
-    paths: list[str] = []
-    offset = 0
-    while offset + 12 <= size:
-        next_offset, _action, length = struct.unpack_from("<III", raw, offset)
-        name = raw[offset + 12 : offset + 12 + length].decode("utf-16-le", errors="replace")
-        paths.append(os.path.join(root, name))
-        if next_offset == 0:
-            break
-        offset += next_offset
-    return paths
+class _Handler(FileSystemEventHandler):
+    """把一个目录的变动交给 PathWatch。只报路径，要不要扫描由对账决定。"""
+
+    def __init__(
+        self,
+        root: str,
+        on_change: ChangeCallback,
+        on_lost_root: Callable[[], None],
+    ) -> None:
+        super().__init__()
+        self._root = os.path.normcase(os.path.normpath(root))
+        self._on_change = on_change
+        self._on_lost_root = on_lost_root
+
+    def on_created(self, event: FileSystemEvent) -> None:
+        self._on_change([str(event.src_path)])
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        self._on_change([str(event.src_path)])
+
+    def on_attrib(self, event: FileSystemEvent) -> None:
+        self._on_change([str(event.src_path)])
+
+    def on_moved(self, event: FileSystemEvent) -> None:
+        paths = [str(event.src_path)]
+        if isinstance(event, FileSystemMovedEvent):
+            paths.append(str(event.dest_path))
+        self._on_change(paths)
+
+    def on_deleted(self, event: FileSystemEvent) -> None:
+        path = os.path.normcase(os.path.normpath(str(event.src_path)))
+        if path == self._root:
+            # 库根被删不是库里的文件没了，对账也等不到，交给外面重试。
+            self._on_lost_root()
+            return
+        self._on_change([str(event.src_path)])
+
+    def on_events_lost(self, _event: FileSystemEvent) -> None:
+        """队列或缓冲区溢出，丢了多少不知道，只知道这个目录有变动。"""
+        self._on_change(None)
 
 
 class PathWatch:
-    """一个目录一个线程。停的时候设事件，线程取消挂着的读取后退出，不会卡在等待里。"""
+    """一个目录一个监听线程。系统通知收不到时，线程里换成轮询，外面看不出来。"""
 
     def __init__(
         self,
@@ -159,105 +106,86 @@ class PathWatch:
         on_state: StateCallback,
         *,
         retry_seconds: float = RETRY_SECONDS,
+        polling: bool = False,
     ) -> None:
         self.path = path
         self._on_change = on_change
         self._on_state = on_state
-        self._retry_ms = max(1, int(retry_seconds * 1000))
-        self._stop_event = _CreateEventW(None, True, False, None)
-        if not self._stop_event:
-            raise _win_error()
+        self._retry = max(0.001, retry_seconds)
+        self._polling = polling
+        self._stopping = threading.Event()
+        self._lost_root = threading.Event()
         self._thread = threading.Thread(target=self._run, name="mortis-watch", daemon=True)
+        self._observer: BaseObserver | None = None
 
     def start(self) -> None:
         self._thread.start()
 
     def stop(self) -> None:
-        _SetEvent(self._stop_event)
+        self._stopping.set()
+        self._lost_root.set()  # 打断正在等的时间片
 
     def join(self, timeout: float = 10) -> bool:
+        """等线程退出；按时退出返回真。退出时的清理在 _run 里做完。"""
         self._thread.join(timeout)
-        if self._thread.is_alive():
-            return False
-        _CloseHandle(self._stop_event)
-        self._stop_event = None
-        return True
+        return not self._thread.is_alive()
 
-    def _stopping(self, wait_ms: int = 0) -> bool:
-        return _WaitForSingleObject(self._stop_event, wait_ms) == _WAIT_OBJECT_0
+    def _loss(self) -> None:
+        """监听自己发现根目录没了：置位后不再重新打开，交给外面重试。"""
+        self._lost_root.set()
+
+    def _paused(self, seconds: float) -> None:
+        """等一会儿再重试；停止或根目录被删都能提前打断。"""
+        deadline = time.monotonic() + seconds
+        while not self._stopping.is_set() and not self._lost_root.is_set():
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return
+            self._lost_root.wait(min(left, _WAIT_SECONDS))
 
     def _run(self) -> None:
-        while not self._stopping():
-            handle = _CreateFileW(
-                self.path,
-                _FILE_LIST_DIRECTORY,
-                _FILE_SHARE_ALL,
-                None,
-                _OPEN_EXISTING,
-                _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OVERLAPPED,
-                None,
-            )
-            if handle in (None, _INVALID_HANDLE):
-                self._on_state(_reason(_win_error()))
-                self._stopping(self._retry_ms)
+        while not self._stopping.is_set():
+            self._lost_root.clear()
+            if not os.path.isdir(self.path):
+                self._on_state(f"目录不存在：{self.path}")
+                self._paused(self._retry)
                 continue
+            observer = self._build()
             try:
-                self._read(handle)
+                observer.start()
             except OSError as error:
+                self._stop_observer(observer)
                 self._on_state(_reason(error))
-                _CloseHandle(handle)
-                handle = None
-                self._stopping(self._retry_ms)
-            finally:
-                if handle is not None:
-                    _CloseHandle(handle)
+                self._paused(self._retry)
+                continue
+            self._on_state(None)
+            self._watch_until_done(observer)
+            self._stop_observer(observer)
+            # 根目录被删时不在这里重试，回到开头报「目录不存在」，再等它回来。
 
-    def _read(self, handle: Any) -> None:
-        buffer = ctypes.create_string_buffer(_BUFFER_SIZE)
-        overlapped = _Overlapped()
-        overlapped.hEvent = _CreateEventW(None, True, False, None)
-        if not overlapped.hEvent:
-            raise _win_error()
-        waits = (wintypes.HANDLE * 2)(overlapped.hEvent, self._stop_event)
-        transferred = wintypes.DWORD()
-        first = True
-        try:
-            while True:
-                _ResetEvent(overlapped.hEvent)
-                if not _ReadDirectoryChangesW(
-                    handle,
-                    buffer,
-                    _BUFFER_SIZE,
-                    True,
-                    _NOTIFY_FILTER,
-                    None,
-                    ctypes.byref(overlapped),
-                    None,
-                ):
-                    raise _win_error()
-                if first:
-                    # 第一次读取挂上以后系统才开始记变动，这时才算监听上了。
-                    self._on_state(None)
-                    first = False
-                result = _WaitForMultipleObjects(2, waits, False, _INFINITE)
-                if result == _WAIT_OBJECT_0 + 1:
-                    _CancelIoEx(handle, ctypes.byref(overlapped))
-                    # 等内核真正放下缓冲区再返回，之后才能释放它。
-                    _GetOverlappedResult(handle, ctypes.byref(overlapped), transferred, True)
-                    return
-                if result != _WAIT_OBJECT_0:
-                    raise _win_error()
-                if not _GetOverlappedResult(handle, ctypes.byref(overlapped), transferred, False):
-                    code = ctypes.get_last_error()
-                    if code != _ERROR_NOTIFY_ENUM_DIR:
-                        raise _win_error(code)
-                    self._on_change(None)
-                elif transferred.value == 0:
-                    self._on_change(None)  # 变动太多缓冲区装不下，只知道有变动
-                else:
-                    self._on_change(_parse_notifications(buffer.raw, transferred.value, self.path))
-        finally:
-            _CloseHandle(overlapped.hEvent)
+    def _build(self) -> BaseObserver:
+        if self._polling:
+            observer: BaseObserver = PollingObserver(timeout=POLL_SECONDS)
+        else:
+            observer = Observer(timeout=OBSERVER_TIMEOUT_SECONDS)
+        self._observer = observer
+        handler = _Handler(self.path, self._on_change, self._loss)
+        observer.schedule(handler, self.path, recursive=True)
+        return observer
+
+    def _watch_until_done(self, observer: BaseObserver) -> None:
+        """等到要停、根目录被删，或者监听线程自己退了。"""
+        while not self._stopping.is_set() and not self._lost_root.is_set():
+            if not observer.is_alive():
+                self._on_state("监听线程意外退出")
+                self._paused(self._retry)
+                return
+            self._lost_root.wait(_WAIT_SECONDS)
+
+    def _stop_observer(self, observer: BaseObserver) -> None:
+        observer.stop()
+        observer.join(10)
+        self._observer = None
 
 
 @dataclass(frozen=True)
@@ -460,11 +388,14 @@ class WatchManager:
         *,
         debounce: float = DEBOUNCE_SECONDS,
         retry: float = RETRY_SECONDS,
+        polling: bool = False,
     ) -> None:
         self.session_factory = session_factory
         self.config_store = config_store
         self.debounce = debounce
         self.retry = retry
+        self.polling = polling
+        """收不到系统通知的挂载（NFS/CIFS、Docker Desktop 的绑定目录）按间隔比对文件。"""
         self._wake = wake
         self._cond = threading.Condition()
         self._libraries: dict[int, _LibraryWatch] = {}
@@ -472,10 +403,6 @@ class WatchManager:
         self._stopping = False
         self._thread: threading.Thread | None = None
         self._sync_lock = threading.Lock()
-
-    @property
-    def supported(self) -> bool:
-        return sys.platform == "win32"
 
     def start(self) -> None:
         with self._cond:
@@ -547,14 +474,12 @@ class WatchManager:
 
     def _start_watch(self, watch: _LibraryWatch) -> None:
         for path in watch.paths:
-            if not self.supported:
-                watch.errors[path] = "这台系统不支持监听目录变动"
-                continue
             path_watch = PathWatch(
                 path,
                 lambda changed, w=watch: self._on_change(w, changed),
                 lambda error, w=watch, p=path: self._on_state(w, p, error),
                 retry_seconds=self.retry,
+                polling=self.polling,
             )
             watch.watches.append(path_watch)
             path_watch.start()

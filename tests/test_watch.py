@@ -56,7 +56,8 @@ def _stop_quickly(watch: PathWatch) -> None:
     started = time.monotonic()
     watch.stop()
     assert watch.join(timeout=3)
-    assert time.monotonic() - started < 1
+    # 系统通知这一路的读超时是 0.5 秒，停止最多等这么久；留够余量，别卡在边界上。
+    assert time.monotonic() - started < 2
 
 
 def test_path_watch_reports_new_files_recursively(tmp_path: Path, recorder: Recorder) -> None:
@@ -89,6 +90,42 @@ def test_path_watch_stops_while_waiting_to_retry(tmp_path: Path, recorder: Recor
     watch.start()
     assert _wait(lambda: bool(recorder.states))
     _stop_quickly(watch)
+
+
+def test_path_watch_restarts_after_root_deleted(tmp_path: Path, recorder: Recorder) -> None:
+    root = tmp_path / "库里的一级目录"
+    root.mkdir()
+    watch = PathWatch(str(root), recorder.change, recorder.state, retry_seconds=0.1)
+    watch.start()
+    try:
+        assert _wait(lambda: recorder.states == [None])
+        root.rmdir()
+        assert _wait(
+            lambda: bool(recorder.states)
+            and recorder.states[-1] is not None
+            and "目录不存在" in str(recorder.states[-1])
+        )
+        root.mkdir()
+        assert _wait(lambda: recorder.states[-1] is None)
+        target = root / "回来的片.mkv"
+        target.write_bytes(b"x")
+        assert _wait(lambda: str(target) in recorder.seen())
+    finally:
+        _stop_quickly(watch)
+
+
+def test_polling_path_watch_sees_new_files(tmp_path: Path, recorder: Recorder) -> None:
+    """收不到系统通知的挂载（NFS、Docker Desktop 的绑定目录）靠轮询。"""
+    (tmp_path / "子目录").mkdir()
+    watch = PathWatch(str(tmp_path), recorder.change, recorder.state, polling=True)
+    watch.start()
+    try:
+        assert _wait(lambda: recorder.states == [None])
+        target = tmp_path / "子目录" / "轮询发现的.mkv"
+        target.write_bytes(b"x")
+        assert _wait(lambda: str(target) in recorder.seen(), timeout=20)
+    finally:
+        _stop_quickly(watch)
 
 
 # ---- 按库防抖和排扫描 ----
@@ -256,8 +293,11 @@ def test_library_changes_restart_or_stop_threads(
         update_library(session, library_id, automation="manual")
     manager.sync()
     assert manager.status(library_id) is None
-    alive = [thread for thread in threading.enumerate() if thread.name == "mortis-watch"]
-    assert alive == []
+
+    def _watch_threads() -> list[threading.Thread]:
+        return [thread for thread in threading.enumerate() if thread.name == "mortis-watch"]
+
+    assert _wait(lambda: not _watch_threads())
 
     with app.state.session_factory() as session:
         update_library(session, library_id, automation="watch")
@@ -286,6 +326,25 @@ def test_open_failure_shows_reason_and_recovers(
         assert status.error.startswith(f"{folder}：")
         folder.mkdir()
         assert _wait(lambda: created.status(library_id).state == "watching")  # type: ignore[union-attr]
+    finally:
+        created.stop(timeout=3)
+
+
+def test_manager_polling_sees_new_files(app: FastAPI, folder: Path, library_id: int) -> None:
+    """设置里打开轮询后，库的监听改用比对文件，不依赖系统通知。"""
+    created = WatchManager(
+        app.state.session_factory,
+        app.state.config_store,
+        Wakes(),
+        debounce=DEBOUNCE,
+        retry=0.2,
+        polling=True,
+    )
+    created.start()
+    try:
+        _wait_open(created, library_id)
+        (folder / "新片.mp4").write_bytes(b"x")
+        assert _wait(lambda: len(_scans(app)) == 1, timeout=30)
     finally:
         created.stop(timeout=3)
 
