@@ -9,6 +9,7 @@
 TMDB 刮削 · 字段级择优 · 锁定不被覆盖 · 数据私有 · 热加载插件 · 本机播放 · 智能体协同 · Emby NFO 适配
 
 [![Release](https://img.shields.io/github/v/release/AmadeusOfficial/Mortis?label=Release)](https://github.com/AmadeusOfficial/Mortis/releases)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/AmadeusOfficial/Mortis/pkgs/container/mortis)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 [下载](https://github.com/AmadeusOfficial/Mortis/releases) · [反馈问题](https://github.com/AmadeusOfficial/Mortis/issues)
@@ -33,6 +34,7 @@ TMDB 刮削 · 字段级择优 · 锁定不被覆盖 · 数据私有 · 热加�
 | **热加载插件** | 数据类型、来源和播放插件放进插件目录即可加载。自带 Galgame 插件（Bangumi、VNDB、月幕 Galgame、CnGal），能启动游戏。 |
 | **智能体（可选）** | 侧栏 AI 对话兼容 OpenAI 接口，能检索片库、处理识别错误、加减标签；批量修改和重新匹配都要你批准。 |
 | **桌面版自带更新** | Windows 托盘程序看护后端，数据默认放在程序目录下，检查到新版后原地更新；升级数据库前自动备份。 |
+| **也能用 Docker 跑** | 官方镜像 `ghcr.io/amadeusofficial/mortis`，一份 compose 就能起，数据目录挂出来即可备份；适合 Linux NAS 或不想装 Python 的机器。 |
 
 ## 开始使用
 
@@ -41,6 +43,32 @@ TMDB 刮削 · 字段级择优 · 锁定不被覆盖 · 数据私有 · 热加�
 - 数据库、图片、日志和设置都在解压目录下的 `data` 文件夹。要放到别处，编辑解压目录下的 `desktop.env`，改 `MORTIS_DATA_DIR`。
 - 更新时托盘只替换程序文件，不动 `data` 和 `desktop.env`。不要直接删掉整个解压目录，数据会一起删除。
 - 第一次使用先在「设置」里填 TMDB 的 API Key，再添加媒体库并扫描。
+
+## 用 Docker 跑
+
+不想装 Python 和 Node，或者在 NAS、Linux 服务器上跑，用官方镜像：
+
+```sh
+docker compose up -d
+```
+
+仓库里的 [`compose.yaml`](compose.yaml) 已经写好，改两处就能用：
+
+- `volumes` 里的 `/path/to/media` 换成你自己的媒体目录。容器里一律用 `/media`、`/media2` 这样的挂载点建库，不是宿主机的路径。
+- 想给局域网里的其他设备打开海报墙，把 `ports` 改成 `"8100:8100"`。默认只绑 `127.0.0.1`，和「只服务这台电脑」一致。
+
+起来以后打开 http://127.0.0.1:8100 ，和桌面版一样先在「设置」里填 TMDB 的 API Key，再添加媒体库。
+
+数据都在 `./data`（数据库、图片、日志、`config.toml`、`secrets.toml`、插件），备份这个目录就够。想换位置就改左边那半边路径。
+
+几处和桌面版的差别：
+
+- **删除是永久的**。容器里没有 Windows 回收站，「删除条目」直接删磁盘上的文件和目录，确认框里也会这么写。
+- **播放和「在资源管理器中显示」用不了**。容器里没有本机播放器，也没有资源管理器。用不到就在「设置 → 插件」里停用 `system_player`。
+- **「发现新文件就整理」可能收不到通知**。NFS/CIFS 网络盘和 Docker Desktop 的绑定挂载不产生 inotify 事件，这时在 `compose.yaml` 里打开 `MORTIS_WATCH_POLLING: "1"`，改成按间隔比对文件。
+- **定时扫描按容器时区算**。默认 `TZ=Asia/Shanghai`，和你本机一致；不在这个时区就改 `compose.yaml`。
+
+镜像同时发布 amd64 和 arm64，打 `v*` 标签时由 GitHub Actions 构建推送。
 
 ## 参与开发
 
