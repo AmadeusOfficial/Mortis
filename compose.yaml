@@ -1,0 +1,37 @@
+services:
+  mortis:
+    image: ghcr.io/amadeusofficial/mortis:latest
+    build: .
+    container_name: mortis
+    # 对齐宿主机 UID/GID，避免 ./data 里出现 root 属主的文件。
+    # Windows 的 Docker Desktop 上文件属主不按这一项走，可以整行删掉。
+    user: "${UID:-1000}:${GID:-1000}"
+    # 只绑宿主机回环，和「只服务这台电脑」一致。要给局域网里的其他设备用，改成 "8100:8100"。
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      # 数据库、图片、日志、设置、插件都在这里，备份就备份这个目录。
+      - ./data:/data
+      # 媒体目录。宿主机路径换成你自己的；容器里一律用 /media、/media2 这样的挂载点去建库。
+      - /path/to/media:/media
+      # - /path/to/media2:/media2
+    environment:
+      TZ: Asia/Shanghai
+      MORTIS_HOST: 0.0.0.0
+      MORTIS_DATA_DIR: /data
+      MORTIS_WEB_DIST: /app/web/dist
+      MORTIS_PLUGINS_DIR: /app/plugins
+      # NFS/CIFS 网络盘、Docker Desktop 的绑定挂载收不到系统目录通知时打开，
+      # 改成按间隔比对文件：「发现新文件就整理」的延迟会变成几十秒。
+      # MORTIS_WATCH_POLLING: "1"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/api/health', timeout=5)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

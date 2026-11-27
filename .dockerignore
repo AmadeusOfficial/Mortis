@@ -1,0 +1,37 @@
+# 版本控制与编辑器
+.git
+.github
+.cursor
+.superpowers
+.vscode
+.idea
+
+# 本机数据、密钥、打包产物
+.dev-data
+data
+dist
+build
+config.toml
+secrets.toml
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# 前端（镜像里重新构建）
+web/node_modules
+web/dist
+
+# 只在开发机上用
+tests
+scripts
+tray
+docs
+docs-internal
+assets
+examples
