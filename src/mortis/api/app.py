@@ -201,9 +201,15 @@ def _startup_config(store: ConfigStore) -> AppConfig:
 
 
 def _allowed_hosts(configured: str) -> list[str]:
-    """只认回环名和配置的监听地址，挡住 DNS 重绑定；通配监听地址不算。"""
+    """监听通配地址时接受任何 Host，只监听回环时只认本机名，挡住 DNS 重绑定。
+
+    绑 0.0.0.0 / :: 就是要让局域网里的其他机器访问，这时按 Host 拦会把正常访问一起拦掉，
+    而且机器换了 IP 就断。此时不校验 Host。
+    """
+    if configured in {"0.0.0.0", "::"}:
+        return ["*"]
     hosts = ["127.0.0.1", "localhost"]
-    if configured not in {"0.0.0.0", "::"} and configured not in hosts:
+    if configured not in hosts:
         hosts.append(configured)
     return hosts
 

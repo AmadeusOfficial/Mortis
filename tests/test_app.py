@@ -45,12 +45,22 @@ def test_testserver_host_is_not_allowed(tmp_path: Path) -> None:
     assert client.get("/api/health").status_code == 400
 
 
+@pytest.mark.parametrize("host", ["0.0.0.0", "::"])
+def test_wildcard_bind_accepts_any_host(tmp_path: Path, host: str) -> None:
+    """Docker 里绑 0.0.0.0，从别的机器用 NAS/主机的局域网 IP 打开页面要能用。"""
+    app = create_app(Settings(data_dir=tmp_path / "data", host=host))
+    client = TestClient(app, base_url=LOCAL)
+    for name in ("192.168.3.200:8100", "127.0.0.1:8100", "nas.local:8100", "10.0.0.7"):
+        assert client.get("/api/health", headers={"Host": name}).status_code == 200
+
+
 @pytest.mark.parametrize(
     ("host", "allowed", "denied"),
     [
         ("192.168.1.5", ["192.168.1.5:8100", "localhost"], ["10.0.0.1"]),
-        ("0.0.0.0", ["127.0.0.1"], ["0.0.0.0", "10.0.0.1"]),
-        ("::", ["localhost"], ["::", "10.0.0.1"]),
+        # 绑通配地址就是给局域网用的，任何 Host 都放行，换 IP 也不会断。
+        ("0.0.0.0", ["127.0.0.1", "192.168.3.200:8100", "10.0.0.1"], []),
+        ("::", ["localhost", "192.168.3.200:8100"], []),
         ("localhost", ["localhost", "127.0.0.1"], ["10.0.0.1"]),
     ],
 )
